@@ -50,12 +50,13 @@ const Auth = () => {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.message || "Authentication failed");
+        throw new Error(data.error || data.message || "Authentication failed");
       }
 
+      // FIXED: The backend returns the ID inside the `user` object as `id`
       storeUser({
-        user_id: data.user_id,
-        user_name: form.user_name,
+        user_id: data.user.id,
+        user_name: data.user.user_name,
       });
 
       toast({ title: isSignup ? "Account created!" : "Welcome back!" });
