@@ -9,6 +9,7 @@ import Auth from "./pages/Auth";
 import DashboardLayout from "./components/DashboardLayout";
 import Assistant from "./pages/Assistant";
 import ApiKeys from "./pages/ApiKeys";
+import PhoneNumber from "./pages/PhoneNumber";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
             <Route path="/dashboard" element={<DashboardLayout />}>
               <Route index element={<Navigate to="assistant" replace />} />
               <Route path="assistant" element={<Assistant />} />
+              <Route path="phone-number" element={<PhoneNumber />} />
               <Route path="api-keys" element={<ApiKeys />} />
             </Route>
             <Route path="*" element={<NotFound />} />
