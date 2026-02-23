@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { Bot, Plus, Loader2, Save, Trash2 } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import { Bot, Plus, Loader2, Save, Trash2, Phone, ArrowLeft, PhoneCall, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,16 +58,38 @@ export default function AssistantPage() {
   const { toast } = useToast();
 
   // --- State ---
+  const location = useLocation();
   const [assistants, setAssistants] = useState<AssistantItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [mode, setMode] = useState<"create" | "edit" | "empty">("empty");
+  const [mode, setMode] = useState<"create" | "edit" | "empty" | "make-call">("empty");
+
+  // Sync mode with URL param
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const m = params.get("mode");
+    if (m === "make-call") {
+      setMode("make-call");
+      setSelectedId(null);
+    } else if (mode === "make-call") {
+      // If we were in make-call but the param is gone, go to empty
+      setMode("empty");
+    }
+  }, [location.search]);
 
   const [formData, setFormData] = useState<AssistantDetail>(emptyForm);
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [trunks, setTrunks] = useState<any[]>([]);
+  const [trunksLoading, setTrunksLoading] = useState(false);
+  const [callFormData, setCallFormData] = useState({
+    customer_number: "",
+    assistant_id: "",
+    trunk_id: "",
+  });
+  const [callLoading, setCallLoading] = useState(false);
 
   // --- Actions ---
 
@@ -90,9 +113,62 @@ export default function AssistantPage() {
     }
   }, [user?.user_id, toast]);
 
+  const fetchTrunks = useCallback(async () => {
+    if (!user?.user_id) return;
+    setTrunksLoading(true);
+    try {
+      const res = await fetch(`http://localhost:3000/api/sip/list?user_id=${user.user_id}`);
+      const json = await res.json();
+      if (res.ok) {
+        setTrunks(Array.isArray(json.data) ? json.data : []);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setTrunksLoading(false);
+    }
+  }, [user?.user_id]);
+
   useEffect(() => {
     fetchList();
-  }, [fetchList]);
+    fetchTrunks();
+  }, [fetchList, fetchTrunks]);
+
+  const handleMakeCallClick = () => {
+    setMode("make-call");
+    setSelectedId(null);
+  };
+
+  const handleTriggerCall = async () => {
+    if (!user?.user_id) return;
+    if (!callFormData.customer_number || !callFormData.assistant_id || !callFormData.trunk_id) {
+      toast({ variant: "destructive", title: "Missing Fields", description: "Please fill all fields" });
+      return;
+    }
+    setCallLoading(true);
+    try {
+      const res = await fetch("http://localhost:3000/api/call/outbound", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: user.user_id,
+          assistant_id: callFormData.assistant_id,
+          trunk_id: callFormData.trunk_id,
+          to_number: callFormData.customer_number,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        toast({ title: "Call Triggered", description: json.message || "Outbound call triggered successfully" });
+      } else {
+        toast({ variant: "destructive", title: "Error", description: json.error || "Failed to trigger call" });
+      }
+    } catch (error) {
+      toast({ variant: "destructive", title: "Error", description: "Failed to connect to API" });
+    } finally {
+      setCallLoading(false);
+    }
+  };
 
   const handleCreateNew = () => {
     setSelectedId(null);
@@ -145,7 +221,7 @@ export default function AssistantPage() {
 
   const handleDeleteAssistant = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation(); // Prevent triggering handleSelectAssistant when clicking trash icon
-    
+
     if (!user?.user_id) {
       toast({
         variant: "destructive",
@@ -202,7 +278,7 @@ export default function AssistantPage() {
       });
       return;
     }
-    
+
     setSaving(true);
 
     try {
@@ -238,7 +314,7 @@ export default function AssistantPage() {
         });
       } else {
         res = await fetch(`${API_BASE}/update/${selectedId}`, {
-          method: "PATCH", 
+          method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
@@ -289,79 +365,84 @@ export default function AssistantPage() {
     <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-background">
 
       {/* --- SIDEBAR --- */}
-      <div className="w-80 border-r border-border flex flex-col bg-card/30">
-        <div className="p-4 border-b border-border flex items-center justify-between sticky top-0 bg-background/50 backdrop-blur-sm z-10">
-          <div className="flex items-center gap-2">
-            <Bot className="h-5 w-5 text-primary" />
-            <span className="font-semibold text-foreground">Assistants</span>
+      {mode !== "make-call" && (
+        <div className="w-80 border-r border-border flex flex-col bg-card/30 animate-in slide-in-from-left duration-300">
+          <div className="p-4 border-b border-border flex items-center justify-between sticky top-0 bg-background/50 backdrop-blur-sm z-10">
+            <div className="flex items-center gap-2">
+              <Bot className="h-5 w-5 text-primary" />
+              <span className="font-semibold text-foreground">Assistants</span>
+            </div>
+            <Button
+              size="sm"
+              onClick={handleCreateNew}
+              className="h-8 px-2 bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="h-4 w-4 mr-1" /> New
+            </Button>
           </div>
-          <Button
-            size="sm"
-            onClick={handleCreateNew}
-            className="h-8 px-2 bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4 mr-1" /> New Assistant
-          </Button>
-        </div>
 
-        <ScrollArea className="flex-1">
-          <div className="p-3 space-y-2">
-            {listLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : assistants.length === 0 ? (
-              <div className="text-center py-10 px-4 text-muted-foreground text-sm">
-                No assistants found. Create one to get started.
-              </div>
-            ) : (
-              assistants.map((item) => (
-                <div
-                  key={item.assistant_id}
-                  onClick={() => handleSelectAssistant(item.assistant_id)}
-                  className={`
-                    group flex items-center gap-3 p-3 rounded-md cursor-pointer transition-all border
-                    ${selectedId === item.assistant_id
-                      ? "bg-accent/50 border-primary/50 shadow-[0_0_15px_-3px_rgba(var(--primary),0.3)]"
-                      : "bg-transparent border-transparent hover:bg-accent/30 hover:border-border"
-                    }
-                  `}
-                >
-                  <div className={`
-                    w-10 h-10 rounded-full flex items-center justify-center shrink-0
-                    ${selectedId === item.assistant_id ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}
-                  `}>
-                    <Bot className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className={`text-sm font-medium truncate ${selectedId === item.assistant_id ? "text-primary" : "text-foreground"}`}>
-                      {item.assistant_name}
-                    </h4>
-                    <p className="text-xs text-muted-foreground truncate font-mono opacity-70">
-                      {item.assistant_id.slice(0, 8)}...
-                    </p>
-                  </div>
-                  
-                  {/* Delete Button inside Sidebar (Shows on Hover) */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                    onClick={(e) => handleDeleteAssistant(item.assistant_id, e)}
-                    disabled={deletingId === item.assistant_id}
-                  >
-                    {deletingId === item.assistant_id ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                  </Button>
+          <ScrollArea className="flex-1">
+            <div className="p-3 space-y-2">
+              {listLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
-              ))
-            )}
-          </div>
-        </ScrollArea>
-      </div>
+              ) : assistants.length === 0 ? (
+                <div className="text-center py-10 px-4 text-muted-foreground text-sm">
+                  No assistants found. Create one to get started.
+                </div>
+              ) : (
+                assistants.map((item) => {
+                  const itemId = item.assistant_id || (item as any)._id;
+                  return (
+                    <div
+                      key={itemId}
+                      onClick={() => handleSelectAssistant(itemId)}
+                      className={`
+                        group flex items-center gap-3 p-3 rounded-md cursor-pointer transition-all border
+                        ${selectedId === itemId
+                          ? "bg-accent/50 border-primary/50 shadow-[0_0_15px_-3px_rgba(var(--primary),0.3)]"
+                          : "bg-transparent border-transparent hover:bg-accent/30 hover:border-border"
+                        }
+                      `}
+                    >
+                      <div className={`
+                        w-10 h-10 rounded-full flex items-center justify-center shrink-0
+                        ${selectedId === itemId ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}
+                      `}>
+                        <Bot className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className={`text-sm font-medium truncate ${selectedId === itemId ? "text-primary" : "text-foreground"}`}>
+                          {item.assistant_name}
+                        </h4>
+                        <p className="text-xs text-muted-foreground truncate font-mono opacity-70">
+                          {itemId.slice(0, 8)}...
+                        </p>
+                      </div>
+
+                      {/* Delete Button inside Sidebar (Shows on Hover) */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                        onClick={(e) => handleDeleteAssistant(itemId, e)}
+                        disabled={deletingId === itemId}
+                      >
+                        {deletingId === itemId ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
+        </div>
+      )}
 
       {/* --- RIGHT MAIN PANEL --- */}
       <div className="flex-1 flex flex-col bg-background relative">
@@ -376,6 +457,140 @@ export default function AssistantPage() {
             <p className="max-w-md text-center text-sm opacity-70">
               Select an assistant from the sidebar or click "New Assistant" to get started.
             </p>
+          </div>
+        ) : mode === "make-call" ? (
+          <div className="flex-1 flex flex-col h-full overflow-hidden z-10">
+            {/* HEADER */}
+            <div className="p-8 border-b border-border bg-card/20 backdrop-blur-md flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shadow-inner">
+                  <PhoneCall className="h-6 w-6" />
+                </div>
+                <div>
+                  <h2 className="text-3xl font-black tracking-tight text-foreground">Outbound Call</h2>
+                  <p className="text-sm text-muted-foreground font-medium uppercase tracking-widest opacity-70">Initialize a new conversation</p>
+                </div>
+              </div>
+            </div>
+
+            {/* FORM CONTENT */}
+            <ScrollArea className="flex-1">
+              <div className="p-10 max-w-2xl mx-auto">
+                <div className="glass rounded-3xl p-10 space-y-8 border border-border/50 shadow-2xl relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-3xl" />
+
+                  <div className="grid gap-8">
+                    <div className="space-y-3">
+                      <Label className="text-xs font-black uppercase tracking-widest text-primary/70 ml-1">Customer Number</Label>
+                      <div className="relative group">
+                        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
+                          <Phone className="h-4 w-4" />
+                        </div>
+                        <Input
+                          placeholder="+1 234 567 8900"
+                          className="pl-12 h-14 bg-muted/30 border-border/50 focus:border-primary focus:ring-primary/20 rounded-2xl text-lg font-medium transition-all"
+                          value={callFormData.customer_number}
+                          onChange={(e) => setCallFormData({ ...callFormData, customer_number: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label className="text-xs font-black uppercase tracking-widest text-primary/70 ml-1">Select Assistant</Label>
+                      <Select
+                        value={callFormData.assistant_id}
+                        onValueChange={(v) => setCallFormData({ ...callFormData, assistant_id: v })}
+                      >
+                        <SelectTrigger className="h-14 bg-muted/30 border-border/50 rounded-2xl text-base font-medium">
+                          <SelectValue placeholder="Which AI should call?">
+                            {assistants.find(a => (a.assistant_id || (a as any)._id) === callFormData.assistant_id)?.assistant_name}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-border/50 shadow-xl">
+                          {assistants.map((a) => {
+                            const aId = a.assistant_id || (a as any)._id;
+                            return (
+                              <SelectItem
+                                key={aId}
+                                value={aId}
+                                className={`h-12 rounded-lg m-1 transition-all ${callFormData.assistant_id === aId ? 'bg-primary/10 text-primary font-bold' : ''}`}
+                              >
+                                <div className="flex items-center justify-between w-full">
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full ${callFormData.assistant_id === aId ? 'bg-primary animate-pulse' : 'bg-primary/30'}`} />
+                                    {a.assistant_name}
+                                  </div>
+                                  {callFormData.assistant_id === aId && <Check className="h-4 w-4" />}
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label className="text-xs font-black uppercase tracking-widest text-primary/70 ml-1">SIP Trunk</Label>
+                      <Select
+                        value={callFormData.trunk_id}
+                        onValueChange={(v) => setCallFormData({ ...callFormData, trunk_id: v })}
+                      >
+                        <SelectTrigger className="h-14 bg-muted/30 border-border/50 rounded-2xl text-base font-medium">
+                          <SelectValue placeholder="Choose outbound trunk">
+                            {trunks.find(t => (t.trunk_id || t._id || t.external_trunk_id) === callFormData.trunk_id)?.trunk_name}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl border-border/50 shadow-xl">
+                          {trunks.map((t) => {
+                            const tId = t.trunk_id || t._id || t.external_trunk_id;
+                            return (
+                              <SelectItem
+                                key={tId}
+                                value={tId}
+                                className={`h-12 rounded-lg m-1 transition-all ${callFormData.trunk_id === tId ? 'bg-primary/10 text-primary font-bold' : ''}`}
+                              >
+                                <div className="flex items-center justify-between w-full">
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full ${t.trunk_type === 'twilio' ? 'bg-red-500' : 'bg-blue-500'} ${callFormData.trunk_id === tId ? 'ring-2 ring-primary/20' : ''}`} />
+                                    <span>{t.trunk_name}</span>
+                                    <span className={`text-[10px] uppercase px-1.5 py-0.5 border rounded ${callFormData.trunk_id === tId ? 'border-primary' : 'opacity-50 border-current'}`}>{t.trunk_type}</span>
+                                  </div>
+                                  {callFormData.trunk_id === tId && <Check className="h-4 w-4" />}
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="pt-6">
+                    <Button
+                      onClick={handleTriggerCall}
+                      disabled={callLoading}
+                      className="w-full h-16 rounded-2xl text-lg font-bold shadow-xl shadow-primary/20 hover:shadow-primary/30 active:scale-[0.98] transition-all"
+                    >
+                      {callLoading ? (
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                      ) : (
+                        <>
+                          <PhoneCall className="h-5 w-5 mr-3" />
+                          Initiate Outbound Call
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="mt-8 p-6 bg-primary/5 border border-primary/10 rounded-2xl text-center">
+                  <p className="text-sm text-muted-foreground font-medium">
+                    This will initiate a real-time call using the selected assistant and SIP trunk.
+                    Charges may apply based on your provider.
+                  </p>
+                </div>
+              </div>
+            </ScrollArea>
           </div>
         ) : (
           detailLoading ? (
@@ -425,7 +640,7 @@ export default function AssistantPage() {
                       Delete
                     </Button>
                   )}
-                  
+
                   <Button
                     onClick={handleSubmit}
                     disabled={saving || !!deletingId}
@@ -518,7 +733,7 @@ export default function AssistantPage() {
                           className="font-mono"
                         />
                       </div>
-                      
+
                       {/* For Create Mode: Show Advanced directly here */}
                       {mode === "create" && (
                         <>

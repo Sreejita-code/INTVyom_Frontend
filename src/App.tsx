@@ -10,6 +10,7 @@ import DashboardLayout from "./components/DashboardLayout";
 import Assistant from "./pages/Assistant";
 import ApiKeys from "./pages/ApiKeys";
 import PhoneNumber from "./pages/PhoneNumber";
+import Integrations from "./pages/Integrations";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,7 @@ const App = () => (
               <Route path="assistant" element={<Assistant />} />
               <Route path="phone-number" element={<PhoneNumber />} />
               <Route path="api-keys" element={<ApiKeys />} />
+              <Route path="integration" element={<Integrations />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

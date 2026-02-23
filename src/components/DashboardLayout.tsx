@@ -1,12 +1,14 @@
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
-import { Bot, KeyRound, LogOut, Phone } from "lucide-react";
+import { Bot, KeyRound, LogOut, Phone, Blocks, PhoneCall } from "lucide-react";
 import { clearUser, getStoredUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const navItems = [
+  { label: "Make a Call", icon: PhoneCall, path: "/dashboard/assistant?mode=make-call" },
   { label: "Assistant", icon: Bot, path: "/dashboard/assistant" },
-  { label: "Phone number", icon: Phone, path: "/dashboard/phone-number?new=true" },
+  { label: "Phone number", icon: Phone, path: "/dashboard/phone-number" },
   { label: "API Keys", icon: KeyRound, path: "/dashboard/api-keys" },
+  { label: "Integration", icon: Blocks, path: "/dashboard/integration" },
 ];
 
 const DashboardLayout = () => {
@@ -33,7 +35,7 @@ const DashboardLayout = () => {
         {/* Nav */}
         <nav className="flex-1 p-3 space-y-1">
           {navItems.map((item) => {
-            const active = location.pathname === item.path.split("?")[0];
+            const active = (location.pathname + location.search) === item.path;
             return (
               <button
                 key={item.path}

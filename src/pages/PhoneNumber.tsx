@@ -77,7 +77,12 @@ export default function PhoneNumberPage() {
             const res = await fetch(`${API_BASE}/list?user_id=${user.user_id}`);
             const json = await res.json();
             if (res.ok) {
-                setTrunks(Array.isArray(json.data) ? json.data : []);
+                const data = Array.isArray(json.data) ? json.data : [];
+                setTrunks(data);
+                // Auto-open the add modal only when there are no existing trunks
+                if (data.length === 0) {
+                    setIsModalOpen(true);
+                }
             }
         } catch (error) {
             console.error(error);
@@ -91,12 +96,11 @@ export default function PhoneNumberPage() {
         fetchList();
     }, [fetchList]);
 
-    // Handle ?new=true param
+    // Handle ?new=true param (kept for backward compatibility, e.g. direct links)
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         if (params.get('new') === 'true') {
             setIsModalOpen(true);
-            // Clean up URL to avoid re-opening on refresh
             navigate(location.pathname, { replace: true });
         }
     }, [location, navigate]);
