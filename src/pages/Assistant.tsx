@@ -24,6 +24,9 @@ interface AssistantItem {
   assistant_id: string;
   assistant_name: string;
   assistant_created_at?: string;
+  // External API may return these field names
+  _id?: string;
+  name?: string;
 }
 
 interface AssistantDetail {
@@ -34,7 +37,7 @@ interface AssistantDetail {
   assistant_tts_model: "cartesia" | "sarvam";
   assistant_tts_config: {
     voice_id?: string;
-    api_key?: string;
+    target_language_code?: string;
   };
   assistant_start_instruction: string;
   assistant_end_call_url: string;
@@ -47,7 +50,7 @@ const emptyForm: AssistantDetail = {
   assistant_tts_model: "cartesia",
   assistant_tts_config: {
     voice_id: "",
-    api_key: "",
+    target_language_code: "hi-IN",
   },
   assistant_start_instruction: "",
   assistant_end_call_url: "",
@@ -102,9 +105,38 @@ export default function AssistantPage() {
     try {
       const res = await fetch(`${API_BASE}/list?user_id=${user.user_id}`);
       const json = await res.json();
-      if (res.ok) {
-        setAssistants(Array.isArray(json.data) ? json.data : []);
+
+      if (!res.ok) {
+        // Surface the actual backend error to the user
+        const errMsg = json?.error || json?.message || "Failed to load assistants";
+        toast({ variant: "destructive", title: "Error", description: errMsg });
+        setAssistants([]);
+        return;
       }
+
+      // Handle multiple possible response shapes from the external API proxy:
+      // 1. { data: { assistants: [...], pagination: {...} } }  — actual shape
+      // 2. { data: [...] }
+      // 3. { assistants: [...] }
+      // 4. Root array
+      let list: AssistantItem[] = [];
+      if (Array.isArray(json?.data?.assistants)) {
+        list = json.data.assistants;          // ← actual API shape
+      } else if (Array.isArray(json?.data)) {
+        list = json.data;
+      } else if (Array.isArray(json?.assistants)) {
+        list = json.assistants;
+      } else if (Array.isArray(json)) {
+        list = json;
+      }
+      // Normalise items to ensure assistant_id and assistant_name are always populated
+      // The external API may return { name, _id } or { assistant_name, assistant_id }
+      const normalised: AssistantItem[] = list.map((item: any) => ({
+        ...item,
+        assistant_id: item.assistant_id || item._id || "",
+        assistant_name: item.assistant_name || item.name || "Unnamed Assistant",
+      }));
+      setAssistants(normalised);
     } catch (error) {
       console.error(error);
       toast({ variant: "destructive", title: "Failed to load assistants" });
@@ -204,7 +236,7 @@ export default function AssistantPage() {
           assistant_tts_model: d.assistant_tts_model || "cartesia",
           assistant_tts_config: {
             voice_id: d.assistant_tts_config?.voice_id || d.assistant_tts_config?.speaker || "",
-            api_key: d.assistant_tts_config?.api_key || "",
+            target_language_code: d.assistant_tts_config?.target_language_code || "hi-IN",
           },
           assistant_start_instruction: d.assistant_start_instruction || "",
           assistant_end_call_url: d.assistant_end_call_url || "",
@@ -295,13 +327,11 @@ export default function AssistantPage() {
       if (formData.assistant_tts_model === "sarvam") {
         payload.assistant_tts_config = {
           speaker: formData.assistant_tts_config.voice_id,
-          target_language_code: "hi-IN",
-          api_key: formData.assistant_tts_config.api_key
+          target_language_code: formData.assistant_tts_config.target_language_code || "hi-IN",
         };
       } else {
         payload.assistant_tts_config = {
           voice_id: formData.assistant_tts_config.voice_id,
-          api_key: formData.assistant_tts_config.api_key
         };
       }
 
@@ -354,7 +384,7 @@ export default function AssistantPage() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const updateTTS = (field: "voice_id" | "api_key", value: string) => {
+  const updateTTS = (field: "voice_id" | "target_language_code", value: string) => {
     setFormData(prev => ({
       ...prev,
       assistant_tts_config: { ...prev.assistant_tts_config, [field]: value }
@@ -723,16 +753,24 @@ export default function AssistantPage() {
                         />
                       </div>
 
-                      <div className="grid gap-2">
-                        <Label>API Key</Label>
-                        <Input
-                          type="password"
-                          placeholder="••••••••••••••••••••••••"
-                          value={formData.assistant_tts_config.api_key}
-                          onChange={(e) => updateTTS("api_key", e.target.value)}
-                          className="font-mono"
-                        />
-                      </div>
+                      {formData.assistant_tts_model === "sarvam" && (
+                        <div className="grid gap-2">
+                          <Label>Target Language Code</Label>
+                          <Select
+                            value={formData.assistant_tts_config.target_language_code || "hi-IN"}
+                            onValueChange={(v) => updateTTS("target_language_code", v)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select Language" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="bn-IN">bn-IN</SelectItem>
+                              <SelectItem value="hi-IN">hi-IN</SelectItem>
+                              <SelectItem value="en-IN">en-IN</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
 
                       {/* For Create Mode: Show Advanced directly here */}
                       {mode === "create" && (
