@@ -1,8 +1,6 @@
-// src/pages/CallLogs.tsx
 import { useEffect, useState, useCallback } from "react";
-import { List, Loader2, Play, Search, FileText, Calendar, Filter } from "lucide-react";
+import { List, Loader2, Play, Search, FileText, Filter, Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -27,8 +25,15 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { getStoredUser } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 const API_BASE = "http://localhost:3005/api/assistant";
 
@@ -50,8 +55,10 @@ export default function CallLogsPage() {
   
   const [sortBy, setSortBy] = useState("started_at");
   const [sortOrder, setSortOrder] = useState("desc");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  
+  // Update state to handle Date objects for the Calendar component
+  const [startDate, setStartDate] = useState<Date>();
+  const [endDate, setEndDate] = useState<Date>();
 
   // Dialog State
   const [selectedTranscripts, setSelectedTranscripts] = useState<any[] | null>(null);
@@ -95,9 +102,17 @@ export default function CallLogsPage() {
         sort_order: sortOrder,
       });
 
-      // Append dates if provided (convert to ISO 8601)
-      if (startDate) queryParams.append("start_date", new Date(`${startDate}T00:00:00Z`).toISOString());
-      if (endDate) queryParams.append("end_date", new Date(`${endDate}T23:59:59Z`).toISOString());
+      // Append dates if provided (Ensure proper start of day and end of day formatting)
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        queryParams.append("start_date", start.toISOString());
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        queryParams.append("end_date", end.toISOString());
+      }
 
       const res = await fetch(`${API_BASE}/call-logs/${selectedAssistant}?${queryParams.toString()}`);
       const json = await res.json();
@@ -159,7 +174,7 @@ export default function CallLogsPage() {
           <div className="grid gap-2 flex-1 min-w-[200px]">
             <Label>Select Assistant *</Label>
             <Select value={selectedAssistant} onValueChange={(v) => { setSelectedAssistant(v); setPage(1); }}>
-              <SelectTrigger className="bg-background">
+              <SelectTrigger className="bg-background h-10">
                 <SelectValue placeholder="Choose an assistant..." />
               </SelectTrigger>
               <SelectContent>
@@ -172,19 +187,64 @@ export default function CallLogsPage() {
             </Select>
           </div>
 
-          <div className="grid gap-2 w-36">
+          {/* Start Date Calendar Picker */}
+          <div className="grid gap-2 w-44">
             <Label>Start Date</Label>
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-background" />
-          </div>
-          <div className="grid gap-2 w-36">
-            <Label>End Date</Label>
-            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-background" />
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant={"outline"}
+                  className={cn(
+                    "w-full justify-start text-left font-normal bg-background h-10",
+                    !startDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {startDate ? startDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : <span>Pick a date</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={startDate}
+                  onSelect={setStartDate}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
           </div>
 
-          <div className="grid gap-2 w-40">
+          {/* End Date Calendar Picker */}
+          <div className="grid gap-2 w-44">
+            <Label>End Date</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant={"outline"}
+                  className={cn(
+                    "w-full justify-start text-left font-normal bg-background h-10",
+                    !endDate && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {endDate ? endDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : <span>Pick a date</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={endDate}
+                  onSelect={setEndDate}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <div className="grid gap-2 w-36">
             <Label>Sort By</Label>
             <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="bg-background h-10"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="started_at">Started At</SelectItem>
                 <SelectItem value="ended_at">Ended At</SelectItem>
@@ -196,7 +256,7 @@ export default function CallLogsPage() {
           <div className="grid gap-2 w-32">
             <Label>Order</Label>
             <Select value={sortOrder} onValueChange={setSortOrder}>
-              <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="bg-background h-10"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="desc">Descending</SelectItem>
                 <SelectItem value="asc">Ascending</SelectItem>
@@ -204,7 +264,7 @@ export default function CallLogsPage() {
             </Select>
           </div>
 
-          <Button onClick={handleApplyFilters} disabled={!selectedAssistant || loading} className="shrink-0 gap-2">
+          <Button onClick={handleApplyFilters} disabled={!selectedAssistant || loading} className="shrink-0 gap-2 h-10">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Filter className="h-4 w-4" />}
             Apply
           </Button>
@@ -223,7 +283,7 @@ export default function CallLogsPage() {
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : (
-          <div className="border border-border/50 rounded-xl overflow-hidden glass">
+          <div className="border border-border/50 rounded-xl overflow-hidden glass shadow-sm">
             <Table>
               <TableHeader className="bg-muted/50">
                 <TableRow>
@@ -250,7 +310,7 @@ export default function CallLogsPage() {
                       </TableCell>
                       <TableCell className="font-mono text-sm">{log.to_number}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="font-mono">
+                        <Badge variant="outline" className="font-mono bg-background">
                           {formatDuration(log.call_duration_minutes)}
                         </Badge>
                       </TableCell>
