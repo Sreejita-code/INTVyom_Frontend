@@ -29,8 +29,8 @@ const Auth = () => {
 
     try {
       const url = isSignup
-        ? "http://localhost:3000/api/auth/signup"
-        : "http://localhost:3000/api/auth/login";
+        ? "http://localhost:3005/api/auth/signup"
+        : "http://localhost:3005/api/auth/login";
 
       const body = isSignup
         ? {
@@ -87,7 +87,7 @@ const Auth = () => {
       >
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
-            INT<span className="text-primary">_Vyom</span>
+            INT<span className="text-primary">VOICEKIT</span>
           </h1>
           <p className="text-muted-foreground mt-2 text-sm">
             {isSignup ? "Create your account" : "Sign in to your dashboard"}

@@ -21,7 +21,7 @@ const ApiKeys = () => {
       if (!user?.user_name) return;
       try {
         const res = await fetch(
-          `http://localhost:3000/api/auth/get_api?user_name=${encodeURIComponent(user.user_name)}`
+          `http://localhost:3005/api/auth/get_api?user_name=${encodeURIComponent(user.user_name)}`
         );
         const data = await res.json();
         if (Array.isArray(data)) {

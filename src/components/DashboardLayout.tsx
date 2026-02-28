@@ -1,11 +1,13 @@
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
-import { Bot, KeyRound, LogOut, Phone, Blocks, PhoneCall } from "lucide-react";
+import { Bot, KeyRound, LogOut, Phone, Blocks, PhoneCall, Wrench, List } from "lucide-react"; // <-- Added List
 import { clearUser, getStoredUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { label: "Make a Call", icon: PhoneCall, path: "/dashboard/assistant?mode=make-call" },
   { label: "Assistant", icon: Bot, path: "/dashboard/assistant" },
+  { label: "Tools", icon: Wrench, path: "/dashboard/tools" },
+  { label: "Call Logs", icon: List, path: "/dashboard/call-logs" }, // <-- Added Call Logs
   { label: "Phone number", icon: Phone, path: "/dashboard/phone-number" },
   { label: "API Keys", icon: KeyRound, path: "/dashboard/api-keys" },
   { label: "Integration", icon: Blocks, path: "/dashboard/integration" },
@@ -28,7 +30,7 @@ const DashboardLayout = () => {
         {/* Logo */}
         <div className="p-6 border-b border-border">
           <h1 className="text-xl font-bold tracking-tight text-foreground">
-            INT<span className="text-primary">_Vyom</span>
+            INT<span className="text-primary">VOICEKIT</span>
           </h1>
         </div>
 
@@ -76,7 +78,7 @@ const DashboardLayout = () => {
       <main className="flex-1 relative overflow-hidden">
         {/* Watermark */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-          <span className="watermark">INT_Vyom</span>
+          <span className="watermark">INTVOICEKIT</span>
         </div>
 
         <div className="relative z-10 h-full">

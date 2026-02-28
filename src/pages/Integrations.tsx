@@ -31,7 +31,7 @@ const Integrations = () => {
         for (const provider of providers) {
             try {
                 const response = await fetch(
-                    `http://localhost:3000/api/integration/get?user_id=${user.user_id}&service_name=${provider}`
+                    `http://localhost:3005/api/integration/get?user_id=${user.user_id}&service_name=${provider}`
                 );
                 const data = await response.json();
                 if (data.success && data.data) {
@@ -56,7 +56,7 @@ const Integrations = () => {
 
         setIsLoading(true);
         try {
-            const response = await fetch("http://localhost:3000/api/integration/store", {
+            const response = await fetch("http://localhost:3005/api/integration/store", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

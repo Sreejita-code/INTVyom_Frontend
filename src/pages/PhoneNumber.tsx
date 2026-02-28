@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
-const API_BASE = "http://localhost:3000/api/sip";
+const API_BASE = "http://localhost:3005/api/sip";
 
 interface TrunkItem {
     trunk_id: string;

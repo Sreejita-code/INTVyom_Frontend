@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from "react";
 import { useLocation } from "react-router-dom";
-import { Bot, Plus, Loader2, Save, Trash2, Phone, ArrowLeft, PhoneCall, Check } from "lucide-react";
+import { Bot, Plus, Loader2, Save, Trash2, Phone, ArrowLeft, PhoneCall, Check, Wrench } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -18,7 +19,8 @@ import { getStoredUser } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 
 // --- Types ---
-const API_BASE = "http://localhost:3000/api/assistant";
+const API_BASE = "http://localhost:3005/api/assistant";
+const TOOL_API_BASE = "http://localhost:3005/api/tool";
 
 interface AssistantItem {
   assistant_id: string;
@@ -87,6 +89,12 @@ export default function AssistantPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [trunks, setTrunks] = useState<any[]>([]);
   const [trunksLoading, setTrunksLoading] = useState(false);
+  
+  // --- Tools State ---
+  const [allTools, setAllTools] = useState<any[]>([]);
+  const [attachedToolIds, setAttachedToolIds] = useState<string[]>([]);
+  const [selectedToolToAdd, setSelectedToolToAdd] = useState<string>("");
+
   const [callFormData, setCallFormData] = useState({
     customer_number: "",
     assistant_id: "",
@@ -107,30 +115,18 @@ export default function AssistantPage() {
       const json = await res.json();
 
       if (!res.ok) {
-        // Surface the actual backend error to the user
         const errMsg = json?.error || json?.message || "Failed to load assistants";
         toast({ variant: "destructive", title: "Error", description: errMsg });
         setAssistants([]);
         return;
       }
 
-      // Handle multiple possible response shapes from the external API proxy:
-      // 1. { data: { assistants: [...], pagination: {...} } }  — actual shape
-      // 2. { data: [...] }
-      // 3. { assistants: [...] }
-      // 4. Root array
       let list: AssistantItem[] = [];
-      if (Array.isArray(json?.data?.assistants)) {
-        list = json.data.assistants;          // ← actual API shape
-      } else if (Array.isArray(json?.data)) {
-        list = json.data;
-      } else if (Array.isArray(json?.assistants)) {
-        list = json.assistants;
-      } else if (Array.isArray(json)) {
-        list = json;
-      }
-      // Normalise items to ensure assistant_id and assistant_name are always populated
-      // The external API may return { name, _id } or { assistant_name, assistant_id }
+      if (Array.isArray(json?.data?.assistants)) list = json.data.assistants;
+      else if (Array.isArray(json?.data)) list = json.data;
+      else if (Array.isArray(json?.assistants)) list = json.assistants;
+      else if (Array.isArray(json)) list = json;
+      
       const normalised: AssistantItem[] = list.map((item: any) => ({
         ...item,
         assistant_id: item.assistant_id || item._id || "",
@@ -149,7 +145,7 @@ export default function AssistantPage() {
     if (!user?.user_id) return;
     setTrunksLoading(true);
     try {
-      const res = await fetch(`http://localhost:3000/api/sip/list?user_id=${user.user_id}`);
+      const res = await fetch(`http://localhost:3005/api/sip/list?user_id=${user.user_id}`);
       const json = await res.json();
       if (res.ok) {
         setTrunks(Array.isArray(json.data) ? json.data : []);
@@ -161,10 +157,22 @@ export default function AssistantPage() {
     }
   }, [user?.user_id]);
 
+  const fetchTools = useCallback(async () => {
+    if (!user?.user_id) return;
+    try {
+      const res = await fetch(`${TOOL_API_BASE}/list?user_id=${user.user_id}`);
+      const json = await res.json();
+      if (res.ok) setAllTools(json.data || []);
+    } catch (error) {
+      console.error(error);
+    }
+  }, [user?.user_id]);
+
   useEffect(() => {
     fetchList();
     fetchTrunks();
-  }, [fetchList, fetchTrunks]);
+    fetchTools();
+  }, [fetchList, fetchTrunks, fetchTools]);
 
   const handleMakeCallClick = () => {
     setMode("make-call");
@@ -179,7 +187,7 @@ export default function AssistantPage() {
     }
     setCallLoading(true);
     try {
-      const res = await fetch("http://localhost:3000/api/call/outbound", {
+      const res = await fetch("http://localhost:3005/api/call/outbound", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -205,6 +213,7 @@ export default function AssistantPage() {
   const handleCreateNew = () => {
     setSelectedId(null);
     setFormData(emptyForm);
+    setAttachedToolIds([]);
     setMode("create");
   };
 
@@ -241,6 +250,11 @@ export default function AssistantPage() {
           assistant_start_instruction: d.assistant_start_instruction || "",
           assistant_end_call_url: d.assistant_end_call_url || "",
         });
+
+        // Parse attached tools (depends on exact external API return structure)
+        const attached = d.tools?.map((t: any) => t.tool_id || t.id || t) || d.tool_ids || [];
+        setAttachedToolIds(attached);
+
       } else {
         throw new Error(json.message || "Failed to load details");
       }
@@ -252,50 +266,32 @@ export default function AssistantPage() {
   };
 
   const handleDeleteAssistant = async (id: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation(); // Prevent triggering handleSelectAssistant when clicking trash icon
+    if (e) e.stopPropagation(); 
 
     if (!user?.user_id) {
-      toast({
-        variant: "destructive",
-        title: "Authentication Error",
-        description: "User ID not found. Please log in again.",
-      });
+      toast({ variant: "destructive", title: "Authentication Error", description: "User ID not found. Please log in again." });
       return;
     }
 
-    if (!window.confirm("Are you sure you want to delete this assistant? This action cannot be undone.")) {
-      return;
-    }
+    if (!window.confirm("Are you sure you want to delete this assistant? This action cannot be undone.")) return;
 
     setDeletingId(id);
 
     try {
-      const res = await fetch(`${API_BASE}/delete/${id}?user_id=${user.user_id}`, {
-        method: "DELETE",
-      });
-
+      const res = await fetch(`${API_BASE}/delete/${id}?user_id=${user.user_id}`, { method: "DELETE" });
       const json = await res.json();
 
       if (!res.ok) throw new Error(json.error || json.message || "Failed to delete assistant");
 
-      toast({
-        title: "Assistant Deleted",
-        description: "The assistant has been successfully removed.",
-      });
+      toast({ title: "Assistant Deleted", description: "The assistant has been successfully removed." });
 
-      // If the currently open assistant was deleted, reset the view
       if (selectedId === id) {
         setMode("empty");
         setSelectedId(null);
       }
-
       await fetchList();
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.message,
-      });
+      toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
       setDeletingId(null);
     }
@@ -303,11 +299,7 @@ export default function AssistantPage() {
 
   const handleSubmit = async () => {
     if (!user?.user_id) {
-      toast({
-        variant: "destructive",
-        title: "Authentication Error",
-        description: "User ID not found. Please log in again.",
-      });
+      toast({ variant: "destructive", title: "Authentication Error", description: "User ID not found. Please log in again." });
       return;
     }
 
@@ -330,9 +322,7 @@ export default function AssistantPage() {
           target_language_code: formData.assistant_tts_config.target_language_code || "hi-IN",
         };
       } else {
-        payload.assistant_tts_config = {
-          voice_id: formData.assistant_tts_config.voice_id,
-        };
+        payload.assistant_tts_config = { voice_id: formData.assistant_tts_config.voice_id };
       }
 
       let res;
@@ -362,21 +352,52 @@ export default function AssistantPage() {
       await fetchList();
 
       if (mode === "create") {
-        if (json.assistant?.external_assistant_id) {
-          handleSelectAssistant(json.assistant.external_assistant_id);
-        } else if (json.data?.assistant_id) {
-          handleSelectAssistant(json.data.assistant_id);
-        }
+        if (json.assistant?.external_assistant_id) handleSelectAssistant(json.assistant.external_assistant_id);
+        else if (json.data?.assistant_id) handleSelectAssistant(json.data.assistant_id);
       }
 
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.message
-      });
+      toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Toggle Tool Logic
+  const handleToggleTool = async (toolId: string, attach: boolean) => {
+    if (!user?.user_id || !selectedId) return;
+
+    const endpoint = attach ? "attach" : "detach";
+    const originalIds = [...attachedToolIds];
+
+    // Optimistic UI Update
+    if (attach) {
+      setAttachedToolIds(prev => [...prev, toolId]);
+    } else {
+      setAttachedToolIds(prev => prev.filter(id => id !== toolId));
+    }
+
+    try {
+      const res = await fetch(`${TOOL_API_BASE}/${endpoint}/${selectedId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: user.user_id,
+          tool_ids: [toolId]
+        })
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || json.message || `Failed to ${endpoint} tool`);
+
+      toast({
+        title: attach ? "Tool Attached" : "Tool Detached",
+        description: `Successfully ${attach ? 'attached' : 'detached'} the tool.`
+      });
+    } catch (error: any) {
+      // Revert on failure
+      setAttachedToolIds(originalIds);
+      toast({ variant: "destructive", title: "Error", description: error.message });
     }
   };
 
@@ -451,7 +472,6 @@ export default function AssistantPage() {
                         </p>
                       </div>
 
-                      {/* Delete Button inside Sidebar (Shows on Hover) */}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -459,11 +479,7 @@ export default function AssistantPage() {
                         onClick={(e) => handleDeleteAssistant(itemId, e)}
                         disabled={deletingId === itemId}
                       >
-                        {deletingId === itemId ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
+                        {deletingId === itemId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                       </Button>
                     </div>
                   );
@@ -527,10 +543,7 @@ export default function AssistantPage() {
 
                     <div className="space-y-3">
                       <Label className="text-xs font-black uppercase tracking-widest text-primary/70 ml-1">Select Assistant</Label>
-                      <Select
-                        value={callFormData.assistant_id}
-                        onValueChange={(v) => setCallFormData({ ...callFormData, assistant_id: v })}
-                      >
+                      <Select value={callFormData.assistant_id} onValueChange={(v) => setCallFormData({ ...callFormData, assistant_id: v })}>
                         <SelectTrigger className="h-14 bg-muted/30 border-border/50 rounded-2xl text-base font-medium">
                           <SelectValue placeholder="Which AI should call?">
                             {assistants.find(a => (a.assistant_id || (a as any)._id) === callFormData.assistant_id)?.assistant_name}
@@ -540,11 +553,7 @@ export default function AssistantPage() {
                           {assistants.map((a) => {
                             const aId = a.assistant_id || (a as any)._id;
                             return (
-                              <SelectItem
-                                key={aId}
-                                value={aId}
-                                className={`h-12 rounded-lg m-1 transition-all ${callFormData.assistant_id === aId ? 'bg-primary/10 text-primary font-bold' : ''}`}
-                              >
+                              <SelectItem key={aId} value={aId} className={`h-12 rounded-lg m-1 transition-all ${callFormData.assistant_id === aId ? 'bg-primary/10 text-primary font-bold' : ''}`}>
                                 <div className="flex items-center justify-between w-full">
                                   <div className="flex items-center gap-2">
                                     <div className={`w-2 h-2 rounded-full ${callFormData.assistant_id === aId ? 'bg-primary animate-pulse' : 'bg-primary/30'}`} />
@@ -561,10 +570,7 @@ export default function AssistantPage() {
 
                     <div className="space-y-3">
                       <Label className="text-xs font-black uppercase tracking-widest text-primary/70 ml-1">SIP Trunk</Label>
-                      <Select
-                        value={callFormData.trunk_id}
-                        onValueChange={(v) => setCallFormData({ ...callFormData, trunk_id: v })}
-                      >
+                      <Select value={callFormData.trunk_id} onValueChange={(v) => setCallFormData({ ...callFormData, trunk_id: v })}>
                         <SelectTrigger className="h-14 bg-muted/30 border-border/50 rounded-2xl text-base font-medium">
                           <SelectValue placeholder="Choose outbound trunk">
                             {trunks.find(t => (t.trunk_id || t._id || t.external_trunk_id) === callFormData.trunk_id)?.trunk_name}
@@ -574,11 +580,7 @@ export default function AssistantPage() {
                           {trunks.map((t) => {
                             const tId = t.trunk_id || t._id || t.external_trunk_id;
                             return (
-                              <SelectItem
-                                key={tId}
-                                value={tId}
-                                className={`h-12 rounded-lg m-1 transition-all ${callFormData.trunk_id === tId ? 'bg-primary/10 text-primary font-bold' : ''}`}
-                              >
+                              <SelectItem key={tId} value={tId} className={`h-12 rounded-lg m-1 transition-all ${callFormData.trunk_id === tId ? 'bg-primary/10 text-primary font-bold' : ''}`}>
                                 <div className="flex items-center justify-between w-full">
                                   <div className="flex items-center gap-2">
                                     <div className={`w-2 h-2 rounded-full ${t.trunk_type === 'twilio' ? 'bg-red-500' : 'bg-blue-500'} ${callFormData.trunk_id === tId ? 'ring-2 ring-primary/20' : ''}`} />
@@ -596,19 +598,8 @@ export default function AssistantPage() {
                   </div>
 
                   <div className="pt-6">
-                    <Button
-                      onClick={handleTriggerCall}
-                      disabled={callLoading}
-                      className="w-full h-16 rounded-2xl text-lg font-bold shadow-xl shadow-primary/20 hover:shadow-primary/30 active:scale-[0.98] transition-all"
-                    >
-                      {callLoading ? (
-                        <Loader2 className="h-6 w-6 animate-spin" />
-                      ) : (
-                        <>
-                          <PhoneCall className="h-5 w-5 mr-3" />
-                          Initiate Outbound Call
-                        </>
-                      )}
+                    <Button onClick={handleTriggerCall} disabled={callLoading} className="w-full h-16 rounded-2xl text-lg font-bold shadow-xl shadow-primary/20 hover:shadow-primary/30 active:scale-[0.98] transition-all">
+                      {callLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : <><PhoneCall className="h-5 w-5 mr-3" /> Initiate Outbound Call</>}
                     </Button>
                   </div>
                 </div>
@@ -654,28 +645,13 @@ export default function AssistantPage() {
                 </div>
 
                 <div className="flex items-center gap-3 shrink-0 ml-4">
-                  {/* Delete Button inside Header (Edit Mode only) */}
                   {mode === "edit" && selectedId && (
-                    <Button
-                      variant="destructive"
-                      onClick={() => handleDeleteAssistant(selectedId)}
-                      disabled={deletingId === selectedId || saving}
-                      className="shadow-lg shadow-destructive/20"
-                    >
-                      {deletingId === selectedId ? (
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      ) : (
-                        <Trash2 className="h-4 w-4 mr-2" />
-                      )}
+                    <Button variant="destructive" onClick={() => handleDeleteAssistant(selectedId)} disabled={deletingId === selectedId || saving} className="shadow-lg shadow-destructive/20">
+                      {deletingId === selectedId ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
                       Delete
                     </Button>
                   )}
-
-                  <Button
-                    onClick={handleSubmit}
-                    disabled={saving || !!deletingId}
-                    className="min-w-[100px] shadow-lg shadow-primary/20"
-                  >
+                  <Button onClick={handleSubmit} disabled={saving || !!deletingId} className="min-w-[100px] shadow-lg shadow-primary/20">
                     {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                     Save
                   </Button>
@@ -686,35 +662,21 @@ export default function AssistantPage() {
               <ScrollArea className="flex-1">
                 <div className="p-8 max-w-4xl mx-auto space-y-10 pb-20">
 
-                  {/* CREATE MODE: Includes Description under basic fields */}
                   {mode === "create" && (
                     <div className="grid gap-6">
                       <div className="grid gap-2">
                         <Label>Assistant Name</Label>
-                        <Input
-                          placeholder="e.g. Support Bot"
-                          value={formData.assistant_name}
-                          onChange={(e) => updateField("assistant_name", e.target.value)}
-                        />
+                        <Input placeholder="e.g. Support Bot" value={formData.assistant_name} onChange={(e) => updateField("assistant_name", e.target.value)} />
                       </div>
                       <div className="grid gap-2">
                         <Label>Assistant Description</Label>
-                        <Input
-                          placeholder="Description..."
-                          value={formData.assistant_description}
-                          onChange={(e) => updateField("assistant_description", e.target.value)}
-                        />
+                        <Input placeholder="Description..." value={formData.assistant_description} onChange={(e) => updateField("assistant_description", e.target.value)} />
                       </div>
                     </div>
                   )}
 
-                  {/* System Prompt Section */}
                   <div className="space-y-4">
-                    {mode === "edit" ? (
-                      <h3 className="text-lg font-semibold border-b border-border/50 pb-2">System Prompt</h3>
-                    ) : (
-                      <Label className="text-base font-semibold">System Prompt</Label>
-                    )}
+                    {mode === "edit" ? <h3 className="text-lg font-semibold border-b border-border/50 pb-2">System Prompt</h3> : <Label className="text-base font-semibold">System Prompt</Label>}
                     <Textarea
                       placeholder="You are a helpful support agent..."
                       className="min-h-[150px] font-mono text-sm leading-relaxed"
@@ -723,19 +685,13 @@ export default function AssistantPage() {
                     />
                   </div>
 
-                  {/* TTS Section */}
                   <div className="space-y-4">
                     <h3 className="text-lg font-semibold border-b border-border/50 pb-2">TTS Section</h3>
                     <div className="grid gap-4">
                       <div className="grid gap-2">
                         <Label>Model</Label>
-                        <Select
-                          value={formData.assistant_tts_model}
-                          onValueChange={(v) => updateField("assistant_tts_model", v)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select Model" />
-                          </SelectTrigger>
+                        <Select value={formData.assistant_tts_model} onValueChange={(v) => updateField("assistant_tts_model", v)}>
+                          <SelectTrigger><SelectValue placeholder="Select Model" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="cartesia">Cartesia</SelectItem>
                             <SelectItem value="sarvam">Sarvam</SelectItem>
@@ -745,24 +701,14 @@ export default function AssistantPage() {
 
                       <div className="grid gap-2">
                         <Label>Voice Id</Label>
-                        <Input
-                          placeholder="e.g. a167e0f3-df7e-4277-976b-be2f952fa275"
-                          value={formData.assistant_tts_config.voice_id}
-                          onChange={(e) => updateTTS("voice_id", e.target.value)}
-                          className="font-mono"
-                        />
+                        <Input placeholder="e.g. a167e0f3-df7e-4277-976b-be2f952fa275" value={formData.assistant_tts_config.voice_id} onChange={(e) => updateTTS("voice_id", e.target.value)} className="font-mono" />
                       </div>
 
                       {formData.assistant_tts_model === "sarvam" && (
                         <div className="grid gap-2">
                           <Label>Target Language Code</Label>
-                          <Select
-                            value={formData.assistant_tts_config.target_language_code || "hi-IN"}
-                            onValueChange={(v) => updateTTS("target_language_code", v)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select Language" />
-                            </SelectTrigger>
+                          <Select value={formData.assistant_tts_config.target_language_code || "hi-IN"} onValueChange={(v) => updateTTS("target_language_code", v)}>
+                            <SelectTrigger><SelectValue placeholder="Select Language" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="bn-IN">bn-IN</SelectItem>
                               <SelectItem value="hi-IN">hi-IN</SelectItem>
@@ -772,24 +718,15 @@ export default function AssistantPage() {
                         </div>
                       )}
 
-                      {/* For Create Mode: Show Advanced directly here */}
                       {mode === "create" && (
                         <>
                           <div className="grid gap-2">
                             <Label>Start Instruction</Label>
-                            <Input
-                              placeholder="Hello, how can I help you today?"
-                              value={formData.assistant_start_instruction}
-                              onChange={(e) => updateField("assistant_start_instruction", e.target.value)}
-                            />
+                            <Input placeholder="Hello, how can I help you today?" value={formData.assistant_start_instruction} onChange={(e) => updateField("assistant_start_instruction", e.target.value)} />
                           </div>
                           <div className="grid gap-2">
                             <Label>End Call URL (Optional)</Label>
-                            <Input
-                              placeholder="https://callback.com/end"
-                              value={formData.assistant_end_call_url}
-                              onChange={(e) => updateField("assistant_end_call_url", e.target.value)}
-                            />
+                            <Input placeholder="https://callback.com/end" value={formData.assistant_end_call_url} onChange={(e) => updateField("assistant_end_call_url", e.target.value)} />
                           </div>
                         </>
                       )}
@@ -798,28 +735,124 @@ export default function AssistantPage() {
 
                   {/* Advanced Section (Edit Mode) */}
                   {mode === "edit" && (
-                    <div className="space-y-4">
-                      <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Advanced</h3>
-                      <div className="grid gap-4">
-                        <div className="grid gap-2">
-                          <Label>Start Instruction</Label>
-                          <Input
-                            placeholder="Hello, how can I help you today?"
-                            value={formData.assistant_start_instruction}
-                            onChange={(e) => updateField("assistant_start_instruction", e.target.value)}
-                          />
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label>End Call URL (Optional)</Label>
-                          <Input
-                            placeholder="https://callback.com/end"
-                            value={formData.assistant_end_call_url}
-                            onChange={(e) => updateField("assistant_end_call_url", e.target.value)}
-                            className="font-mono text-sm"
-                          />
+                    <div className="space-y-10">
+                      <div className="space-y-4">
+                        <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Advanced</h3>
+                        <div className="grid gap-4">
+                          <div className="grid gap-2">
+                            <Label>Start Instruction</Label>
+                            <Input placeholder="Hello, how can I help you today?" value={formData.assistant_start_instruction} onChange={(e) => updateField("assistant_start_instruction", e.target.value)} />
+                          </div>
+                          <div className="grid gap-2">
+                            <Label>End Call URL (Optional)</Label>
+                            <Input placeholder="https://callback.com/end" value={formData.assistant_end_call_url} onChange={(e) => updateField("assistant_end_call_url", e.target.value)} className="font-mono text-sm" />
+                          </div>
                         </div>
                       </div>
+
+                      {/* --- TOOLS ATTACHMENT SECTION --- */}
+                      <div className="space-y-4 pt-4">
+                        <div>
+                          <h3 className="text-lg font-semibold border-b border-border/50 pb-2 flex items-center gap-2">
+                            <Wrench className="h-5 w-5 text-primary" />
+                            Tools & Capabilities
+                          </h3>
+                          <p className="text-sm text-muted-foreground mt-2">
+                            Attach external tools and functions to allow this assistant to perform tasks during calls.
+                          </p>
+                        </div>
+
+                        {/* Dropdown to ADD a tool */}
+                        {allTools.length > 0 && (
+                          <div className="flex items-center gap-3 pt-2">
+                            <Select
+                              value={selectedToolToAdd}
+                              onValueChange={async (val) => {
+                                if (val) {
+                                  setSelectedToolToAdd(""); // Reset the select input immediately
+                                  await handleToggleTool(val, true);
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="w-full h-12">
+                                <SelectValue placeholder="Select a tool to attach..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {allTools.filter(t => !attachedToolIds.includes(t.tool_id || t._id)).length === 0 ? (
+                                  <div className="p-3 text-sm text-muted-foreground text-center">No more tools available</div>
+                                ) : (
+                                  allTools
+                                    .filter(t => !attachedToolIds.includes(t.tool_id || t._id))
+                                    .map(tool => (
+                                      <SelectItem key={tool.tool_id || tool._id} value={tool.tool_id || tool._id}>
+                                        <div className="flex items-center gap-3 py-1">
+                                          <Wrench className="h-4 w-4 text-muted-foreground" />
+                                          <span className="font-medium">{tool.tool_name}</span>
+                                          <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase bg-muted px-1.5 py-0.5 rounded ml-2">
+                                            {tool.tool_execution_type}
+                                          </span>
+                                        </div>
+                                      </SelectItem>
+                                    ))
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        {/* List of ATTACHED tools */}
+                        <div className="grid gap-3 pt-2">
+                          {attachedToolIds.length === 0 ? (
+                            <div className="text-sm text-muted-foreground p-6 border border-dashed border-border/60 rounded-xl text-center flex flex-col items-center">
+                              <Wrench className="h-8 w-8 mb-3 opacity-20" />
+                              <p>No tools attached yet.</p>
+                              {allTools.length === 0 && (
+                                <p className="text-xs opacity-70 mt-1">Create tools in the Tools section to attach them here.</p>
+                              )}
+                            </div>
+                          ) : (
+                            allTools
+                              .filter(tool => attachedToolIds.includes(tool.tool_id || tool._id))
+                              .map(tool => {
+                                const toolId = tool.tool_id || tool._id;
+                                
+                                return (
+                                  <div 
+                                    key={toolId} 
+                                    className="flex items-center justify-between p-4 border rounded-xl bg-primary/5 border-primary/30 shadow-sm transition-all"
+                                  >
+                                    <div className="flex items-center gap-4">
+                                      <div className="w-10 h-10 rounded-full flex items-center justify-center bg-primary/20 text-primary">
+                                        <Wrench className="h-4 w-4" />
+                                      </div>
+                                      <div>
+                                        <p className="font-semibold text-sm">{tool.tool_name}</p>
+                                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                                          {tool.tool_description || "No description provided"}
+                                        </p>
+                                        <div className="flex items-center gap-2 mt-1.5">
+                                          <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground">
+                                            {tool.tool_execution_type}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="text-destructive hover:bg-destructive/10 hover:text-destructive shrink-0"
+                                      onClick={() => handleToggleTool(toolId, false)}
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-1.5" />
+                                      Remove
+                                    </Button>
+                                  </div>
+                                )
+                              })
+                          )}
+                        </div>
+                      </div>
+                      {/* --- END TOOLS ATTACHMENT SECTION --- */}
                     </div>
                   )}
 

@@ -8,6 +8,8 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import DashboardLayout from "./components/DashboardLayout";
 import Assistant from "./pages/Assistant";
+import Tools from "./pages/Tools";
+import CallLogs from "./pages/CallLogs"; // <-- Import CallLogs
 import ApiKeys from "./pages/ApiKeys";
 import PhoneNumber from "./pages/PhoneNumber";
 import Integrations from "./pages/Integrations";
@@ -28,6 +30,8 @@ const App = () => (
             <Route path="/dashboard" element={<DashboardLayout />}>
               <Route index element={<Navigate to="assistant" replace />} />
               <Route path="assistant" element={<Assistant />} />
+              <Route path="tools" element={<Tools />} />
+              <Route path="call-logs" element={<CallLogs />} /> {/* <-- Add Call Logs Route */}
               <Route path="phone-number" element={<PhoneNumber />} />
               <Route path="api-keys" element={<ApiKeys />} />
               <Route path="integration" element={<Integrations />} />
