@@ -35,7 +35,7 @@ import { getStoredUser } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-const API_BASE = "http://localhost:3005/api/assistant";
+const API_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/assistant`;
 
 export default function CallLogsPage() {
   const user = getStoredUser();

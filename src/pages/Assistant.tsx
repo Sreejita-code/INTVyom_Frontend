@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useLocation } from "react-router-dom";
-import { Bot, Plus, Loader2, Save, Trash2, Phone, ArrowLeft, PhoneCall, Check, Wrench } from "lucide-react";
+import { Bot, Plus, Loader2, Save, Trash2, Phone, ArrowLeft, PhoneCall, Check, Wrench, Mic, X, Copy } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,15 +18,18 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { getStoredUser } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 
+// --- LiveKit Imports ---
+import { LiveKitRoom, RoomAudioRenderer, VoiceAssistantControlBar } from "@livekit/components-react";
+import "@livekit/components-styles";
+
 // --- Types ---
-const API_BASE = "http://localhost:3005/api/assistant";
-const TOOL_API_BASE = "http://localhost:3005/api/tool";
+const API_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/assistant`;
+const TOOL_API_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/tool`;
 
 interface AssistantItem {
   assistant_id: string;
   assistant_name: string;
   assistant_created_at?: string;
-  // External API may return these field names
   _id?: string;
   name?: string;
 }
@@ -36,13 +39,25 @@ interface AssistantDetail {
   assistant_name: string;
   assistant_description: string;
   assistant_prompt: string;
-  assistant_tts_model: "cartesia" | "sarvam";
+  assistant_tts_model: "cartesia" | "sarvam" | "elevenlabs";
   assistant_tts_config: {
     voice_id?: string;
     target_language_code?: string;
   };
   assistant_start_instruction: string;
-  assistant_end_call_url: string;
+  // --- New Interaction Config ---
+  assistant_interaction_config?: {
+    speaks_first?: boolean;
+    filler_words?: boolean;
+    silence_reprompts?: boolean;
+    silence_reprompt_interval?: number;
+    silence_max_reprompts?: number;
+  };
+  // --- New End Call Config ---
+  assistant_end_call_enabled?: boolean;
+  assistant_end_call_trigger_phrase?: string;
+  assistant_end_call_agent_message?: string;
+  assistant_end_call_url?: string;
 }
 
 const emptyForm: AssistantDetail = {
@@ -55,6 +70,16 @@ const emptyForm: AssistantDetail = {
     target_language_code: "hi-IN",
   },
   assistant_start_instruction: "",
+  assistant_interaction_config: {
+    speaks_first: true,
+    filler_words: false,
+    silence_reprompts: false,
+    silence_reprompt_interval: 10.0,
+    silence_max_reprompts: 2,
+  },
+  assistant_end_call_enabled: false,
+  assistant_end_call_trigger_phrase: "",
+  assistant_end_call_agent_message: "",
   assistant_end_call_url: "",
 };
 
@@ -78,7 +103,6 @@ export default function AssistantPage() {
       setMode("make-call");
       setSelectedId(null);
     } else if (mode === "make-call") {
-      // If we were in make-call but the param is gone, go to empty
       setMode("empty");
     }
   }, [location.search]);
@@ -101,6 +125,14 @@ export default function AssistantPage() {
     trunk_id: "",
   });
   const [callLoading, setCallLoading] = useState(false);
+
+  // --- Web Call State ---
+  const [webCallToken, setWebCallToken] = useState<string>("");
+  const [isWebCallActive, setIsWebCallActive] = useState<boolean>(false);
+  const [webCallLoading, setWebCallLoading] = useState<boolean>(false);
+  
+  // --- Copy State ---
+  const [copied, setCopied] = useState(false);
 
   // --- Actions ---
 
@@ -145,7 +177,7 @@ export default function AssistantPage() {
     if (!user?.user_id) return;
     setTrunksLoading(true);
     try {
-      const res = await fetch(`http://localhost:3005/api/sip/list?user_id=${user.user_id}`);
+      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/sip/list?user_id=${user.user_id}`);
       const json = await res.json();
       if (res.ok) {
         setTrunks(Array.isArray(json.data) ? json.data : []);
@@ -187,7 +219,7 @@ export default function AssistantPage() {
     }
     setCallLoading(true);
     try {
-      const res = await fetch("http://localhost:3005/api/call/outbound", {
+      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/call/outbound`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -210,6 +242,51 @@ export default function AssistantPage() {
     }
   };
 
+  // --- Web Call Actions ---
+  const handleStartWebCall = async () => {
+    if (!user?.user_id || !selectedId) return;
+    setWebCallLoading(true);
+    
+    try {
+      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/web-call/get-token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          user_id: user.user_id, 
+          assistant_id: selectedId 
+        }),
+      });
+      
+      const json = await res.json();
+      
+      if (res.ok && json.data?.token) {
+        setWebCallToken(json.data.token);
+        setIsWebCallActive(true);
+      } else {
+        throw new Error(json.error || json.message || "Failed to generate token");
+      }
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Web Call Error", description: error.message });
+    } finally {
+      setWebCallLoading(false);
+    }
+  };
+
+  const handleDisconnectWebCall = () => {
+    setIsWebCallActive(false);
+    setWebCallToken("");
+  };
+
+  // --- Copy Actions ---
+  const handleCopyId = () => {
+    if (formData.assistant_id) {
+      navigator.clipboard.writeText(formData.assistant_id);
+      setCopied(true);
+      toast({ title: "Copied!", description: "Assistant ID copied to clipboard." });
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
   const handleCreateNew = () => {
     setSelectedId(null);
     setFormData(emptyForm);
@@ -219,11 +296,7 @@ export default function AssistantPage() {
 
   const handleSelectAssistant = async (id: string) => {
     if (!user?.user_id) {
-      toast({
-        variant: "destructive",
-        title: "Authentication Error",
-        description: "User ID not found. Please log in again.",
-      });
+      toast({ variant: "destructive", title: "Authentication Error", description: "User ID not found." });
       return;
     }
 
@@ -248,13 +321,23 @@ export default function AssistantPage() {
             target_language_code: d.assistant_tts_config?.target_language_code || "hi-IN",
           },
           assistant_start_instruction: d.assistant_start_instruction || "",
+          
+          // Mapped New Fields
+          assistant_interaction_config: {
+            speaks_first: d.assistant_interaction_config?.speaks_first ?? true,
+            filler_words: d.assistant_interaction_config?.filler_words ?? false,
+            silence_reprompts: d.assistant_interaction_config?.silence_reprompts ?? false,
+            silence_reprompt_interval: d.assistant_interaction_config?.silence_reprompt_interval ?? 10.0,
+            silence_max_reprompts: d.assistant_interaction_config?.silence_max_reprompts ?? 2,
+          },
+          assistant_end_call_enabled: d.assistant_end_call_enabled ?? false,
+          assistant_end_call_trigger_phrase: d.assistant_end_call_trigger_phrase || "",
+          assistant_end_call_agent_message: d.assistant_end_call_agent_message || "",
           assistant_end_call_url: d.assistant_end_call_url || "",
         });
 
-        // Parse attached tools (depends on exact external API return structure)
         const attached = d.tools?.map((t: any) => t.tool_id || t.id || t) || d.tool_ids || [];
         setAttachedToolIds(attached);
-
       } else {
         throw new Error(json.message || "Failed to load details");
       }
@@ -268,11 +351,7 @@ export default function AssistantPage() {
   const handleDeleteAssistant = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation(); 
 
-    if (!user?.user_id) {
-      toast({ variant: "destructive", title: "Authentication Error", description: "User ID not found. Please log in again." });
-      return;
-    }
-
+    if (!user?.user_id) return;
     if (!window.confirm("Are you sure you want to delete this assistant? This action cannot be undone.")) return;
 
     setDeletingId(id);
@@ -298,11 +377,7 @@ export default function AssistantPage() {
   };
 
   const handleSubmit = async () => {
-    if (!user?.user_id) {
-      toast({ variant: "destructive", title: "Authentication Error", description: "User ID not found. Please log in again." });
-      return;
-    }
-
+    if (!user?.user_id) return;
     setSaving(true);
 
     try {
@@ -313,6 +388,12 @@ export default function AssistantPage() {
         assistant_prompt: formData.assistant_prompt,
         assistant_tts_model: formData.assistant_tts_model,
         assistant_start_instruction: formData.assistant_start_instruction,
+        
+        // Include new config fields
+        assistant_interaction_config: formData.assistant_interaction_config,
+        assistant_end_call_enabled: formData.assistant_end_call_enabled,
+        assistant_end_call_trigger_phrase: formData.assistant_end_call_trigger_phrase,
+        assistant_end_call_agent_message: formData.assistant_end_call_agent_message,
         assistant_end_call_url: formData.assistant_end_call_url,
       };
 
@@ -355,7 +436,6 @@ export default function AssistantPage() {
         if (json.assistant?.external_assistant_id) handleSelectAssistant(json.assistant.external_assistant_id);
         else if (json.data?.assistant_id) handleSelectAssistant(json.data.assistant_id);
       }
-
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
@@ -363,39 +443,25 @@ export default function AssistantPage() {
     }
   };
 
-  // Toggle Tool Logic
   const handleToggleTool = async (toolId: string, attach: boolean) => {
     if (!user?.user_id || !selectedId) return;
 
     const endpoint = attach ? "attach" : "detach";
     const originalIds = [...attachedToolIds];
 
-    // Optimistic UI Update
-    if (attach) {
-      setAttachedToolIds(prev => [...prev, toolId]);
-    } else {
-      setAttachedToolIds(prev => prev.filter(id => id !== toolId));
-    }
+    if (attach) setAttachedToolIds(prev => [...prev, toolId]);
+    else setAttachedToolIds(prev => prev.filter(id => id !== toolId));
 
     try {
       const res = await fetch(`${TOOL_API_BASE}/${endpoint}/${selectedId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: user.user_id,
-          tool_ids: [toolId]
-        })
+        body: JSON.stringify({ user_id: user.user_id, tool_ids: [toolId] })
       });
-
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || json.message || `Failed to ${endpoint} tool`);
-
-      toast({
-        title: attach ? "Tool Attached" : "Tool Detached",
-        description: `Successfully ${attach ? 'attached' : 'detached'} the tool.`
-      });
+      toast({ title: attach ? "Tool Attached" : "Tool Detached", description: `Successfully ${attach ? 'attached' : 'detached'} the tool.` });
     } catch (error: any) {
-      // Revert on failure
       setAttachedToolIds(originalIds);
       toast({ variant: "destructive", title: "Error", description: error.message });
     }
@@ -406,9 +472,16 @@ export default function AssistantPage() {
   };
 
   const updateTTS = (field: "voice_id" | "target_language_code", value: string) => {
+    setFormData(prev => ({ ...prev, assistant_tts_config: { ...prev.assistant_tts_config, [field]: value } }));
+  };
+
+  const updateInteractionConfig = (field: keyof NonNullable<AssistantDetail["assistant_interaction_config"]>, value: any) => {
     setFormData(prev => ({
       ...prev,
-      assistant_tts_config: { ...prev.assistant_tts_config, [field]: value }
+      assistant_interaction_config: {
+        ...(prev.assistant_interaction_config || emptyForm.assistant_interaction_config!),
+        [field]: value
+      }
     }));
   };
 
@@ -423,11 +496,7 @@ export default function AssistantPage() {
               <Bot className="h-5 w-5 text-primary" />
               <span className="font-semibold text-foreground">Assistants</span>
             </div>
-            <Button
-              size="sm"
-              onClick={handleCreateNew}
-              className="h-8 px-2 bg-primary text-primary-foreground hover:bg-primary/90"
-            >
+            <Button size="sm" onClick={handleCreateNew} className="h-8 px-2 bg-primary text-primary-foreground hover:bg-primary/90">
               <Plus className="h-4 w-4 mr-1" /> New
             </Button>
           </div>
@@ -506,7 +575,7 @@ export default function AssistantPage() {
           </div>
         ) : mode === "make-call" ? (
           <div className="flex-1 flex flex-col h-full overflow-hidden z-10">
-            {/* HEADER */}
+            {/* MAKE CALL HEADER */}
             <div className="p-8 border-b border-border bg-card/20 backdrop-blur-md flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shadow-inner">
@@ -519,7 +588,7 @@ export default function AssistantPage() {
               </div>
             </div>
 
-            {/* FORM CONTENT */}
+            {/* MAKE CALL CONTENT */}
             <ScrollArea className="flex-1">
               <div className="p-10 max-w-2xl mx-auto">
                 <div className="glass rounded-3xl p-10 space-y-8 border border-border/50 shadow-2xl relative overflow-hidden">
@@ -621,36 +690,75 @@ export default function AssistantPage() {
           ) : (
             <div className="flex-1 flex flex-col h-full overflow-hidden z-10">
 
-              {/* HEADER */}
+              {/* EDITOR HEADER */}
               <div className="p-6 border-b border-border bg-card/20 backdrop-blur-md flex items-start justify-between">
-                <div className="space-y-1 w-full max-w-2xl">
+                <div className="space-y-1 flex-1 w-full max-w-2xl mr-4">
                   {mode === "create" ? (
                     <div className="flex items-center gap-2 text-primary">
                       <Plus className="h-5 w-5" />
                       <h2 className="text-xl font-bold">Create New Assistant</h2>
                     </div>
                   ) : (
-                    <div className="space-y-1">
-                      <Input
-                        value={formData.assistant_name}
-                        onChange={(e) => updateField("assistant_name", e.target.value)}
-                        className="text-2xl font-bold h-auto border-none p-0 bg-transparent focus-visible:ring-0 rounded-none border-b border-transparent focus:border-primary w-full shadow-none hover:bg-transparent"
-                        placeholder="Assistant Name"
-                      />
-                      <p className="text-sm text-muted-foreground font-mono">
-                        {formData.assistant_id}
-                      </p>
+                    <div className="flex flex-col space-y-1 w-full">
+                      {/* Name Input & Delete Button Row */}
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={formData.assistant_name}
+                          onChange={(e) => updateField("assistant_name", e.target.value)}
+                          className="text-2xl font-bold h-auto border-none p-0 bg-transparent focus-visible:ring-0 rounded-none border-b border-transparent focus:border-primary shadow-none hover:bg-transparent"
+                          placeholder="Assistant Name"
+                          style={{ width: `${Math.max((formData.assistant_name || "").length, 10)}ch`, maxWidth: '100%' }}
+                        />
+                        {selectedId && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteAssistant(selectedId)}
+                            disabled={deletingId === selectedId || saving}
+                            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 h-7 w-7 rounded-full"
+                            title="Delete Assistant"
+                          >
+                            {deletingId === selectedId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                          </Button>
+                        )}
+                      </div>
+                      
+                      {/* ID & Copy Button Row */}
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm text-muted-foreground font-mono">
+                          {formData.assistant_id}
+                        </p>
+                        {formData.assistant_id && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={handleCopyId}
+                            className="h-6 w-6 text-muted-foreground hover:text-primary bg-muted/30 rounded-md"
+                            title="Copy ID"
+                          >
+                            {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
 
                 <div className="flex items-center gap-3 shrink-0 ml-4">
+                  {/* WEB CALL BUTTON */}
                   {mode === "edit" && selectedId && (
-                    <Button variant="destructive" onClick={() => handleDeleteAssistant(selectedId)} disabled={deletingId === selectedId || saving} className="shadow-lg shadow-destructive/20">
-                      {deletingId === selectedId ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
-                      Delete
+                    <Button 
+                      variant="secondary" 
+                      onClick={handleStartWebCall} 
+                      disabled={webCallLoading || saving} 
+                      className="shadow-lg bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"
+                    >
+                      {webCallLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Mic className="h-4 w-4 mr-2" />}
+                      Web Call
                     </Button>
                   )}
+
+                  {/* SAVE BUTTON */}
                   <Button onClick={handleSubmit} disabled={saving || !!deletingId} className="min-w-[100px] shadow-lg shadow-primary/20">
                     {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                     Save
@@ -662,6 +770,7 @@ export default function AssistantPage() {
               <ScrollArea className="flex-1">
                 <div className="p-8 max-w-4xl mx-auto space-y-10 pb-20">
 
+                  {/* General Configuration */}
                   {mode === "create" && (
                     <div className="grid gap-6">
                       <div className="grid gap-2">
@@ -686,6 +795,14 @@ export default function AssistantPage() {
                   </div>
 
                   <div className="space-y-4">
+                    <div className="grid gap-2">
+                      <Label className="text-base font-semibold">Start Instruction</Label>
+                      <Input placeholder="Hello, how can I help you today?" value={formData.assistant_start_instruction} onChange={(e) => updateField("assistant_start_instruction", e.target.value)} />
+                    </div>
+                  </div>
+
+                  {/* TTS Section */}
+                  <div className="space-y-4 pt-4">
                     <h3 className="text-lg font-semibold border-b border-border/50 pb-2">TTS Section</h3>
                     <div className="grid gap-4">
                       <div className="grid gap-2">
@@ -695,6 +812,7 @@ export default function AssistantPage() {
                           <SelectContent>
                             <SelectItem value="cartesia">Cartesia</SelectItem>
                             <SelectItem value="sarvam">Sarvam</SelectItem>
+                            <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -717,40 +835,117 @@ export default function AssistantPage() {
                           </Select>
                         </div>
                       )}
+                    </div>
+                  </div>
 
-                      {mode === "create" && (
-                        <>
+                  {/* Interaction Config */}
+                  <div className="space-y-4 pt-4">
+                    <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Interaction Settings</h3>
+                    <div className="grid gap-4">
+                      <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
+                        <div>
+                          <Label>Speaks First</Label>
+                          <p className="text-sm text-muted-foreground mt-1">If enabled, the assistant initiates the conversation immediately.</p>
+                        </div>
+                        <Switch checked={formData.assistant_interaction_config?.speaks_first} onCheckedChange={(v) => updateInteractionConfig("speaks_first", v)} />
+                      </div>
+
+                      <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
+                        <div>
+                          <Label>Filler Words</Label>
+                          <p className="text-sm text-muted-foreground mt-1">Use short phrases like "Um" or "Let me see" to reduce perceived latency.</p>
+                        </div>
+                        <Switch checked={formData.assistant_interaction_config?.filler_words} onCheckedChange={(v) => updateInteractionConfig("filler_words", v)} />
+                      </div>
+
+                      <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
+                        <div>
+                          <Label>Silence Reprompts</Label>
+                          <p className="text-sm text-muted-foreground mt-1">Assistant will proactively speak if the user remains silent.</p>
+                        </div>
+                        <Switch checked={formData.assistant_interaction_config?.silence_reprompts} onCheckedChange={(v) => updateInteractionConfig("silence_reprompts", v)} />
+                      </div>
+
+                      {formData.assistant_interaction_config?.silence_reprompts && (
+                        <div className="grid grid-cols-2 gap-6 p-4 border rounded-xl bg-card/50">
                           <div className="grid gap-2">
-                            <Label>Start Instruction</Label>
-                            <Input placeholder="Hello, how can I help you today?" value={formData.assistant_start_instruction} onChange={(e) => updateField("assistant_start_instruction", e.target.value)} />
+                            <Label>Reprompt Interval (seconds)</Label>
+                            <Input 
+                              type="number" 
+                              step="0.5" 
+                              min="1" 
+                              max="60" 
+                              value={formData.assistant_interaction_config.silence_reprompt_interval} 
+                              onChange={(e) => updateInteractionConfig("silence_reprompt_interval", parseFloat(e.target.value) || 10.0)} 
+                            />
                           </div>
                           <div className="grid gap-2">
-                            <Label>End Call URL (Optional)</Label>
-                            <Input placeholder="https://callback.com/end" value={formData.assistant_end_call_url} onChange={(e) => updateField("assistant_end_call_url", e.target.value)} />
+                            <Label>Max Reprompts</Label>
+                            <Input 
+                              type="number" 
+                              min="0" 
+                              max="5" 
+                              value={formData.assistant_interaction_config.silence_max_reprompts} 
+                              onChange={(e) => updateInteractionConfig("silence_max_reprompts", parseInt(e.target.value, 10) || 2)} 
+                            />
                           </div>
-                        </>
+                        </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Advanced Section (Edit Mode) */}
-                  {mode === "edit" && (
-                    <div className="space-y-10">
-                      <div className="space-y-4">
-                        <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Advanced</h3>
-                        <div className="grid gap-4">
-                          <div className="grid gap-2">
-                            <Label>Start Instruction</Label>
-                            <Input placeholder="Hello, how can I help you today?" value={formData.assistant_start_instruction} onChange={(e) => updateField("assistant_start_instruction", e.target.value)} />
-                          </div>
-                          <div className="grid gap-2">
-                            <Label>End Call URL (Optional)</Label>
-                            <Input placeholder="https://callback.com/end" value={formData.assistant_end_call_url} onChange={(e) => updateField("assistant_end_call_url", e.target.value)} className="font-mono text-sm" />
-                          </div>
-                        </div>
+                  {/* End Call Config */}
+                  <div className="space-y-4 pt-4">
+                    <h3 className="text-lg font-semibold border-b border-border/50 pb-2">End Call Settings</h3>
+                    <div className="grid gap-4">
+                      
+                      {/* End Call URL - ALWAYS VISIBLE */}
+                      <div className="grid gap-2 p-4 border rounded-xl bg-card">
+                        <Label>End Call Webhook URL (Optional)</Label>
+                        <p className="text-sm text-muted-foreground mb-2">URL to POST call details when the call ends.</p>
+                        <Input 
+                          placeholder="https://api.example.com/call-ended" 
+                          value={formData.assistant_end_call_url} 
+                          onChange={(e) => updateField("assistant_end_call_url", e.target.value)} 
+                          className="font-mono text-sm" 
+                        />
                       </div>
 
-                      {/* --- TOOLS ATTACHMENT SECTION --- */}
+                      <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
+                        <div>
+                          <Label>Enable End Call Tool</Label>
+                          <p className="text-sm text-muted-foreground mt-1">Allows the assistant to programmatically hang up the call.</p>
+                        </div>
+                        <Switch checked={formData.assistant_end_call_enabled} onCheckedChange={(v) => updateField("assistant_end_call_enabled", v)} />
+                      </div>
+
+                      {/* Trigger Phrase & Message - ONLY VISIBLE IF TOOL IS ENABLED */}
+                      {formData.assistant_end_call_enabled && (
+                        <div className="grid gap-4 p-4 border rounded-xl bg-card/50">
+                          <div className="grid gap-2">
+                            <Label>Trigger Phrase (Optional)</Label>
+                            <Input 
+                              placeholder="e.g. Thanks, you can end the call now" 
+                              value={formData.assistant_end_call_trigger_phrase} 
+                              onChange={(e) => updateField("assistant_end_call_trigger_phrase", e.target.value)} 
+                            />
+                          </div>
+                          <div className="grid gap-2">
+                            <Label>Agent Message (Optional)</Label>
+                            <Input 
+                              placeholder="Thank you for your time. Have a great day!" 
+                              value={formData.assistant_end_call_agent_message} 
+                              onChange={(e) => updateField("assistant_end_call_agent_message", e.target.value)} 
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Tools Section (Edit Mode Only) */}
+                  {mode === "edit" && (
+                    <div className="space-y-10">
                       <div className="space-y-4 pt-4">
                         <div>
                           <h3 className="text-lg font-semibold border-b border-border/50 pb-2 flex items-center gap-2">
@@ -769,7 +964,7 @@ export default function AssistantPage() {
                               value={selectedToolToAdd}
                               onValueChange={async (val) => {
                                 if (val) {
-                                  setSelectedToolToAdd(""); // Reset the select input immediately
+                                  setSelectedToolToAdd(""); 
                                   await handleToggleTool(val, true);
                                 }
                               }}
@@ -852,7 +1047,6 @@ export default function AssistantPage() {
                           )}
                         </div>
                       </div>
-                      {/* --- END TOOLS ATTACHMENT SECTION --- */}
                     </div>
                   )}
 
@@ -862,6 +1056,52 @@ export default function AssistantPage() {
           )
         )}
       </div>
+
+      {/* --- LIVEKIT WEB CALL OVERLAY --- */}
+      {isWebCallActive && webCallToken && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-card border border-border rounded-3xl shadow-2xl overflow-hidden relative">
+            
+            {/* Close Button */}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="absolute top-4 right-4 z-10 rounded-full bg-background/50 hover:bg-destructive/10 hover:text-destructive"
+              onClick={handleDisconnectWebCall}
+            >
+              <X className="h-5 w-5" />
+            </Button>
+
+            <div className="p-8 pb-4 text-center space-y-2">
+              <div className="w-20 h-20 mx-auto bg-primary/10 rounded-full flex items-center justify-center relative mb-6 shadow-inner">
+                <Bot className="h-10 w-10 text-primary relative z-10" />
+                <div className="absolute inset-0 border-2 border-primary/30 rounded-full animate-ping opacity-50"></div>
+              </div>
+              <h3 className="text-2xl font-bold">Talking to {formData.assistant_name || "Assistant"}</h3>
+              <p className="text-sm text-muted-foreground">Voice assistant connected.</p>
+            </div>
+
+            <div className="p-6 bg-muted/30">
+              <LiveKitRoom
+                video={false}
+                audio={true}
+                token={webCallToken}
+                serverUrl={import.meta.env.VITE_LIVEKIT_URL}
+                connect={true}
+                onDisconnected={handleDisconnectWebCall}
+                className="flex flex-col items-center gap-4"
+              >
+                <RoomAudioRenderer />
+                
+                {/* Standard LiveKit Voice Assistant controls */}
+                <div className="w-full max-w-[250px] mx-auto">
+                  <VoiceAssistantControlBar />
+                </div>
+              </LiveKitRoom>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

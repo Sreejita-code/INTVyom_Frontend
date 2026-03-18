@@ -28,9 +28,10 @@ const Auth = () => {
     setLoading(true);
 
     try {
+      const BACKEND = import.meta.env.VITE_BACKEND_URL;
       const url = isSignup
-        ? "http://localhost:3005/api/auth/signup"
-        : "http://localhost:3005/api/auth/login";
+        ? `${BACKEND}/api/auth/signup`
+        : `${BACKEND}/api/auth/login`;
 
       const body = isSignup
         ? {

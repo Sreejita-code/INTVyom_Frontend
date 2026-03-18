@@ -20,8 +20,9 @@ const ApiKeys = () => {
     const fetchKeys = async () => {
       if (!user?.user_name) return;
       try {
+        const BACKEND = import.meta.env.VITE_BACKEND_URL;
         const res = await fetch(
-          `http://localhost:3005/api/auth/get_api?user_name=${encodeURIComponent(user.user_name)}`
+          `${BACKEND}/api/auth/get_api?user_name=${encodeURIComponent(user.user_name)}`
         );
         const data = await res.json();
         if (Array.isArray(data)) {

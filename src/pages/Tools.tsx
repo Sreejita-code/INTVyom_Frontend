@@ -17,7 +17,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { getStoredUser } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 
-const API_BASE = "http://localhost:3005/api/tool";
+const API_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/tool`;
 
 interface ToolParameter {
   name: string;

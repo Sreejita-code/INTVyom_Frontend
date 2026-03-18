@@ -16,13 +16,17 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
-const API_BASE = "http://localhost:3005/api/sip";
+const API_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/sip`;
 
+// Adjusted interface to allow for mongoose _id as well
 interface TrunkItem {
-    trunk_id: string;
+    trunk_id?: string;
+    _id?: string;
+    external_trunk_id?: string;
     trunk_name: string;
     trunk_type: "twilio" | "exotel";
-    trunk_created_at: string;
+    trunk_created_at?: string;
+    createdAt?: string;
 }
 
 interface TrunkDetail {
@@ -105,43 +109,43 @@ export default function PhoneNumberPage() {
         }
     }, [location, navigate]);
 
-    const handleSelectTrunk = async (trunk: TrunkItem) => {
+    // Accept 'any' temporarily or strict type but extracting safely
+    const handleSelectTrunk = async (trunk: any) => {
         if (!user?.user_id) return;
 
         setSelectedTrunk(null);
         setDetailLoading(true);
 
+        // SAFELY EXTRACT THE ID:
+        const trunkId = trunk.trunk_id || trunk._id || trunk.external_trunk_id;
+
+        if (!trunkId) {
+             toast({ variant: "destructive", title: "Error", description: "Could not find ID for this trunk." });
+             setDetailLoading(false);
+             return;
+        }
+
         try {
-            // Trying to fetch details. If it fails, we use the basic info we have.
-            const res = await fetch(`${API_BASE}/details/${trunk.trunk_id}?user_id=${user.user_id}`);
+            const res = await fetch(`${API_BASE}/details/${trunkId}?user_id=${user.user_id}`);
+            
+            // If the route doesn't exist (404), throw so we go to the fallback
+            if (!res.ok) throw new Error("Details route not found or failed");
+            
             const json = await res.json();
-            if (res.ok) {
-                setSelectedTrunk(json.trunk || json.data);
-            } else {
-                // Fallback: created a partial detail object from the list item
-                setSelectedTrunk({
-                    _id: trunk.trunk_id,
-                    user_id: user.user_id,
-                    external_trunk_id: trunk.trunk_id,
-                    trunk_name: trunk.trunk_name,
-                    trunk_type: trunk.trunk_type,
-                    trunk_config: {}, // Config usually hidden in list
-                    createdAt: trunk.trunk_created_at,
-                    updatedAt: trunk.trunk_created_at,
-                });
-            }
+            setSelectedTrunk(json.trunk || json.data);
+            
         } catch (error) {
-            console.error(error);
-            // Fallback
+            console.warn("Falling back to local list data for details", error);
+            // Fallback: created a partial detail object from the list item
             setSelectedTrunk({
-                _id: trunk.trunk_id,
+                _id: trunk._id || trunk.trunk_id,
                 user_id: user.user_id,
-                external_trunk_id: trunk.trunk_id,
+                external_trunk_id: trunk.external_trunk_id || trunk.trunk_id,
                 trunk_name: trunk.trunk_name,
                 trunk_type: trunk.trunk_type,
-                trunk_config: {},
-                createdAt: trunk.trunk_created_at,
-                updatedAt: trunk.trunk_created_at,
+                trunk_config: trunk.trunk_config || {}, // Use config if it came with the list
+                createdAt: trunk.trunk_created_at || trunk.createdAt,
+                updatedAt: trunk.trunk_created_at || trunk.updatedAt,
             });
         } finally {
             setDetailLoading(false);
@@ -421,41 +425,46 @@ export default function PhoneNumberPage() {
                                 </p>
                             </div>
                         ) : (
-                            trunks.map((item) => (
-                                <div
-                                    key={item.trunk_id}
-                                    onClick={() => handleSelectTrunk(item)}
-                                    className={cn(
-                                        "group flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all border",
-                                        selectedTrunk?.external_trunk_id === item.trunk_id
-                                            ? "bg-primary/5 border-primary/30 shadow-[0_0_20px_-5px_rgba(var(--primary),0.2)]"
-                                            : "bg-transparent border-transparent hover:bg-muted/50 hover:border-border/50"
-                                    )}
-                                >
-                                    <div className={cn(
-                                        "w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-transform group-hover:scale-110",
-                                        selectedTrunk?.external_trunk_id === item.trunk_id
-                                            ? "bg-primary text-primary-foreground"
-                                            : "bg-muted text-muted-foreground"
-                                    )}>
-                                        <Phone className="h-5 w-5" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <h4 className={cn(
-                                            "text-sm font-semibold truncate",
-                                            selectedTrunk?.external_trunk_id === item.trunk_id ? "text-primary" : "text-foreground"
+                            trunks.map((item) => {
+                                // Extract consistent ID for UI matching
+                                const itemId = item.trunk_id || item._id || item.external_trunk_id;
+                                
+                                return (
+                                    <div
+                                        key={itemId}
+                                        onClick={() => handleSelectTrunk(item)}
+                                        className={cn(
+                                            "group flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all border",
+                                            (selectedTrunk?.external_trunk_id === itemId || selectedTrunk?._id === itemId)
+                                                ? "bg-primary/5 border-primary/30 shadow-[0_0_20px_-5px_rgba(var(--primary),0.2)]"
+                                                : "bg-transparent border-transparent hover:bg-muted/50 hover:border-border/50"
+                                        )}
+                                    >
+                                        <div className={cn(
+                                            "w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-transform group-hover:scale-110",
+                                            (selectedTrunk?.external_trunk_id === itemId || selectedTrunk?._id === itemId)
+                                                ? "bg-primary text-primary-foreground"
+                                                : "bg-muted text-muted-foreground"
                                         )}>
-                                            {item.trunk_name}
-                                        </h4>
-                                        <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground/60 mt-0.5">
-                                            {item.trunk_type}
-                                        </p>
+                                            <Phone className="h-5 w-5" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className={cn(
+                                                "text-sm font-semibold truncate",
+                                                (selectedTrunk?.external_trunk_id === itemId || selectedTrunk?._id === itemId) ? "text-primary" : "text-foreground"
+                                            )}>
+                                                {item.trunk_name}
+                                            </h4>
+                                            <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground/60 mt-0.5">
+                                                {item.trunk_type}
+                                            </p>
+                                        </div>
+                                        {(selectedTrunk?.external_trunk_id === itemId || selectedTrunk?._id === itemId) && (
+                                            <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                                        )}
                                     </div>
-                                    {selectedTrunk?.external_trunk_id === item.trunk_id && (
-                                        <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                                    )}
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
                 </ScrollArea>
@@ -499,7 +508,7 @@ export default function PhoneNumberPage() {
                                     <div>
                                         <h2 className="text-3xl font-black tracking-tight">{selectedTrunk.trunk_name}</h2>
                                         <p className="text-xs font-mono text-muted-foreground/60 flex items-center gap-2">
-                                            ID: {selectedTrunk.external_trunk_id} <ExternalLink className="h-3 w-3" />
+                                            ID: {selectedTrunk.external_trunk_id || selectedTrunk._id} <ExternalLink className="h-3 w-3" />
                                         </p>
                                     </div>
                                 </div>
@@ -530,7 +539,7 @@ export default function PhoneNumberPage() {
                                     {selectedTrunk.trunk_type}
                                 </div>
                                 <p className="text-[10px] text-muted-foreground">
-                                    Updated {new Date(selectedTrunk.updatedAt).toLocaleDateString()}
+                                    Updated {selectedTrunk.updatedAt ? new Date(selectedTrunk.updatedAt).toLocaleDateString() : 'Unknown'}
                                 </p>
                             </div>
                         </div>
@@ -552,12 +561,14 @@ export default function PhoneNumberPage() {
                                                 </div>
                                                 <div className="space-y-1">
                                                     <Label className="text-[10px] uppercase font-bold text-muted-foreground">Created On</Label>
-                                                    <p className="text-sm font-semibold">{new Date(selectedTrunk.createdAt).toLocaleDateString(undefined, { dateStyle: 'long' })}</p>
+                                                    <p className="text-sm font-semibold">
+                                                        {selectedTrunk.createdAt ? new Date(selectedTrunk.createdAt).toLocaleDateString(undefined, { dateStyle: 'long' }) : 'Unknown'}
+                                                    </p>
                                                 </div>
                                                 {selectedTrunk.trunk_type === "twilio" && (
                                                     <div className="space-y-1">
                                                         <Label className="text-[10px] uppercase font-bold text-muted-foreground">SIP Address</Label>
-                                                        <p className="text-sm font-mono break-all">{selectedTrunk.trunk_config.address || 'N/A'}</p>
+                                                        <p className="text-sm font-mono break-all">{selectedTrunk.trunk_config?.address || 'N/A'}</p>
                                                     </div>
                                                 )}
                                             </div>
@@ -579,7 +590,7 @@ export default function PhoneNumberPage() {
                                                                     <User className="h-3 w-3" /> Account SID
                                                                 </Label>
                                                                 <div className="bg-muted/30 p-3 rounded-lg border border-border/50">
-                                                                    <p className="text-sm font-mono truncate">{selectedTrunk.trunk_config.username || 'Not set'}</p>
+                                                                    <p className="text-sm font-mono truncate">{selectedTrunk.trunk_config?.username || 'Not set'}</p>
                                                                 </div>
                                                             </div>
                                                             <div className="space-y-2">
@@ -599,7 +610,7 @@ export default function PhoneNumberPage() {
                                                                 <Hash className="h-3 w-3" /> Registered Numbers
                                                             </Label>
                                                             <div className="flex flex-wrap gap-3">
-                                                                {selectedTrunk.trunk_config.numbers && selectedTrunk.trunk_config.numbers.length > 0 ? (
+                                                                {selectedTrunk.trunk_config?.numbers && selectedTrunk.trunk_config.numbers.length > 0 ? (
                                                                     selectedTrunk.trunk_config.numbers.map(n => (
                                                                         <div key={n} className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-bold">
                                                                             <Phone className="h-3 w-3" /> {n}
@@ -618,7 +629,7 @@ export default function PhoneNumberPage() {
                                                             <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center text-primary">
                                                                 <Phone className="h-6 w-6" />
                                                             </div>
-                                                            <p className="text-2xl font-black tracking-tight">{selectedTrunk.trunk_config.exotel_number || 'N/A'}</p>
+                                                            <p className="text-2xl font-black tracking-tight">{selectedTrunk.trunk_config?.exotel_number || 'N/A'}</p>
                                                         </div>
                                                     </div>
                                                 )}
