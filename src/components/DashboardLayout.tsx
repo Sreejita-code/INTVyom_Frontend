@@ -1,5 +1,5 @@
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
-import { Bot, KeyRound, LogOut, Phone, Blocks, PhoneCall, Wrench, List } from "lucide-react"; // <-- Added List
+import { Bot, KeyRound, LogOut, Phone, Blocks, PhoneCall, Wrench, List, PhoneIncoming, Webhook } from "lucide-react"; // <-- Import Webhook
 import { clearUser, getStoredUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -7,8 +7,10 @@ const navItems = [
   { label: "Make a Call", icon: PhoneCall, path: "/dashboard/assistant?mode=make-call" },
   { label: "Assistant", icon: Bot, path: "/dashboard/assistant" },
   { label: "Tools", icon: Wrench, path: "/dashboard/tools" },
-  { label: "Call Logs", icon: List, path: "/dashboard/call-logs" }, // <-- Added Call Logs
+  { label: "Call Logs", icon: List, path: "/dashboard/call-logs" },
   { label: "Phone number", icon: Phone, path: "/dashboard/phone-number" },
+  { label: "Inbound Routes", icon: PhoneIncoming, path: "/dashboard/inbound" },
+  { label: "Inbound Context", icon: Webhook, path: "/dashboard/inbound-context" }, // <-- Add to Nav
   { label: "API Keys", icon: KeyRound, path: "/dashboard/api-keys" },
   { label: "Integration", icon: Blocks, path: "/dashboard/integration" },
 ];
@@ -37,7 +39,7 @@ const DashboardLayout = () => {
         {/* Nav */}
         <nav className="flex-1 p-3 space-y-1">
           {navItems.map((item) => {
-            const active = (location.pathname + location.search) === item.path;
+            const active = (location.pathname + location.search) === item.path || location.pathname === item.path;
             return (
               <button
                 key={item.path}
