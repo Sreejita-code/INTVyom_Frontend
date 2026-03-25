@@ -1,14 +1,15 @@
 # INTVyom Frontend
 
-React + Vite frontend for the INTVyom dashboard UI.
+React + Vite frontend for the INTVyom AI voice assistant dashboard.
 
 ## Tech Stack
 
-- React 18
+- React 18 + TypeScript
 - Vite 5
-- TypeScript
-- Tailwind CSS
-- shadcn/ui
+- Tailwind CSS + shadcn/ui
+- LiveKit (real-time voice)
+- React Router v6
+- TanStack Query
 
 ## Local Development
 
@@ -17,72 +18,66 @@ npm install
 npm run dev
 ```
 
-Default dev server runs on `http://localhost:8080`.
+Dev server runs on `http://localhost:5173` (Vite default).
 
 ## Scripts
 
 - `npm run dev` - start local dev server
-- `npm run build` - create production build
+- `npm run build` - production build
 - `npm run preview` - preview production build locally
 - `npm run lint` - run ESLint
 - `npm run test` - run Vitest tests
 
-## Production Deployment (EC2 + Docker)
+## Environment Variables
 
-This repo includes:
-
-- `Dockerfile` - multi-stage build (Node build + Nginx runtime)
-- `nginx.conf` - SPA routing config (`/index.html` fallback)
-- `docker-compose.yml` - container orchestration with port `8003`
-- `.dockerignore` - slimmer/faster Docker builds
-- `.env.production.example` - required production env keys
-
-### 1. Create production env file
-
-```bash
-cp .env.production.example .env.production
-```
-
-Then set real values:
+Create a `.env` file in the root:
 
 ```env
 VITE_BACKEND_URL=https://your-api-domain
 VITE_LIVEKIT_URL=wss://your-livekit-domain
+APP_PORT=8003
 ```
 
-### 2. Build and start
+> `.env` is git-ignored — never commit real secrets.
+
+## Production Deployment (Docker)
 
 ```bash
-docker compose --env-file .env.production up -d --build
+docker compose up -d --build
 ```
 
-### 3. Verify
+App is served by **nginx** on the port set in `APP_PORT` (default `8003`).
+
+### How it works
+
+| File               | Purpose                                      |
+|--------------------|----------------------------------------------|
+| `Dockerfile`       | Multi-stage: Node builds, nginx serves dist  |
+| `nginx.conf`       | SPA routing — falls back to `/index.html`    |
+| `docker-compose.yml` | Wires env vars and port mapping            |
+
+### Verify
 
 ```bash
 curl http://localhost:8003
 ```
 
-App will be available on:
-
-- `http://<EC2_PUBLIC_IP>:8003`
-
 ## Project Structure
 
-```text
+```
 .
-|-- src/
-|   |-- components/
-|   |-- hooks/
-|   |-- lib/
-|   |-- pages/
-|   |-- test/
-|   |-- App.tsx
-|   `-- main.tsx
-|-- public/
-|-- Dockerfile
-|-- docker-compose.yml
-|-- nginx.conf
-|-- .dockerignore
-|-- .env.production.example
-`-- README.md
+├── src/
+│   ├── components/        # shared + shadcn/ui components
+│   ├── hooks/             # custom React hooks
+│   ├── lib/               # auth, utilities
+│   ├── pages/             # route-level page components
+│   ├── test/              # Vitest tests
+│   ├── App.tsx
+│   └── main.tsx
+├── public/
+├── Dockerfile
+├── docker-compose.yml
+├── nginx.conf
+├── .env                   # local env (git-ignored)
+└── README.md
 ```

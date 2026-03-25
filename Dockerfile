@@ -14,14 +14,11 @@ ENV VITE_LIVEKIT_URL=${VITE_LIVEKIT_URL}
 
 RUN npm run build
 
-FROM node:20-alpine AS runner
+FROM nginx:alpine AS runner
 
-RUN npm install -g serve
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-COPY --from=builder /app/dist /app/dist
+EXPOSE 80
 
-ENV APP_PORT=3000
-
-EXPOSE ${APP_PORT}
-
-CMD serve -s /app/dist -l ${APP_PORT}
+CMD ["nginx", "-g", "daemon off;"]
