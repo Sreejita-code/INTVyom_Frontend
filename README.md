@@ -1,73 +1,88 @@
-# Welcome to your Lovable project
+# INTVyom Frontend
 
-## Project info
+React + Vite frontend for the INTVyom dashboard UI.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Tech Stack
 
-## How can I edit this code?
+- React 18
+- Vite 5
+- TypeScript
+- Tailwind CSS
+- shadcn/ui
 
-There are several ways of editing your application.
+## Local Development
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Default dev server runs on `http://localhost:8080`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Scripts
 
-**Use GitHub Codespaces**
+- `npm run dev` - start local dev server
+- `npm run build` - create production build
+- `npm run preview` - preview production build locally
+- `npm run lint` - run ESLint
+- `npm run test` - run Vitest tests
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Production Deployment (EC2 + Docker)
 
-## What technologies are used for this project?
+This repo includes:
 
-This project is built with:
+- `Dockerfile` - multi-stage build (Node build + Nginx runtime)
+- `nginx.conf` - SPA routing config (`/index.html` fallback)
+- `docker-compose.yml` - container orchestration with port `8003`
+- `.dockerignore` - slimmer/faster Docker builds
+- `.env.production.example` - required production env keys
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### 1. Create production env file
 
-## How can I deploy this project?
+```bash
+cp .env.production.example .env.production
+```
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+Then set real values:
 
-## Can I connect a custom domain to my Lovable project?
+```env
+VITE_BACKEND_URL=https://your-api-domain
+VITE_LIVEKIT_URL=wss://your-livekit-domain
+```
 
-Yes, you can!
+### 2. Build and start
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+```bash
+docker compose --env-file .env.production up -d --build
+```
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+### 3. Verify
+
+```bash
+curl http://localhost:8003
+```
+
+App will be available on:
+
+- `http://<EC2_PUBLIC_IP>:8003`
+
+## Project Structure
+
+```text
+.
+|-- src/
+|   |-- components/
+|   |-- hooks/
+|   |-- lib/
+|   |-- pages/
+|   |-- test/
+|   |-- App.tsx
+|   `-- main.tsx
+|-- public/
+|-- Dockerfile
+|-- docker-compose.yml
+|-- nginx.conf
+|-- .dockerignore
+|-- .env.production.example
+`-- README.md
+```
