@@ -62,6 +62,7 @@ export default function CallLogsPage() {
 
   // Dialog State
   const [selectedTranscripts, setSelectedTranscripts] = useState<any[] | null>(null);
+  const [selectedRecording, setSelectedRecording] = useState<string | null>(null); // Added recording state
 
   // 1. Fetch Assistants for the Dropdown
   const fetchAssistants = useCallback(async () => {
@@ -316,7 +317,14 @@ export default function CallLogsPage() {
                       </TableCell>
                       <TableCell>
                         {log.recording_path ? (
-                          <audio controls src={log.recording_path} className="h-8 w-48" preload="none" />
+                          <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            onClick={() => setSelectedRecording(log.recording_path)}
+                          >
+                            <Play className="h-4 w-4 mr-2" />
+                            Listen to recording
+                          </Button>
                         ) : (
                           <span className="text-xs text-muted-foreground italic">No recording</span>
                         )}
@@ -361,14 +369,17 @@ export default function CallLogsPage() {
 
       {/* Transcript Dialog */}
       <Dialog open={!!selectedTranscripts} onOpenChange={(open) => !open && setSelectedTranscripts(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+        {/* Changed to max-w-4xl for a wider box, and h-[85vh] for a taller, fixed-height box */}
+        <DialogContent className="max-w-4xl h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-primary" />
               Call Transcript
             </DialogTitle>
           </DialogHeader>
-          <ScrollArea className="flex-1 p-4 bg-muted/20 rounded-md border">
+          
+          {/* Added h-full to explicitly bound the scroll area within the flex container */}
+          <ScrollArea className="flex-1 h-full p-4 bg-muted/20 rounded-md border pr-4">
             <div className="space-y-4">
               {selectedTranscripts?.map((t, idx) => {
                 const isAgent = t.speaker?.toLowerCase() === 'agent' || t.speaker?.toLowerCase() === 'assistant';
@@ -387,6 +398,26 @@ export default function CallLogsPage() {
               })}
             </div>
           </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Recording Player Dialog */}
+      <Dialog open={!!selectedRecording} onOpenChange={(open) => !open && setSelectedRecording(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Play className="h-5 w-5 text-primary" />
+              Call Recording
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col p-4 bg-muted/20 rounded-xl border border-border/50 shadow-inner mt-2">
+            <audio 
+              controls 
+              src={selectedRecording || ""} 
+              className="w-full" 
+              autoPlay 
+            />
+          </div>
         </DialogContent>
       </Dialog>
     </div>
