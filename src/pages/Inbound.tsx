@@ -96,18 +96,14 @@ export default function InboundPage() {
             const astJson = await astRes.json();
 
             if (astRes.ok) {
-                // 1. Handle both { data: [...] } and direct array [...] formats
                 let rawAssistants: any[] = [];
                 if (Array.isArray(astJson?.data?.assistants)) rawAssistants = astJson.data.assistants;
                 else if (Array.isArray(astJson?.data)) rawAssistants = astJson.data;
                 else if (Array.isArray(astJson?.assistants)) rawAssistants = astJson.assistants;
                 else if (Array.isArray(astJson)) rawAssistants = astJson;
 
-                // 2. Map whatever ID and Name fields the backend provides to our strict frontend interface
                 const formattedAssistants = rawAssistants.map((ast: any) => ({
-                    // Safely grab the ID whether it's local Mongo (_id) or external
                     assistant_id: ast.assistant_id || ast.external_assistant_id || ast._id || ast.id,
-                    // Safely grab the name
                     name: ast.name || ast.assistant_name || "Unnamed Assistant"
                 }));
 
@@ -134,41 +130,34 @@ export default function InboundPage() {
         }
     }, [user?.user_id]);
 
-    const fetchList = useCallback(async () => {
+    // FIX: Removed selectedInbound dependencies and added showLoading flag to prevent infinite loops
+    const fetchList = async (showLoading = true) => {
         if (!user?.user_id) {
             setListLoading(false);
             return;
         }
-        setListLoading(true);
+        if (showLoading) setListLoading(true);
         try {
             const res = await fetch(`${API_BASE}/list?user_id=${user.user_id}`);
             const json = await res.json();
             if (res.ok) {
                 const data = Array.isArray(json.data) ? json.data : [];
                 setInbounds(data);
-
-                if (selectedInbound) {
-                    const updatedSelected = data.find((item: InboundItem) => item.inbound_id === selectedInbound.inbound_id);
-                    if (updatedSelected) {
-                        setSelectedInbound(updatedSelected);
-                        setUpdateAssistantId(updatedSelected.assistant_id || "none");
-                    } else {
-                        setSelectedInbound(null);
-                    }
-                }
             }
         } catch (error) {
             console.error(error);
             toast({ variant: "destructive", title: "Failed to load inbound mappings" });
         } finally {
-            setListLoading(false);
+            if (showLoading) setListLoading(false);
         }
-    }, [user?.user_id, toast, selectedInbound]);
+    };
 
+    // FIX: Ensure it only mounts on user load
     useEffect(() => {
         fetchData();
-        fetchList();
-    }, [fetchData, fetchList]);
+        fetchList(true);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.user_id]);
 
     const handleSelectInbound = (inbound: InboundItem) => {
         setSelectedInbound(inbound);
@@ -213,7 +202,7 @@ export default function InboundPage() {
                 toast({ title: "Success", description: "Inbound number assigned successfully" });
                 setIsModalOpen(false);
                 setModalForm({ phone_number: "", assistant_id: "none" });
-                await fetchList();
+                await fetchList(false); // Fetch silently in background
             } else {
                 toast({ variant: "destructive", title: "Error", description: json.error || "Failed to assign number" });
             }
@@ -244,7 +233,16 @@ export default function InboundPage() {
             const json = await res.json();
             if (res.ok) {
                 toast({ title: "Success", description: "Mapping updated successfully" });
-                await fetchList();
+                
+                // Optimistic UI Update instantly reflects changes
+                const attachedAssistant = assistants.find(a => a.assistant_id === updateAssistantId);
+                setSelectedInbound(prev => prev ? {
+                    ...prev,
+                    assistant_id: updateAssistantId === "none" ? null : updateAssistantId,
+                    assistant_name: attachedAssistant ? attachedAssistant.name : null
+                } : null);
+
+                await fetchList(false); // Fetch silently in background
             } else {
                 toast({ variant: "destructive", title: "Error", description: json.error || "Failed to update mapping" });
             }
@@ -266,7 +264,16 @@ export default function InboundPage() {
             const json = await res.json();
             if (res.ok) {
                 toast({ title: "Success", description: "Assistant detached successfully" });
-                await fetchList();
+                
+                // Optimistic Update
+                setSelectedInbound(prev => prev ? {
+                    ...prev,
+                    assistant_id: null,
+                    assistant_name: null
+                } : null);
+                setUpdateAssistantId("none");
+
+                await fetchList(false); // Fetch silently in background
             } else {
                 toast({ variant: "destructive", title: "Error", description: json.error || "Failed to detach" });
             }
@@ -292,7 +299,7 @@ export default function InboundPage() {
             if (res.ok) {
                 toast({ title: "Success", description: "Inbound mapping deleted successfully" });
                 setSelectedInbound(null);
-                await fetchList();
+                await fetchList(false);
             } else {
                 toast({ variant: "destructive", title: "Error", description: json.error || "Failed to delete" });
             }
