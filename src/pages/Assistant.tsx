@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useLocation } from "react-router-dom";
-import { Bot, Plus, Loader2, Save, Trash2, Phone, ArrowLeft, PhoneCall, Check, Wrench, Mic, X, Copy, MessageSquare, Send, PhoneOff } from "lucide-react";
- 
+import { Bot, Plus, Loader2, Save, Trash2, Phone, Check, Wrench, Mic, X, Copy, MessageSquare, Send, PhoneOff, PhoneCall } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,14 +18,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { getStoredUser } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useChatTranscriptions } from "@/hooks/useChatTranscriptions";
+
 // --- LiveKit Imports ---
-import { LiveKitRoom, RoomAudioRenderer, VoiceAssistantControlBar, useLocalParticipant } from "@livekit/components-react";
+import { LiveKitRoom, RoomAudioRenderer, VoiceAssistantControlBar, useLocalParticipant, useChat } from "@livekit/components-react";
 import "@livekit/components-styles";
- 
+
 // --- Types ---
 const API_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/assistant`;
 const TOOL_API_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/tool`;
- 
+
 interface AssistantItem {
   assistant_id: string;
   assistant_name: string;
@@ -33,7 +34,7 @@ interface AssistantItem {
   _id?: string;
   name?: string;
 }
- 
+
 interface AssistantDetail {
   assistant_id?: string;
   assistant_name: string;
@@ -45,7 +46,6 @@ interface AssistantDetail {
     target_language_code?: string;
   };
   assistant_start_instruction: string;
-  // --- New Interaction Config ---
   assistant_interaction_config?: {
     speaks_first?: boolean;
     filler_words?: boolean;
@@ -53,13 +53,12 @@ interface AssistantDetail {
     silence_reprompt_interval?: number;
     silence_max_reprompts?: number;
   };
-  // --- New End Call Config ---
   assistant_end_call_enabled?: boolean;
   assistant_end_call_trigger_phrase?: string;
   assistant_end_call_agent_message?: string;
   assistant_end_call_url?: string;
 }
- 
+
 const emptyForm: AssistantDetail = {
   assistant_name: "",
   assistant_description: "",
@@ -82,39 +81,87 @@ const emptyForm: AssistantDetail = {
   assistant_end_call_agent_message: "",
   assistant_end_call_url: "",
 };
- const ChatInner: React.FC<{ assistantName: string; onClose: () => void }> = ({ assistantName, onClose }) => {
+
+// --- ANIMATED MESSAGE COMPONENT ---
+const AnimatedMessage = ({ text, isBot }: { text: string; isBot: boolean }) => {
+  const [displayed, setDisplayed] = useState(isBot ? "" : text);
+
+  useEffect(() => {
+    if (!isBot) {
+      setDisplayed(text);
+      return;
+    }
+    
+    const interval = setInterval(() => {
+      setDisplayed((prev) => {
+        if (prev.length >= text.length) {
+          clearInterval(interval);
+          return text;
+        }
+        return text.slice(0, prev.length + 1);
+      });
+    }, 15); // Adjust speed of typing here (15ms per letter)
+
+    return () => clearInterval(interval);
+  }, [text, isBot]);
+
+  return <span>{displayed}</span>;
+};
+
+// --- CHAT MODAL COMPONENT ---
+const ChatInner: React.FC<{ assistantName: string; onClose: () => void }> = ({ assistantName, onClose }) => {
   const { localParticipant } = useLocalParticipant();
+  const { send, chatMessages } = useChat(); 
   const liveTranscriptions = useChatTranscriptions();
   const [inputText, setInputText] = useState('');
-  const [userMessages, setUserMessages] = useState<Array<{ role: 'user'; text: string; timestamp: number }>>([]);
+  const [isThinking, setIsThinking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
- 
+
   // Chat-only: disable mic entirely
   useEffect(() => {
     localParticipant?.setMicrophoneEnabled(false);
   }, [localParticipant]);
- 
+
   const allMessages = useMemo(() => {
-    const transcribed = liveTranscriptions.map((m) => ({
-  role: m.sender === 'user' ? 'user' as const : 'bot' as const,
-  text: m.text,
-  timestamp: m.timestamp,
-}));
-    return [...userMessages, ...transcribed].sort((a, b) => a.timestamp - b.timestamp);
-  }, [userMessages, liveTranscriptions]);
- 
+    const chats = chatMessages.map((m) => ({
+      id: m.id || `chat-${m.timestamp}`,
+      role: m.from?.identity === localParticipant?.identity ? 'user' as const : 'bot' as const,
+      text: m.message,
+      timestamp: m.timestamp,
+    }));
+
+    const transcribed = liveTranscriptions.map((m: any) => ({
+      id: m.id || `trans-${m.timestamp}`,
+      role: m.sender === 'user' ? 'user' as const : 'bot' as const,
+      text: m.text,
+      timestamp: m.timestamp,
+    }));
+
+    return [...chats, ...transcribed].sort((a, b) => a.timestamp - b.timestamp);
+  }, [chatMessages, liveTranscriptions, localParticipant]);
+
+  // Turn off thinking state when bot replies
+  useEffect(() => {
+    const lastMsg = allMessages[allMessages.length - 1];
+    if (lastMsg && lastMsg.role === 'bot') {
+      setIsThinking(false);
+    }
+  }, [allMessages]);
+
+  // Auto scroll to bottom smoothly
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [allMessages]);
- 
+  }, [allMessages, isThinking]);
+
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!inputText.trim() || !localParticipant) return;
-    setUserMessages(prev => [...prev, { role: 'user', text: inputText, timestamp: Date.now() }]);
-    await localParticipant.sendText(inputText, { topic: 'lk.chat' });
+    if (!inputText.trim() || !send) return;
+    
+    setIsThinking(true);
+    await send(inputText); 
     setInputText('');
   };
- 
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div
@@ -124,7 +171,7 @@ const emptyForm: AssistantDetail = {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4" style={{ backgroundColor: '#1e293b' }}>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-green-400" />
+            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
             <span className="text-white font-semibold text-sm">Agent: {assistantName}</span>
           </div>
           <button
@@ -134,18 +181,19 @@ const emptyForm: AssistantDetail = {
             <X className="h-4 w-4" />
           </button>
         </div>
- 
+
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-3" style={{ backgroundColor: '#f8fafc' }}>
+        <div className="flex-1 overflow-y-auto p-5 space-y-4" style={{ backgroundColor: '#f8fafc' }}>
           {allMessages.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+            <div className="flex flex-col items-center justify-center h-full text-sm text-muted-foreground opacity-70">
+              <MessageSquare className="h-8 w-8 mb-2 opacity-50" />
               Start chatting below…
             </div>
           ) : (
-            allMessages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            allMessages.map((msg) => (
+              <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div
-                  className="max-w-[80%] px-4 py-2.5 text-sm leading-relaxed"
+                  className="max-w-[80%] px-4 py-3 text-sm leading-relaxed"
                   style={{
                     borderRadius: msg.role === 'user' ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
                     backgroundColor: msg.role === 'user' ? '#6366f1' : '#ffffff',
@@ -156,14 +204,25 @@ const emptyForm: AssistantDetail = {
                       : '0 1px 2px rgba(0,0,0,0.05)',
                   }}
                 >
-                  {msg.text}
+                  <AnimatedMessage text={msg.text} isBot={msg.role === 'bot'} />
                 </div>
               </div>
             ))
           )}
+
+          {/* Thinking Animation Bubble */}
+          {isThinking && (
+            <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2">
+              <div className="px-4 py-3 text-sm leading-relaxed rounded-[14px_14px_14px_2px] bg-white border border-gray-200 text-gray-500 shadow-sm flex items-center gap-1.5 h-[44px]">
+                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            </div>
+          )}
           <div ref={messagesEndRef} />
         </div>
- 
+
         {/* Input */}
         <form
           onSubmit={handleSend}
@@ -175,17 +234,18 @@ const emptyForm: AssistantDetail = {
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             placeholder="Type your message..."
-            className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm outline-none bg-gray-50 focus:border-indigo-400 transition-colors"
+            className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm outline-none bg-gray-50 text-slate-900 focus:border-indigo-400 transition-colors"
           />
           <button
             type="submit"
-            className="w-11 h-11 rounded-xl flex items-center justify-center text-white transition-colors hover:opacity-90"
+            disabled={!inputText.trim()}
+            className="w-11 h-11 rounded-xl flex items-center justify-center text-white transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ backgroundColor: '#1e293b' }}
           >
-            <Send className="h-4 w-4" />
+            <Send className="h-4 w-4 ml-0.5" />
           </button>
         </form>
- 
+
         {/* End button */}
         <div className="p-3 border-t" style={{ backgroundColor: '#ffffff' }}>
           <button
@@ -193,28 +253,32 @@ const emptyForm: AssistantDetail = {
             className="w-full py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors"
           >
             <PhoneOff className="h-4 w-4" />
-            End
+            End Session
           </button>
         </div>
       </div>
     </div>
   );
 };
+
+
 export default function AssistantPage() {
   const user = getStoredUser();
   const { toast } = useToast();
+
   // --- Chat State ---
-const [isChatActive, setIsChatActive] = useState(false);
-const [chatToken, setChatToken] = useState('');
-const [chatLoading, setChatLoading] = useState(false);
+  const [isChatActive, setIsChatActive] = useState(false);
+  const [chatToken, setChatToken] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+
   // --- State ---
   const location = useLocation();
   const [assistants, setAssistants] = useState<AssistantItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
- 
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<"create" | "edit" | "empty" | "make-call">("empty");
- 
+
   // Sync mode with URL param
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -226,7 +290,7 @@ const [chatLoading, setChatLoading] = useState(false);
       setMode("empty");
     }
   }, [location.search]);
- 
+
   const [formData, setFormData] = useState<AssistantDetail>(emptyForm);
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -238,14 +302,14 @@ const [chatLoading, setChatLoading] = useState(false);
   const [allTools, setAllTools] = useState<any[]>([]);
   const [attachedToolIds, setAttachedToolIds] = useState<string[]>([]);
   const [selectedToolToAdd, setSelectedToolToAdd] = useState<string>("");
- 
+
   const [callFormData, setCallFormData] = useState({
     customer_number: "",
     assistant_id: "",
     trunk_id: "",
   });
   const [callLoading, setCallLoading] = useState(false);
- 
+
   // --- Web Call State ---
   const [webCallToken, setWebCallToken] = useState<string>("");
   const [isWebCallActive, setIsWebCallActive] = useState<boolean>(false);
@@ -253,9 +317,9 @@ const [chatLoading, setChatLoading] = useState(false);
   
   // --- Copy State ---
   const [copied, setCopied] = useState(false);
- 
+
   // --- Actions ---
- 
+
   const fetchList = useCallback(async () => {
     if (!user?.user_id) {
       setListLoading(false);
@@ -265,14 +329,14 @@ const [chatLoading, setChatLoading] = useState(false);
     try {
       const res = await fetch(`${API_BASE}/list?user_id=${user.user_id}`);
       const json = await res.json();
- 
+
       if (!res.ok) {
         const errMsg = json?.error || json?.message || "Failed to load assistants";
         toast({ variant: "destructive", title: "Error", description: errMsg });
         setAssistants([]);
         return;
       }
- 
+
       let list: AssistantItem[] = [];
       if (Array.isArray(json?.data?.assistants)) list = json.data.assistants;
       else if (Array.isArray(json?.data)) list = json.data;
@@ -292,7 +356,7 @@ const [chatLoading, setChatLoading] = useState(false);
       setListLoading(false);
     }
   }, [user?.user_id, toast]);
- 
+
   const fetchTrunks = useCallback(async () => {
     if (!user?.user_id) return;
     setTrunksLoading(true);
@@ -308,7 +372,7 @@ const [chatLoading, setChatLoading] = useState(false);
       setTrunksLoading(false);
     }
   }, [user?.user_id]);
- 
+
   const fetchTools = useCallback(async () => {
     if (!user?.user_id) return;
     try {
@@ -319,18 +383,18 @@ const [chatLoading, setChatLoading] = useState(false);
       console.error(error);
     }
   }, [user?.user_id]);
- 
+
   useEffect(() => {
     fetchList();
     fetchTrunks();
     fetchTools();
   }, [fetchList, fetchTrunks, fetchTools]);
- 
+
   const handleMakeCallClick = () => {
     setMode("make-call");
     setSelectedId(null);
   };
- 
+
   const handleTriggerCall = async () => {
     if (!user?.user_id) return;
     if (!callFormData.customer_number || !callFormData.assistant_id || !callFormData.trunk_id) {
@@ -361,33 +425,35 @@ const [chatLoading, setChatLoading] = useState(false);
       setCallLoading(false);
     }
   };
- const handleStartChat = async () => {
-  if (!user?.user_id || !selectedId) return;
-  setChatLoading(true);
-  try {
-    const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/web-call/get-token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: user.user_id, assistant_id: selectedId }),
-    });
-    const json = await res.json();
-    if (res.ok && json.data?.token) {
-      setChatToken(json.data.token);
-      setIsChatActive(true);
-    } else {
-      throw new Error(json.error || json.message || 'Failed to generate token');
+
+  const handleStartChat = async () => {
+    if (!user?.user_id || !selectedId) return;
+    setChatLoading(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/web-call/get-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: user.user_id, assistant_id: selectedId }),
+      });
+      const json = await res.json();
+      if (res.ok && json.data?.token) {
+        setChatToken(json.data.token);
+        setIsChatActive(true);
+      } else {
+        throw new Error(json.error || json.message || 'Failed to generate token');
+      }
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Chat Error', description: error.message });
+    } finally {
+      setChatLoading(false);
     }
-  } catch (error: any) {
-    toast({ variant: 'destructive', title: 'Chat Error', description: error.message });
-  } finally {
-    setChatLoading(false);
-  }
-};
- 
-const handleDisconnectChat = () => {
-  setIsChatActive(false);
-  setChatToken('');
-};
+  };
+
+  const handleDisconnectChat = () => {
+    setIsChatActive(false);
+    setChatToken('');
+  };
+
   // --- Web Call Actions ---
   const handleStartWebCall = async () => {
     if (!user?.user_id || !selectedId) return;
@@ -417,12 +483,12 @@ const handleDisconnectChat = () => {
       setWebCallLoading(false);
     }
   };
- 
+
   const handleDisconnectWebCall = () => {
     setIsWebCallActive(false);
     setWebCallToken("");
   };
- 
+
   // --- Copy Actions ---
   const handleCopyId = () => {
     if (formData.assistant_id) {
@@ -432,28 +498,28 @@ const handleDisconnectChat = () => {
       setTimeout(() => setCopied(false), 2000);
     }
   };
- 
+
   const handleCreateNew = () => {
     setSelectedId(null);
     setFormData(emptyForm);
     setAttachedToolIds([]);
     setMode("create");
   };
- 
+
   const handleSelectAssistant = async (id: string) => {
     if (!user?.user_id) {
       toast({ variant: "destructive", title: "Authentication Error", description: "User ID not found." });
       return;
     }
- 
+
     setSelectedId(id);
     setMode("edit");
     setDetailLoading(true);
- 
+
     try {
       const res = await fetch(`${API_BASE}/details/${id}?user_id=${user.user_id}`);
       const json = await res.json();
- 
+
       if (res.ok && json.data) {
         const d = json.data;
         setFormData({
@@ -481,7 +547,7 @@ const handleDisconnectChat = () => {
           assistant_end_call_agent_message: d.assistant_end_call_agent_message || "",
           assistant_end_call_url: d.assistant_end_call_url || "",
         });
- 
+
         const attached = d.tools?.map((t: any) => t.tool_id || t.id || t) || d.tool_ids || [];
         setAttachedToolIds(attached);
       } else {
@@ -493,23 +559,23 @@ const handleDisconnectChat = () => {
       setDetailLoading(false);
     }
   };
- 
+
   const handleDeleteAssistant = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation(); 
- 
+
     if (!user?.user_id) return;
     if (!window.confirm("Are you sure you want to delete this assistant? This action cannot be undone.")) return;
- 
+
     setDeletingId(id);
- 
+
     try {
       const res = await fetch(`${API_BASE}/delete/${id}?user_id=${user.user_id}`, { method: "DELETE" });
       const json = await res.json();
- 
+
       if (!res.ok) throw new Error(json.error || json.message || "Failed to delete assistant");
- 
+
       toast({ title: "Assistant Deleted", description: "The assistant has been successfully removed." });
- 
+
       if (selectedId === id) {
         setMode("empty");
         setSelectedId(null);
@@ -521,11 +587,11 @@ const handleDisconnectChat = () => {
       setDeletingId(null);
     }
   };
- 
+
   const handleSubmit = async () => {
     if (!user?.user_id) return;
     setSaving(true);
- 
+
     try {
       const payload: any = {
         user_id: user.user_id,
@@ -542,7 +608,7 @@ const handleDisconnectChat = () => {
         assistant_end_call_agent_message: formData.assistant_end_call_agent_message,
         assistant_end_call_url: formData.assistant_end_call_url,
       };
- 
+
       if (formData.assistant_tts_model === "sarvam") {
         payload.assistant_tts_config = {
           speaker: formData.assistant_tts_config.voice_id,
@@ -551,7 +617,7 @@ const handleDisconnectChat = () => {
       } else {
         payload.assistant_tts_config = { voice_id: formData.assistant_tts_config.voice_id };
       }
- 
+
       let res;
       if (mode === "create") {
         res = await fetch(`${API_BASE}/create`, {
@@ -566,18 +632,18 @@ const handleDisconnectChat = () => {
           body: JSON.stringify(payload),
         });
       }
- 
+
       const json = await res.json();
- 
+
       if (!res.ok) throw new Error(json.error || json.message || "Operation failed");
- 
+
       toast({
         title: mode === "create" ? "Assistant Created" : "Assistant Updated",
         description: `Successfully saved ${formData.assistant_name}`
       });
- 
+
       await fetchList();
- 
+
       if (mode === "create") {
         if (json.assistant?.external_assistant_id) handleSelectAssistant(json.assistant.external_assistant_id);
         else if (json.data?.assistant_id) handleSelectAssistant(json.data.assistant_id);
@@ -588,16 +654,16 @@ const handleDisconnectChat = () => {
       setSaving(false);
     }
   };
- 
+
   const handleToggleTool = async (toolId: string, attach: boolean) => {
     if (!user?.user_id || !selectedId) return;
- 
+
     const endpoint = attach ? "attach" : "detach";
     const originalIds = [...attachedToolIds];
- 
+
     if (attach) setAttachedToolIds(prev => [...prev, toolId]);
     else setAttachedToolIds(prev => prev.filter(id => id !== toolId));
- 
+
     try {
       const res = await fetch(`${TOOL_API_BASE}/${endpoint}/${selectedId}`, {
         method: "POST",
@@ -612,15 +678,15 @@ const handleDisconnectChat = () => {
       toast({ variant: "destructive", title: "Error", description: error.message });
     }
   };
- 
+
   const updateField = (field: keyof AssistantDetail, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
- 
+
   const updateTTS = (field: "voice_id" | "target_language_code", value: string) => {
     setFormData(prev => ({ ...prev, assistant_tts_config: { ...prev.assistant_tts_config, [field]: value } }));
   };
- 
+
   const updateInteractionConfig = (field: keyof NonNullable<AssistantDetail["assistant_interaction_config"]>, value: any) => {
     setFormData(prev => ({
       ...prev,
@@ -630,10 +696,10 @@ const handleDisconnectChat = () => {
       }
     }));
   };
- 
+
   return (
     <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-background">
- 
+
       {/* --- SIDEBAR --- */}
       {mode !== "make-call" && (
         <div className="w-80 border-r border-border flex flex-col bg-card/30 animate-in slide-in-from-left duration-300">
@@ -646,7 +712,7 @@ const handleDisconnectChat = () => {
               <Plus className="h-4 w-4 mr-1" /> New
             </Button>
           </div>
- 
+
           <ScrollArea className="flex-1">
             <div className="p-3 space-y-2">
               {listLoading ? (
@@ -686,7 +752,7 @@ const handleDisconnectChat = () => {
                           {itemId.slice(0, 8)}...
                         </p>
                       </div>
- 
+
                       <Button
                         variant="ghost"
                         size="icon"
@@ -704,13 +770,13 @@ const handleDisconnectChat = () => {
           </ScrollArea>
         </div>
       )}
- 
+
       {/* --- RIGHT MAIN PANEL --- */}
       <div className="flex-1 flex flex-col bg-background relative">
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.02]">
           <span className="text-[12rem] font-black select-none">VYOM</span>
         </div>
- 
+
         {mode === "empty" ? (
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-8">
             <Bot className="h-16 w-16 mb-4 opacity-20" />
@@ -733,13 +799,13 @@ const handleDisconnectChat = () => {
                 </div>
               </div>
             </div>
- 
+
             {/* MAKE CALL CONTENT */}
             <ScrollArea className="flex-1">
               <div className="p-10 max-w-2xl mx-auto">
                 <div className="glass rounded-3xl p-10 space-y-8 border border-border/50 shadow-2xl relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-3xl" />
- 
+
                   <div className="grid gap-8">
                     <div className="space-y-3">
                       <Label className="text-xs font-black uppercase tracking-widest text-primary/70 ml-1">Customer Number</Label>
@@ -755,7 +821,7 @@ const handleDisconnectChat = () => {
                         />
                       </div>
                     </div>
- 
+
                     <div className="space-y-3">
                       <Label className="text-xs font-black uppercase tracking-widest text-primary/70 ml-1">Select Assistant</Label>
                       <Select value={callFormData.assistant_id} onValueChange={(v) => setCallFormData({ ...callFormData, assistant_id: v })}>
@@ -782,7 +848,7 @@ const handleDisconnectChat = () => {
                         </SelectContent>
                       </Select>
                     </div>
- 
+
                     <div className="space-y-3">
                       <Label className="text-xs font-black uppercase tracking-widest text-primary/70 ml-1">SIP Trunk</Label>
                       <Select value={callFormData.trunk_id} onValueChange={(v) => setCallFormData({ ...callFormData, trunk_id: v })}>
@@ -811,14 +877,14 @@ const handleDisconnectChat = () => {
                       </Select>
                     </div>
                   </div>
- 
+
                   <div className="pt-6">
                     <Button onClick={handleTriggerCall} disabled={callLoading} className="w-full h-16 rounded-2xl text-lg font-bold shadow-xl shadow-primary/20 hover:shadow-primary/30 active:scale-[0.98] transition-all">
                       {callLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : <><PhoneCall className="h-5 w-5 mr-3" /> Initiate Outbound Call</>}
                     </Button>
                   </div>
                 </div>
- 
+
                 <div className="mt-8 p-6 bg-primary/5 border border-primary/10 rounded-2xl text-center">
                   <p className="text-sm text-muted-foreground font-medium">
                     This will initiate a real-time call using the selected assistant and SIP trunk.
@@ -835,7 +901,7 @@ const handleDisconnectChat = () => {
             </div>
           ) : (
             <div className="flex-1 flex flex-col h-full overflow-hidden z-10">
- 
+
               {/* EDITOR HEADER */}
               <div className="p-6 border-b border-border bg-card/20 backdrop-blur-md flex items-start justify-between">
                 <div className="space-y-1 flex-1 w-full max-w-2xl mr-4">
@@ -889,7 +955,7 @@ const handleDisconnectChat = () => {
                     </div>
                   )}
                 </div>
- 
+
                 <div className="flex items-center gap-3 shrink-0 ml-4">
                   {/* WEB CALL BUTTON */}
                   {mode === "edit" && selectedId && (
@@ -917,7 +983,7 @@ const handleDisconnectChat = () => {
     Chat
   </Button>
 )}
- 
+
                   {/* SAVE BUTTON */}
                   <Button onClick={handleSubmit} disabled={saving || !!deletingId} className="min-w-[100px] shadow-lg shadow-primary/20">
                     {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
@@ -925,11 +991,11 @@ const handleDisconnectChat = () => {
                   </Button>
                 </div>
               </div>
- 
+
               {/* FORM CONTENT */}
               <ScrollArea className="flex-1">
                 <div className="p-8 max-w-4xl mx-auto space-y-10 pb-20">
- 
+
                   {/* General Configuration */}
                   {mode === "create" && (
                     <div className="grid gap-6">
@@ -943,7 +1009,7 @@ const handleDisconnectChat = () => {
                       </div>
                     </div>
                   )}
- 
+
                   <div className="space-y-4">
                     {mode === "edit" ? <h3 className="text-lg font-semibold border-b border-border/50 pb-2">System Prompt</h3> : <Label className="text-base font-semibold">System Prompt</Label>}
                     <Textarea
@@ -953,14 +1019,14 @@ const handleDisconnectChat = () => {
                       onChange={(e) => updateField("assistant_prompt", e.target.value)}
                     />
                   </div>
- 
+
                   <div className="space-y-4">
                     <div className="grid gap-2">
                       <Label className="text-base font-semibold">Start Instruction</Label>
                       <Input placeholder="Hello, how can I help you today?" value={formData.assistant_start_instruction} onChange={(e) => updateField("assistant_start_instruction", e.target.value)} />
                     </div>
                   </div>
- 
+
                   {/* TTS Section */}
                   <div className="space-y-4 pt-4">
                     <h3 className="text-lg font-semibold border-b border-border/50 pb-2">TTS Section</h3>
@@ -976,12 +1042,12 @@ const handleDisconnectChat = () => {
                           </SelectContent>
                         </Select>
                       </div>
- 
+
                       <div className="grid gap-2">
                         <Label>Voice Id</Label>
                         <Input placeholder="e.g. a167e0f3-df7e-4277-976b-be2f952fa275" value={formData.assistant_tts_config.voice_id} onChange={(e) => updateTTS("voice_id", e.target.value)} className="font-mono" />
                       </div>
- 
+
                       {formData.assistant_tts_model === "sarvam" && (
                         <div className="grid gap-2">
                           <Label>Target Language Code</Label>
@@ -997,7 +1063,7 @@ const handleDisconnectChat = () => {
                       )}
                     </div>
                   </div>
- 
+
                   {/* Interaction Config */}
                   <div className="space-y-4 pt-4">
                     <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Interaction Settings</h3>
@@ -1009,7 +1075,7 @@ const handleDisconnectChat = () => {
                         </div>
                         <Switch checked={formData.assistant_interaction_config?.speaks_first} onCheckedChange={(v) => updateInteractionConfig("speaks_first", v)} />
                       </div>
- 
+
                       <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
                         <div>
                           <Label>Filler Words</Label>
@@ -1017,7 +1083,7 @@ const handleDisconnectChat = () => {
                         </div>
                         <Switch checked={formData.assistant_interaction_config?.filler_words} onCheckedChange={(v) => updateInteractionConfig("filler_words", v)} />
                       </div>
- 
+
                       <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
                         <div>
                           <Label>Silence Reprompts</Label>
@@ -1025,7 +1091,7 @@ const handleDisconnectChat = () => {
                         </div>
                         <Switch checked={formData.assistant_interaction_config?.silence_reprompts} onCheckedChange={(v) => updateInteractionConfig("silence_reprompts", v)} />
                       </div>
- 
+
                       {formData.assistant_interaction_config?.silence_reprompts && (
                         <div className="grid grid-cols-2 gap-6 p-4 border rounded-xl bg-card/50">
                           <div className="grid gap-2">
@@ -1053,7 +1119,7 @@ const handleDisconnectChat = () => {
                       )}
                     </div>
                   </div>
- 
+
                   {/* End Call Config */}
                   <div className="space-y-4 pt-4">
                     <h3 className="text-lg font-semibold border-b border-border/50 pb-2">End Call Settings</h3>
@@ -1070,7 +1136,7 @@ const handleDisconnectChat = () => {
                           className="font-mono text-sm" 
                         />
                       </div>
- 
+
                       <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
                         <div>
                           <Label>Enable End Call Tool</Label>
@@ -1078,7 +1144,7 @@ const handleDisconnectChat = () => {
                         </div>
                         <Switch checked={formData.assistant_end_call_enabled} onCheckedChange={(v) => updateField("assistant_end_call_enabled", v)} />
                       </div>
- 
+
                       {/* Trigger Phrase & Message - ONLY VISIBLE IF TOOL IS ENABLED */}
                       {formData.assistant_end_call_enabled && (
                         <div className="grid gap-4 p-4 border rounded-xl bg-card/50">
@@ -1102,7 +1168,7 @@ const handleDisconnectChat = () => {
                       )}
                     </div>
                   </div>
- 
+
                   {/* Tools Section (Edit Mode Only) */}
                   {mode === "edit" && (
                     <div className="space-y-10">
@@ -1116,7 +1182,7 @@ const handleDisconnectChat = () => {
                             Attach external tools and functions to allow this assistant to perform tasks during calls.
                           </p>
                         </div>
- 
+
                         {/* Dropdown to ADD a tool */}
                         {allTools.length > 0 && (
                           <div className="flex items-center gap-3 pt-2">
@@ -1154,7 +1220,7 @@ const handleDisconnectChat = () => {
                             </Select>
                           </div>
                         )}
- 
+
                         {/* List of ATTACHED tools */}
                         <div className="grid gap-3 pt-2">
                           {attachedToolIds.length === 0 ? (
@@ -1209,14 +1275,14 @@ const handleDisconnectChat = () => {
                       </div>
                     </div>
                   )}
- 
+
                 </div>
               </ScrollArea>
             </div>
           )
         )}
       </div>
- 
+
       {/* --- LIVEKIT WEB CALL OVERLAY --- */}
       {isWebCallActive && webCallToken && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
@@ -1230,7 +1296,7 @@ const handleDisconnectChat = () => {
             >
               <X className="h-5 w-5" />
             </Button>
- 
+
             <div className="p-8 pb-4 text-center space-y-2">
               <div className="w-20 h-20 mx-auto bg-primary/10 rounded-full flex items-center justify-center relative mb-6 shadow-inner">
                 <Bot className="h-10 w-10 text-primary relative z-10" />
@@ -1239,7 +1305,7 @@ const handleDisconnectChat = () => {
               <h3 className="text-2xl font-bold">Talking to {formData.assistant_name || "Assistant"}</h3>
               <p className="text-sm text-muted-foreground">Voice assistant connected.</p>
             </div>
- 
+
             <div className="p-6 bg-muted/30">
               <LiveKitRoom
                 video={false}
@@ -1255,13 +1321,13 @@ const handleDisconnectChat = () => {
                   <VoiceAssistantControlBar />
                 </div>
               </LiveKitRoom>
-            </div>          {/* ✅ web call div closes here, chat is NOT inside */}
- 
+            </div>
+
           </div>
         </div>
       )}
- 
-      {/* --- CHAT MODAL --- ✅ Correctly at root level, sibling to web call */}
+
+      {/* --- CHAT MODAL --- */}
       {isChatActive && chatToken && (
         <LiveKitRoom
           video={false}
@@ -1277,7 +1343,7 @@ const handleDisconnectChat = () => {
           />
         </LiveKitRoom>
       )}
- 
-    </div>  /* closes the outermost flex div */
+
+    </div>
   );
 }
