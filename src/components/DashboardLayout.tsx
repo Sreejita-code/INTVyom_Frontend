@@ -1,5 +1,5 @@
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
-import { Bot, KeyRound, LogOut, Phone, Blocks, PhoneCall, Wrench, List, PhoneIncoming, Webhook } from "lucide-react"; // <-- Import Webhook
+import { Bot, KeyRound, LogOut, Phone, Blocks, PhoneCall, Wrench, List, PhoneIncoming, Webhook } from "lucide-react";
 import { clearUser, getStoredUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
@@ -10,7 +10,7 @@ const navItems = [
   { label: "Call Logs", icon: List, path: "/dashboard/call-logs" },
   { label: "Phone number", icon: Phone, path: "/dashboard/phone-number" },
   { label: "Inbound Routes", icon: PhoneIncoming, path: "/dashboard/inbound" },
-  { label: "Inbound Context", icon: Webhook, path: "/dashboard/inbound-context" }, // <-- Add to Nav
+  { label: "Inbound Context", icon: Webhook, path: "/dashboard/inbound-context" },
   { label: "API Keys", icon: KeyRound, path: "/dashboard/api-keys" },
   { label: "Integration", icon: Blocks, path: "/dashboard/integration" },
 ];
@@ -39,7 +39,20 @@ const DashboardLayout = () => {
         {/* Nav */}
         <nav className="flex-1 p-3 space-y-1">
           {navItems.map((item) => {
-            const active = (location.pathname + location.search) === item.path || location.pathname === item.path;
+            const currentFullPath = location.pathname + location.search;
+            
+            // Check if the current URL perfectly matches a specific nav item with a query (e.g. ?mode=make-call)
+            const exactQueryMatchExists = navItems.some(
+              (nav) => nav.path.includes("?") && nav.path === currentFullPath
+            );
+
+            // Dynamic matching logic
+            // If the nav item has a query string, it must match the current full URL exactly.
+            // If it doesn't, it matches the base path, BUT only if a query-specific route isn't currently active.
+            const active = item.path.includes("?")
+              ? currentFullPath === item.path 
+              : location.pathname === item.path && !exactQueryMatchExists; 
+
             return (
               <button
                 key={item.path}
