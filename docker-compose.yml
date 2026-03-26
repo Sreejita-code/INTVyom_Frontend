@@ -1,0 +1,14 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_BACKEND_URL: ${VITE_BACKEND_URL}
+        VITE_LIVEKIT_URL: ${VITE_LIVEKIT_URL}
+    container_name: intvyom-frontend
+    env_file:
+      - .env
+    ports:
+      - "${APP_PORT:-3000}:80"
+    restart: unless-stopped
