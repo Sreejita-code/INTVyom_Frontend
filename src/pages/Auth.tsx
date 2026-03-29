@@ -74,7 +74,7 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-background relative overflow-hidden px-4 py-8">
       {/* Background glow */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div className="w-[600px] h-[600px] rounded-full bg-primary/5 blur-[120px]" />
@@ -95,7 +95,7 @@ const Auth = () => {
           </p>
         </div>
 
-        <div className="glass rounded-xl p-8">
+        <div className="glass rounded-xl p-5 sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-4">
             <AnimatePresence mode="wait">
               <motion.div

@@ -71,7 +71,7 @@
 
   .watermark {
     color: hsl(var(--foreground) / 0.03);
-    font-size: 8rem;
+    font-size: clamp(3rem, 12vw, 8rem);
     font-weight: 800;
     letter-spacing: 0.1em;
     user-select: none;
@@ -82,5 +82,45 @@
     background: hsl(var(--card) / 0.6);
     backdrop-filter: blur(12px);
     border: 1px solid hsl(var(--border) / 0.5);
+  }
+
+  .page-shell {
+    @apply w-full h-full min-h-0 overflow-hidden bg-background;
+  }
+
+  .page-padding {
+    @apply p-4 md:p-6 lg:p-8;
+  }
+
+  .content-max {
+    @apply w-full max-w-6xl mx-auto;
+  }
+
+  .status-chip {
+    @apply px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm;
+  }
+
+  .status-chip-info {
+    @apply bg-primary/10 text-primary border-primary/20;
+  }
+
+  .status-chip-neutral {
+    @apply bg-muted/40 text-muted-foreground border-border/60;
+  }
+
+  .status-chip-warning {
+    @apply bg-amber-500/10 text-amber-500 border-amber-500/25;
+  }
+
+  .status-btn-warning {
+    @apply border-amber-500/25 text-amber-500 hover:bg-amber-500/10;
+  }
+
+  .status-text-warning {
+    @apply text-amber-500;
+  }
+
+  .status-alert-warning {
+    @apply text-amber-500/90 bg-amber-500/10 border border-amber-500/20;
   }
 }

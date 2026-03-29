@@ -56,23 +56,24 @@ const ApiKeys = () => {
     key.substring(0, 4) + "••••••••••••" + key.substring(key.length - 4);
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-      >
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <KeyRound className="h-5 w-5 text-primary" />
+    <div className="page-shell overflow-auto">
+      <div className="page-padding max-w-4xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+        >
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <KeyRound className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-foreground">API Keys</h2>
+              <p className="text-sm text-muted-foreground">
+                Manage your API keys for integration
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-semibold text-foreground">API Keys</h2>
-            <p className="text-sm text-muted-foreground">
-              Manage your API keys for integration
-            </p>
-          </div>
-        </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-20">
@@ -90,9 +91,9 @@ const ApiKeys = () => {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.1 }}
-                className="glass rounded-lg p-4 flex items-center justify-between gap-4"
+                className="glass rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
               >
-                <code className="text-sm font-mono text-foreground flex-1 truncate">
+                <code className="text-sm font-mono text-foreground flex-1 truncate w-full">
                   {visible[i] ? k.api_key : maskKey(k.api_key)}
                 </code>
                 <div className="flex items-center gap-2">
@@ -121,7 +122,8 @@ const ApiKeys = () => {
             ))}
           </div>
         )}
-      </motion.div>
+        </motion.div>
+      </div>
     </div>
   );
 };

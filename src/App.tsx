@@ -15,6 +15,7 @@ import PhoneNumber from "./pages/PhoneNumber";
 import Inbound from "./pages/Inbound";
 import InboundContext from "./pages/InboundContext"; // <-- Import new page
 import Integrations from "./pages/Integrations";
+import Analytics from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +35,7 @@ const App = () => (
               <Route path="assistant" element={<Assistant />} />
               <Route path="tools" element={<Tools />} />
               <Route path="call-logs" element={<CallLogs />} />
+              <Route path="analytics" element={<Analytics />} />
               <Route path="phone-number" element={<PhoneNumber />} />
               <Route path="inbound" element={<Inbound />} />
               <Route path="inbound-context" element={<InboundContext />} /> {/* <-- Add Route */}

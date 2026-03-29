@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { PhoneIncoming, Plus, Loader2, Trash2, ExternalLink, Bot, Shield, Link2, Unlink, Search, Check, ChevronsUpDown } from "lucide-react";
+import { PhoneIncoming, Plus, Loader2, Trash2, ExternalLink, Bot, Shield, Link2, Unlink, Search, Check, ChevronsUpDown, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,6 +66,7 @@ export default function InboundPage() {
     // UI States
     const [listLoading, setListLoading] = useState(true);
     const [selectedInbound, setSelectedInbound] = useState<InboundItem | null>(null);
+    const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [numberSearchQuery, setNumberSearchQuery] = useState("");
 
@@ -162,6 +163,7 @@ export default function InboundPage() {
     const handleSelectInbound = (inbound: InboundItem) => {
         setSelectedInbound(inbound);
         setUpdateAssistantId(inbound.assistant_id || "none");
+        setMobileDetailOpen(true);
     };
 
     const filteredInbounds = useMemo(() => {
@@ -299,6 +301,7 @@ export default function InboundPage() {
             if (res.ok) {
                 toast({ title: "Success", description: "Inbound mapping deleted successfully" });
                 setSelectedInbound(null);
+                setMobileDetailOpen(false);
                 await fetchList(false);
             } else {
                 toast({ variant: "destructive", title: "Error", description: json.error || "Failed to delete" });
@@ -312,9 +315,9 @@ export default function InboundPage() {
     };
 
     return (
-        <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-background">
+        <div className="page-shell flex">
             {/* Sidebar List */}
-            <div className="w-[350px] border-r border-border flex flex-col bg-card/30">
+            <div className={cn("w-full lg:w-[350px] border-r border-border flex flex-col bg-card/30", mobileDetailOpen ? "hidden lg:flex" : "flex")}>
                 <div className="p-4 border-b border-border space-y-4 sticky top-0 bg-background/50 backdrop-blur-sm z-10">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -328,7 +331,7 @@ export default function InboundPage() {
                                     <Plus className="h-4 w-4 mr-1" /> Assign
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-md border-none shadow-2xl rounded-xl bg-background">
+                            <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md border-none shadow-2xl rounded-xl bg-background">
                                 <DialogHeader className="p-6 border-b border-border bg-card/10">
                                     <DialogTitle className="text-xl flex items-center gap-2">
                                         <Link2 className="h-5 w-5 text-primary" /> Assign Inbound Number
@@ -353,7 +356,7 @@ export default function InboundPage() {
                                                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                                 </Button>
                                             </PopoverTrigger>
-                                            <PopoverContent className="w-[380px] p-0" align="start">
+                                            <PopoverContent className="w-[min(380px,calc(100vw-2rem))] p-0" align="start">
                                                 <Command>
                                                     <CommandInput placeholder="Search phone numbers or trunk name..." />
                                                     <CommandList>
@@ -394,12 +397,12 @@ export default function InboundPage() {
                                                     className="w-full justify-between bg-muted/30 h-11"
                                                 >
                                                     {modalForm.assistant_id === "none"
-                                                        ? <span className="text-yellow-600 font-medium">Unassigned (Do not route)</span>
+                                                        ? <span className="status-text-warning font-medium">Unassigned (Do not route)</span>
                                                         : assistants.find((a) => a.assistant_id === modalForm.assistant_id)?.name || "Search assistants..."}
                                                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                                 </Button>
                                             </PopoverTrigger>
-                                            <PopoverContent className="w-[380px] p-0" align="start">
+                                            <PopoverContent className="w-[min(380px,calc(100vw-2rem))] p-0" align="start">
                                                 <Command>
                                                     <CommandInput placeholder="Search assistants by name or ID..." />
                                                     <CommandList>
@@ -413,8 +416,8 @@ export default function InboundPage() {
                                                                 }}
                                                             >
                                                                 <Check className={cn("mr-2 h-4 w-4", modalForm.assistant_id === "none" ? "opacity-100" : "opacity-0")} />
-                                                                <Unlink className="h-4 w-4 mr-2 text-yellow-600" />
-                                                                <span className="text-yellow-600 font-medium">Unassigned</span>
+                                                                <Unlink className="h-4 w-4 mr-2 status-text-warning" />
+                                                                <span className="status-text-warning font-medium">Unassigned</span>
                                                             </CommandItem>
                                                             {assistants.map((ast) => (
                                                                 <CommandItem
@@ -505,7 +508,7 @@ export default function InboundPage() {
                                             {item.assistant_name ? (
                                                 <><Bot className="h-3 w-3" /> {item.assistant_name}</>
                                             ) : (
-                                                <span className="text-yellow-600/70 italic flex items-center gap-1"><Unlink className="h-3 w-3" /> Unassigned</span>
+                                                <span className="text-amber-500/80 italic flex items-center gap-1"><Unlink className="h-3 w-3" /> Unassigned</span>
                                             )}
                                         </p>
                                     </div>
@@ -517,7 +520,7 @@ export default function InboundPage() {
             </div>
 
             {/* Main Panel Details */}
-            <div className="flex-1 flex flex-col bg-background relative overflow-hidden">
+            <div className={cn("flex-1 bg-background relative overflow-hidden", mobileDetailOpen ? "flex flex-col" : "hidden lg:flex lg:flex-col")}>
                 <div className="absolute inset-0 z-0 opacity-[0.03] pointer-events-none">
                     <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,hsl(var(--primary))_0%,transparent_50%)]" />
                 </div>
@@ -535,8 +538,17 @@ export default function InboundPage() {
                 ) : (
                     <div className="flex-1 flex flex-col h-full overflow-hidden z-10 animate-in fade-in slide-in-from-right-4 duration-500">
                         {/* Header */}
-                        <div className="p-8 border-b border-border bg-card/10 backdrop-blur-xl flex items-end justify-between shrink-0">
+                        <div className="p-4 md:p-8 border-b border-border bg-card/10 backdrop-blur-xl flex flex-wrap items-end justify-between gap-4 shrink-0">
                             <div className="space-y-2">
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="lg:hidden -ml-2 text-muted-foreground"
+                                    onClick={() => setMobileDetailOpen(false)}
+                                >
+                                    <ArrowLeft className="h-4 w-4 mr-1" />
+                                    Back
+                                </Button>
                                 <div className="flex items-center gap-3">
                                     <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
                                         <PhoneIncoming className="h-6 w-6" />
@@ -549,7 +561,7 @@ export default function InboundPage() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex flex-col items-end gap-3">
+                            <div className="flex flex-col md:items-end gap-3 w-full md:w-auto">
                                 <div className="flex gap-2">
                                     {selectedInbound.assistant_id && (
                                         <Button
@@ -557,7 +569,7 @@ export default function InboundPage() {
                                             size="sm"
                                             onClick={handleDetachInbound}
                                             disabled={isDetaching}
-                                            className="h-8 px-3 border-yellow-500/20 text-yellow-600 hover:bg-yellow-500/10"
+                                            className="h-8 px-3 status-btn-warning"
                                         >
                                             {isDetaching ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Unlink className="h-4 w-4 mr-2" />}
                                             Detach Assistant
@@ -574,14 +586,14 @@ export default function InboundPage() {
                                         Delete Route
                                     </Button>
                                 </div>
-                                <div className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm bg-blue-500/10 text-blue-500 border-blue-500/20">
+                                <div className="status-chip status-chip-info">
                                     {selectedInbound.service}
                                 </div>
                             </div>
                         </div>
 
                         <ScrollArea className="flex-1">
-                            <div className="p-10 max-w-4xl mx-auto space-y-8">
+                            <div className="p-4 md:p-10 max-w-4xl mx-auto space-y-8">
                                 <section className="space-y-4">
                                     <h3 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
                                         <Shield className="h-3 w-3" /> Routing Configuration
@@ -602,15 +614,15 @@ export default function InboundPage() {
                                                             variant="outline"
                                                             role="combobox"
                                                             aria-expanded={openMainAssistantDropdown}
-                                                            className="w-full sm:w-[400px] justify-between h-12 bg-background border-border"
+                                                            className="w-full sm:max-w-[400px] justify-between h-12 bg-background border-border"
                                                         >
                                                             {updateAssistantId === "none"
-                                                                ? <span className="text-yellow-600 font-medium">Unassigned (Do not route)</span>
+                                                                ? <span className="status-text-warning font-medium">Unassigned (Do not route)</span>
                                                                 : assistants.find((a) => a.assistant_id === updateAssistantId)?.name || "Search assistants..."}
                                                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                                         </Button>
                                                     </PopoverTrigger>
-                                                    <PopoverContent className="w-[400px] p-0" align="start">
+                                                    <PopoverContent className="w-[min(400px,calc(100vw-2rem))] p-0" align="start">
                                                         <Command>
                                                             <CommandInput placeholder="Search assistants by name or ID..." />
                                                             <CommandList>
@@ -624,8 +636,8 @@ export default function InboundPage() {
                                                                         }}
                                                                     >
                                                                         <Check className={cn("mr-2 h-4 w-4", updateAssistantId === "none" ? "opacity-100" : "opacity-0")} />
-                                                                        <Unlink className="h-4 w-4 mr-2 text-yellow-600" />
-                                                                        <span className="text-yellow-600 font-medium">Unassigned</span>
+                                                                        <Unlink className="h-4 w-4 mr-2 status-text-warning" />
+                                                                        <span className="status-text-warning font-medium">Unassigned</span>
                                                                     </CommandItem>
                                                                     {assistants.map((ast) => (
                                                                         <CommandItem
@@ -657,7 +669,7 @@ export default function InboundPage() {
                                             </div>
 
                                             {updateAssistantId === "none" && (
-                                                <div className="text-sm text-yellow-600/80 bg-yellow-500/10 p-4 rounded-xl border border-yellow-500/20 mt-4 inline-flex items-center gap-2">
+                                                <div className="status-alert-warning text-sm p-4 rounded-xl mt-4 inline-flex items-center gap-2">
                                                     ⚠️ Incoming calls to this number will not be routed until you assign and save an AI assistant.
                                                 </div>
                                             )}

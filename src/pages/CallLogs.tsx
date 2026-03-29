@@ -159,10 +159,10 @@ export default function CallLogsPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] w-full overflow-hidden bg-background">
+    <div className="page-shell flex flex-col">
       
       {/* Header & Controls */}
-      <div className="p-6 border-b border-border bg-card/20 backdrop-blur-md space-y-4 shrink-0">
+      <div className="p-4 md:p-6 border-b border-border bg-card/20 backdrop-blur-md space-y-4 shrink-0">
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
             <List className="h-6 w-6 text-primary" />
@@ -171,8 +171,8 @@ export default function CallLogsPage() {
           <p className="text-sm text-muted-foreground mt-1">View past conversations, transcripts, and recordings.</p>
         </div>
 
-        <div className="flex flex-wrap items-end gap-4 glass p-4 rounded-xl border border-border/50">
-          <div className="grid gap-2 flex-1 min-w-[200px]">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 items-end gap-3 glass p-4 rounded-xl border border-border/50">
+          <div className="grid gap-2 xl:col-span-3">
             <Label>Select Assistant *</Label>
             <Select value={selectedAssistant} onValueChange={(v) => { setSelectedAssistant(v); setPage(1); }}>
               <SelectTrigger className="bg-background h-10">
@@ -189,7 +189,7 @@ export default function CallLogsPage() {
           </div>
 
           {/* Start Date Calendar Picker */}
-          <div className="grid gap-2 w-44">
+          <div className="grid gap-2 xl:col-span-2">
             <Label>Start Date</Label>
             <Popover>
               <PopoverTrigger asChild>
@@ -216,7 +216,7 @@ export default function CallLogsPage() {
           </div>
 
           {/* End Date Calendar Picker */}
-          <div className="grid gap-2 w-44">
+          <div className="grid gap-2 xl:col-span-2">
             <Label>End Date</Label>
             <Popover>
               <PopoverTrigger asChild>
@@ -242,7 +242,7 @@ export default function CallLogsPage() {
             </Popover>
           </div>
 
-          <div className="grid gap-2 w-36">
+          <div className="grid gap-2 xl:col-span-2">
             <Label>Sort By</Label>
             <Select value={sortBy} onValueChange={setSortBy}>
               <SelectTrigger className="bg-background h-10"><SelectValue /></SelectTrigger>
@@ -254,7 +254,7 @@ export default function CallLogsPage() {
             </Select>
           </div>
 
-          <div className="grid gap-2 w-32">
+          <div className="grid gap-2 xl:col-span-2">
             <Label>Order</Label>
             <Select value={sortOrder} onValueChange={setSortOrder}>
               <SelectTrigger className="bg-background h-10"><SelectValue /></SelectTrigger>
@@ -265,7 +265,7 @@ export default function CallLogsPage() {
             </Select>
           </div>
 
-          <Button onClick={handleApplyFilters} disabled={!selectedAssistant || loading} className="shrink-0 gap-2 h-10">
+          <Button onClick={handleApplyFilters} disabled={!selectedAssistant || loading} className="w-full xl:w-auto xl:col-span-1 shrink-0 gap-2 h-10">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Filter className="h-4 w-4" />}
             Apply
           </Button>
@@ -273,7 +273,7 @@ export default function CallLogsPage() {
       </div>
 
       {/* Main Table Area */}
-      <div className="flex-1 overflow-auto p-6 relative">
+      <div className="flex-1 overflow-auto p-4 md:p-6 relative">
         {!selectedAssistant ? (
           <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-60">
             <List className="h-16 w-16 mb-4 opacity-20" />
@@ -348,11 +348,11 @@ export default function CallLogsPage() {
 
             {/* Pagination Footer */}
             {logs.length > 0 && (
-              <div className="p-4 border-t border-border/50 flex items-center justify-between bg-card/30">
+              <div className="p-4 border-t border-border/50 flex flex-wrap items-center justify-between gap-3 bg-card/30">
                 <span className="text-sm text-muted-foreground">
                   Showing {logs.length} of {totalLogs} logs
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
                   <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1 || loading}>
                     Previous
                   </Button>
@@ -370,7 +370,7 @@ export default function CallLogsPage() {
       {/* Transcript Dialog */}
       <Dialog open={!!selectedTranscripts} onOpenChange={(open) => !open && setSelectedTranscripts(null)}>
         {/* Changed to max-w-4xl for a wider box, and h-[85vh] for a taller, fixed-height box */}
-        <DialogContent className="max-w-4xl h-[85vh] flex flex-col overflow-hidden">
+        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-primary" />

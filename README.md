@@ -69,8 +69,8 @@ curl http://localhost:8003
 ├── src/
 │   ├── components/        # shared + shadcn/ui components
 │   ├── hooks/             # custom React hooks
-│   ├── lib/               # auth, utilities
-│   ├── pages/             # route-level page components
+│   ├── lib/               # auth, analytics client, utilities
+│   ├── pages/             # route-level pages (assistant, logs, analytics, etc.)
 │   ├── test/              # Vitest tests
 │   ├── App.tsx
 │   └── main.tsx

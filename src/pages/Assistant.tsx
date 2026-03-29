@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useLocation } from "react-router-dom";
-import { Bot, Plus, Loader2, Save, Trash2, Phone, Check, Wrench, Mic, X, Copy, MessageSquare, Send, PhoneOff, PhoneCall } from "lucide-react";
+import { Bot, Plus, Loader2, Save, Trash2, Phone, Check, Wrench, Mic, X, Copy, MessageSquare, Send, PhoneOff, PhoneCall, ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { getStoredUser } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useChatTranscriptions } from "@/hooks/useChatTranscriptions";
+import { cn } from "@/lib/utils";
 
 // --- LiveKit Imports ---
 import { LiveKitRoom, RoomAudioRenderer, VoiceAssistantControlBar, useLocalParticipant, useChat } from "@livekit/components-react";
@@ -165,25 +166,24 @@ const ChatInner: React.FC<{ assistantName: string; onClose: () => void }> = ({ a
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div
-        className="w-full max-w-md bg-card border border-border rounded-3xl shadow-2xl overflow-hidden flex flex-col"
-        style={{ height: '600px' }}
+        className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md bg-card border border-border rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[min(600px,90vh)]"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4" style={{ backgroundColor: '#1e293b' }}>
+        <div className="flex items-center justify-between px-4 sm:px-5 py-4 bg-card border-b border-border">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            <span className="text-white font-semibold text-sm">Agent: {assistantName}</span>
+            <span className="text-foreground font-semibold text-sm">Agent: {assistantName}</span>
           </div>
           <button
             onClick={onClose}
-            className="text-white/60 hover:text-white transition-colors"
+            className="text-muted-foreground hover:text-foreground transition-colors"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4" style={{ backgroundColor: '#f8fafc' }}>
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 bg-muted/20">
           {allMessages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-sm text-muted-foreground opacity-70">
               <MessageSquare className="h-8 w-8 mb-2 opacity-50" />
@@ -193,16 +193,12 @@ const ChatInner: React.FC<{ assistantName: string; onClose: () => void }> = ({ a
             allMessages.map((msg) => (
               <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div
-                  className="max-w-[80%] px-4 py-3 text-sm leading-relaxed"
-                  style={{
-                    borderRadius: msg.role === 'user' ? '14px 14px 2px 14px' : '14px 14px 14px 2px',
-                    backgroundColor: msg.role === 'user' ? '#6366f1' : '#ffffff',
-                    color: msg.role === 'user' ? '#ffffff' : '#334155',
-                    border: msg.role === 'user' ? 'none' : '1px solid #e2e8f0',
-                    boxShadow: msg.role === 'user'
-                      ? '0 2px 8px rgba(99,102,241,0.25)'
-                      : '0 1px 2px rgba(0,0,0,0.05)',
-                  }}
+                  className={cn(
+                    "max-w-[85%] px-4 py-3 text-sm leading-relaxed shadow-sm",
+                    msg.role === "user"
+                      ? "rounded-[14px_14px_2px_14px] bg-primary text-primary-foreground"
+                      : "rounded-[14px_14px_14px_2px] bg-card text-foreground border border-border",
+                  )}
                 >
                   <AnimatedMessage text={msg.text} isBot={msg.role === 'bot'} />
                 </div>
@@ -213,10 +209,10 @@ const ChatInner: React.FC<{ assistantName: string; onClose: () => void }> = ({ a
           {/* Thinking Animation Bubble */}
           {isThinking && (
             <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2">
-              <div className="px-4 py-3 text-sm leading-relaxed rounded-[14px_14px_14px_2px] bg-white border border-gray-200 text-gray-500 shadow-sm flex items-center gap-1.5 h-[44px]">
-                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              <div className="px-4 py-3 text-sm leading-relaxed rounded-[14px_14px_14px_2px] bg-card border border-border text-muted-foreground shadow-sm flex items-center gap-1.5 h-[44px]">
+                <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           )}
@@ -227,30 +223,28 @@ const ChatInner: React.FC<{ assistantName: string; onClose: () => void }> = ({ a
         <form
           onSubmit={handleSend}
           className="flex gap-2 p-3 border-t"
-          style={{ backgroundColor: '#ffffff' }}
         >
           <input
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             placeholder="Type your message..."
-            className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm outline-none bg-gray-50 text-slate-900 focus:border-indigo-400 transition-colors"
+            className="flex-1 px-4 py-2.5 rounded-xl border border-border text-sm outline-none bg-background text-foreground focus:border-primary transition-colors"
           />
           <button
             type="submit"
             disabled={!inputText.trim()}
-            className="w-11 h-11 rounded-xl flex items-center justify-center text-white transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ backgroundColor: '#1e293b' }}
+            className="w-11 h-11 rounded-xl flex items-center justify-center text-primary-foreground bg-primary transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Send className="h-4 w-4 ml-0.5" />
           </button>
         </form>
 
         {/* End button */}
-        <div className="p-3 border-t" style={{ backgroundColor: '#ffffff' }}>
+        <div className="p-3 border-t bg-background">
           <button
             onClick={onClose}
-            className="w-full py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors"
+            className="w-full py-3 rounded-xl bg-destructive hover:bg-destructive/90 text-destructive-foreground font-semibold text-sm flex items-center justify-center gap-2 transition-colors"
           >
             <PhoneOff className="h-4 w-4" />
             End Session
@@ -278,6 +272,7 @@ export default function AssistantPage() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<"create" | "edit" | "empty" | "make-call">("empty");
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
 
   // Sync mode with URL param
   useEffect(() => {
@@ -286,10 +281,18 @@ export default function AssistantPage() {
     if (m === "make-call") {
       setMode("make-call");
       setSelectedId(null);
+      setMobileDetailOpen(true);
     } else if (mode === "make-call") {
       setMode("empty");
+      setMobileDetailOpen(false);
     }
-  }, [location.search]);
+  }, [location.search, mode]);
+
+  useEffect(() => {
+    if (mode === "empty") {
+      setMobileDetailOpen(false);
+    }
+  }, [mode]);
 
   const [formData, setFormData] = useState<AssistantDetail>(emptyForm);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -504,6 +507,7 @@ export default function AssistantPage() {
     setFormData(emptyForm);
     setAttachedToolIds([]);
     setMode("create");
+    setMobileDetailOpen(true);
   };
 
   const handleSelectAssistant = async (id: string) => {
@@ -514,6 +518,7 @@ export default function AssistantPage() {
 
     setSelectedId(id);
     setMode("edit");
+    setMobileDetailOpen(true);
     setDetailLoading(true);
 
     try {
@@ -579,6 +584,7 @@ export default function AssistantPage() {
       if (selectedId === id) {
         setMode("empty");
         setSelectedId(null);
+        setMobileDetailOpen(false);
       }
       await fetchList();
     } catch (error: any) {
@@ -698,11 +704,16 @@ export default function AssistantPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-background">
+    <div className="page-shell flex">
 
       {/* --- SIDEBAR --- */}
       {mode !== "make-call" && (
-        <div className="w-80 border-r border-border flex flex-col bg-card/30 animate-in slide-in-from-left duration-300">
+        <div
+          className={cn(
+            "w-full lg:w-80 border-r border-border flex flex-col bg-card/30 animate-in slide-in-from-left duration-300",
+            mobileDetailOpen ? "hidden lg:flex" : "flex",
+          )}
+        >
           <div className="p-4 border-b border-border flex items-center justify-between sticky top-0 bg-background/50 backdrop-blur-sm z-10">
             <div className="flex items-center gap-2">
               <Bot className="h-5 w-5 text-primary" />
@@ -772,9 +783,14 @@ export default function AssistantPage() {
       )}
 
       {/* --- RIGHT MAIN PANEL --- */}
-      <div className="flex-1 flex flex-col bg-background relative">
+      <div
+        className={cn(
+          "flex-1 bg-background relative",
+          mode !== "make-call" && !mobileDetailOpen ? "hidden lg:flex lg:flex-col" : "flex flex-col",
+        )}
+      >
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.02]">
-          <span className="text-[12rem] font-black select-none">VYOM</span>
+          <span className="text-[5rem] md:text-[8rem] xl:text-[12rem] font-black select-none">VYOM</span>
         </div>
 
         {mode === "empty" ? (
@@ -788,7 +804,16 @@ export default function AssistantPage() {
         ) : mode === "make-call" ? (
           <div className="flex-1 flex flex-col h-full overflow-hidden z-10">
             {/* MAKE CALL HEADER */}
-            <div className="p-8 border-b border-border bg-card/20 backdrop-blur-md flex items-center justify-between">
+            <div className="p-4 md:p-8 border-b border-border bg-card/20 backdrop-blur-md flex flex-wrap items-center justify-between gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="lg:hidden text-muted-foreground"
+                onClick={() => setMobileDetailOpen(false)}
+              >
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Back
+              </Button>
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shadow-inner">
                   <PhoneCall className="h-6 w-6" />
@@ -802,8 +827,8 @@ export default function AssistantPage() {
 
             {/* MAKE CALL CONTENT */}
             <ScrollArea className="flex-1">
-              <div className="p-10 max-w-2xl mx-auto">
-                <div className="glass rounded-3xl p-10 space-y-8 border border-border/50 shadow-2xl relative overflow-hidden">
+              <div className="p-4 md:p-10 max-w-2xl mx-auto">
+                <div className="glass rounded-2xl md:rounded-3xl p-5 md:p-10 space-y-6 md:space-y-8 border border-border/50 shadow-2xl relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-3xl" />
 
                   <div className="grid gap-8">
@@ -903,8 +928,17 @@ export default function AssistantPage() {
             <div className="flex-1 flex flex-col h-full overflow-hidden z-10">
 
               {/* EDITOR HEADER */}
-              <div className="p-6 border-b border-border bg-card/20 backdrop-blur-md flex items-start justify-between">
-                <div className="space-y-1 flex-1 w-full max-w-2xl mr-4">
+              <div className="p-4 md:p-6 border-b border-border bg-card/20 backdrop-blur-md flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-1 flex-1 w-full max-w-2xl">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="lg:hidden -ml-2 mb-2 text-muted-foreground"
+                    onClick={() => setMobileDetailOpen(false)}
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-1" />
+                    Back
+                  </Button>
                   {mode === "create" ? (
                     <div className="flex items-center gap-2 text-primary">
                       <Plus className="h-5 w-5" />
@@ -956,7 +990,7 @@ export default function AssistantPage() {
                   )}
                 </div>
 
-                <div className="flex items-center gap-3 shrink-0 ml-4">
+                <div className="flex flex-wrap items-center gap-2 shrink-0 md:ml-4">
                   {/* WEB CALL BUTTON */}
                   {mode === "edit" && selectedId && (
                     <Button 
@@ -974,7 +1008,7 @@ export default function AssistantPage() {
     variant="secondary"
     onClick={handleStartChat}
     disabled={chatLoading || saving}
-    className="shadow-lg bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border border-emerald-500/20"
+    className="shadow-lg bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"
   >
     {chatLoading
       ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -994,7 +1028,7 @@ export default function AssistantPage() {
 
               {/* FORM CONTENT */}
               <ScrollArea className="flex-1">
-                <div className="p-8 max-w-4xl mx-auto space-y-10 pb-20">
+                <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-8 md:space-y-10 pb-20">
 
                   {/* General Configuration */}
                   {mode === "create" && (
@@ -1093,7 +1127,7 @@ export default function AssistantPage() {
                       </div>
 
                       {formData.assistant_interaction_config?.silence_reprompts && (
-                        <div className="grid grid-cols-2 gap-6 p-4 border rounded-xl bg-card/50">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 p-4 border rounded-xl bg-card/50">
                           <div className="grid gap-2">
                             <Label>Reprompt Interval (seconds)</Label>
                             <Input 
@@ -1286,7 +1320,7 @@ export default function AssistantPage() {
       {/* --- LIVEKIT WEB CALL OVERLAY --- */}
       {isWebCallActive && webCallToken && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-card border border-border rounded-3xl shadow-2xl overflow-hidden relative">
+          <div className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md bg-card border border-border rounded-3xl shadow-2xl overflow-hidden relative">
             
             <Button 
               variant="ghost" 

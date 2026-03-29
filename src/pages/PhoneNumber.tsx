@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Phone, Plus, Loader2, Save, Trash2, ExternalLink, Shield, Globe, Hash, Info, User, Lock, MapPin } from "lucide-react";
+import { Phone, Plus, Loader2, Save, Trash2, ExternalLink, Shield, Globe, Hash, Info, User, Lock, MapPin, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,6 +55,7 @@ export default function PhoneNumberPage() {
     const [trunks, setTrunks] = useState<TrunkItem[]>([]);
     const [listLoading, setListLoading] = useState(true);
     const [selectedTrunk, setSelectedTrunk] = useState<TrunkDetail | null>(null);
+    const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
     const [detailLoading, setDetailLoading] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -133,6 +134,7 @@ export default function PhoneNumberPage() {
             
             const json = await res.json();
             setSelectedTrunk(json.trunk || json.data);
+            setMobileDetailOpen(true);
             
         } catch (error) {
             console.warn("Falling back to local list data for details", error);
@@ -147,6 +149,7 @@ export default function PhoneNumberPage() {
                 createdAt: trunk.trunk_created_at || trunk.createdAt,
                 updatedAt: trunk.trunk_created_at || trunk.updatedAt,
             });
+            setMobileDetailOpen(true);
         } finally {
             setDetailLoading(false);
         }
@@ -239,6 +242,7 @@ export default function PhoneNumberPage() {
             if (res.ok) {
                 toast({ title: "Success", description: "SIP trunk deleted successfully" });
                 setSelectedTrunk(null);
+                setMobileDetailOpen(false);
                 await fetchList();
             } else {
                 toast({ variant: "destructive", title: "Error", description: json.error || "Failed to delete trunk" });
@@ -252,10 +256,10 @@ export default function PhoneNumberPage() {
     };
 
     return (
-        <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-background">
+        <div className="page-shell flex">
 
             {/* Sidebar List */}
-            <div className="w-80 border-r border-border flex flex-col bg-card/30">
+            <div className={cn("w-full lg:w-80 border-r border-border flex flex-col bg-card/30", mobileDetailOpen ? "hidden lg:flex" : "flex")}>
                 <div className="p-4 border-b border-border flex items-center justify-between sticky top-0 bg-background/50 backdrop-blur-sm z-10">
                     <div className="flex items-center gap-2">
                         <Phone className="h-5 w-5 text-primary" />
@@ -268,9 +272,9 @@ export default function PhoneNumberPage() {
                                 <Plus className="h-4 w-4 mr-1" /> Add
                             </Button>
                         </DialogTrigger>
-                        <DialogContent className="max-w-4xl p-0 h-[500px] flex overflow-hidden border-none shadow-2xl rounded-xl">
+                        <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-4xl p-0 h-[min(500px,90vh)] flex overflow-hidden border-none shadow-2xl rounded-xl">
                             {/* Modal Left Sidebar */}
-                            <div className="w-48 bg-muted/30 border-r border-border flex flex-col">
+                            <div className="hidden sm:flex w-48 bg-muted/30 border-r border-border flex-col">
                                 <div className="p-6 border-b border-border">
                                     <DialogTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Provider</DialogTitle>
                                 </div>
@@ -308,7 +312,7 @@ export default function PhoneNumberPage() {
                                     <DialogTitle className="text-xl">Configure {activeTab === 'twilio' ? 'Twilio' : 'Exotel'} Trunk</DialogTitle>
                                 </DialogHeader>
 
-                                <ScrollArea className="flex-1 p-8">
+                                <ScrollArea className="flex-1 p-4 sm:p-8">
                                     <div className="space-y-6 max-w-md mx-auto">
                                         <div className="space-y-2">
                                             <Label htmlFor="trunk_name" className="text-sm font-medium">Trunk Name</Label>
@@ -347,7 +351,7 @@ export default function PhoneNumberPage() {
                                                         className="bg-muted/30 border-border/50"
                                                     />
                                                 </div>
-                                                <div className="grid grid-cols-2 gap-4">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                     <div className="space-y-2">
                                                         <Label htmlFor="username" className="text-sm font-medium flex items-center gap-2">
                                                             <User className="h-4 w-4 text-primary" /> Username
@@ -471,7 +475,7 @@ export default function PhoneNumberPage() {
             </div>
 
             {/* Main Panel Details */}
-            <div className="flex-1 flex flex-col bg-background relative overflow-hidden">
+            <div className={cn("flex-1 bg-background relative overflow-hidden", mobileDetailOpen ? "flex flex-col" : "hidden lg:flex lg:flex-col")}>
                 {/* Background Pattern */}
                 <div className="absolute inset-0 z-0 opacity-[0.03] pointer-events-none">
                     <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,hsl(var(--primary))_0%,transparent_50%)]" />
@@ -499,8 +503,17 @@ export default function PhoneNumberPage() {
                 ) : (
                     <div className="flex-1 flex flex-col h-full overflow-hidden z-10 animate-in fade-in slide-in-from-right-4 duration-500">
                         {/* Header */}
-                        <div className="p-8 border-b border-border bg-card/10 backdrop-blur-xl flex items-end justify-between">
+                        <div className="p-4 md:p-8 border-b border-border bg-card/10 backdrop-blur-xl flex flex-wrap items-end justify-between gap-4">
                             <div className="space-y-2">
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="lg:hidden -ml-2 text-muted-foreground"
+                                    onClick={() => setMobileDetailOpen(false)}
+                                >
+                                    <ArrowLeft className="h-4 w-4 mr-1" />
+                                    Back
+                                </Button>
                                 <div className="flex items-center gap-3">
                                     <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
                                         <Phone className="h-6 w-6" />
@@ -513,7 +526,7 @@ export default function PhoneNumberPage() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex flex-col items-end gap-3">
+                            <div className="flex flex-col md:items-end gap-3 w-full md:w-auto">
                                 <div className="flex gap-2">
                                     <Button
                                         variant="destructive"
@@ -531,10 +544,10 @@ export default function PhoneNumberPage() {
                                     </Button>
                                 </div>
                                 <div className={cn(
-                                    "px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm",
+                                    "status-chip",
                                     selectedTrunk.trunk_type === "twilio"
-                                        ? "bg-red-500/10 text-red-500 border-red-500/20"
-                                        : "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                                        ? "status-chip-info"
+                                        : "status-chip-neutral"
                                 )}>
                                     {selectedTrunk.trunk_type}
                                 </div>
@@ -545,7 +558,7 @@ export default function PhoneNumberPage() {
                         </div>
 
                         <ScrollArea className="flex-1">
-                            <div className="p-10 max-w-5xl mx-auto">
+                            <div className="p-4 md:p-10 max-w-5xl mx-auto">
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
                                     {/* Left Column: Basic Info */}

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Webhook, Plus, Loader2, Trash2, ExternalLink, Globe, Shield, Activity, Search, Code } from "lucide-react";
+import { Webhook, Plus, Loader2, Trash2, ExternalLink, Globe, Shield, Activity, Search, Code, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,6 +42,7 @@ export default function InboundContextPage() {
     const [strategies, setStrategies] = useState<StrategyItem[]>([]);
     const [listLoading, setListLoading] = useState(true);
     const [selectedStrategy, setSelectedStrategy] = useState<StrategyItem | null>(null);
+    const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -100,6 +101,7 @@ export default function InboundContextPage() {
 
     const handleSelectStrategy = (strategy: StrategyItem) => {
         setSelectedStrategy(strategy);
+        setMobileDetailOpen(true);
         setUpdateForm({
             name: strategy.name,
             url: strategy.strategy_config?.url || "",
@@ -240,6 +242,7 @@ export default function InboundContextPage() {
             if (res.ok) {
                 toast({ title: "Success", description: "Strategy deleted successfully" });
                 setSelectedStrategy(null);
+                setMobileDetailOpen(false);
                 await fetchList();
             } else {
                 toast({ variant: "destructive", title: "Error", description: json.error || "Failed to delete" });
@@ -253,9 +256,9 @@ export default function InboundContextPage() {
     };
 
     return (
-        <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-background">
+        <div className="page-shell flex">
             {/* Sidebar List */}
-            <div className="w-[350px] border-r border-border flex flex-col bg-card/30">
+            <div className={cn("w-full lg:w-[350px] border-r border-border flex flex-col bg-card/30", mobileDetailOpen ? "hidden lg:flex" : "flex")}>
                 <div className="p-4 border-b border-border space-y-4 sticky top-0 bg-background/50 backdrop-blur-sm z-10">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -269,7 +272,7 @@ export default function InboundContextPage() {
                                     <Plus className="h-4 w-4 mr-1" /> Create
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-xl border-none shadow-2xl rounded-xl bg-background">
+                            <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-xl border-none shadow-2xl rounded-xl bg-background">
                                 <DialogHeader className="p-6 border-b border-border bg-card/10">
                                     <DialogTitle className="text-xl flex items-center gap-2">
                                         <Webhook className="h-5 w-5 text-primary" /> New Strategy
@@ -385,7 +388,7 @@ export default function InboundContextPage() {
             </div>
 
             {/* Main Panel Details */}
-            <div className="flex-1 flex flex-col bg-background relative overflow-hidden">
+            <div className={cn("flex-1 bg-background relative overflow-hidden", mobileDetailOpen ? "flex flex-col" : "hidden lg:flex lg:flex-col")}>
                 <div className="absolute inset-0 z-0 opacity-[0.03] pointer-events-none">
                     <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,hsl(var(--primary))_0%,transparent_50%)]" />
                 </div>
@@ -403,8 +406,17 @@ export default function InboundContextPage() {
                 ) : (
                     <div className="flex-1 flex flex-col h-full overflow-hidden z-10 animate-in fade-in slide-in-from-right-4 duration-500">
                         {/* Header */}
-                        <div className="p-8 border-b border-border bg-card/10 backdrop-blur-xl flex items-end justify-between shrink-0">
+                        <div className="p-4 md:p-8 border-b border-border bg-card/10 backdrop-blur-xl flex flex-wrap items-end justify-between gap-4 shrink-0">
                             <div className="space-y-2">
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="lg:hidden -ml-2 text-muted-foreground"
+                                    onClick={() => setMobileDetailOpen(false)}
+                                >
+                                    <ArrowLeft className="h-4 w-4 mr-1" />
+                                    Back
+                                </Button>
                                 <div className="flex items-center gap-3">
                                     <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
                                         <Webhook className="h-6 w-6" />
@@ -417,7 +429,7 @@ export default function InboundContextPage() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex flex-col items-end gap-3">
+                            <div className="flex flex-col md:items-end gap-3 w-full md:w-auto">
                                 <Button
                                     variant="destructive"
                                     size="sm"
@@ -428,14 +440,14 @@ export default function InboundContextPage() {
                                     {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
                                     Delete Strategy
                                 </Button>
-                                <div className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm bg-blue-500/10 text-blue-500 border-blue-500/20">
+                                <div className="status-chip status-chip-info">
                                     {selectedStrategy.type}
                                 </div>
                             </div>
                         </div>
 
                         <ScrollArea className="flex-1">
-                            <div className="p-10 max-w-4xl mx-auto space-y-8">
+                            <div className="p-4 md:p-10 max-w-4xl mx-auto space-y-8">
                                 <section className="space-y-4">
                                     <div className="flex items-center justify-between">
                                         <h3 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
@@ -483,7 +495,7 @@ export default function InboundContextPage() {
                                                 onChange={(e) => setUpdateForm({ ...updateForm, headersStr: e.target.value })}
                                                 className="bg-background font-mono text-sm h-48 resize-none"
                                             />
-                                            <p className="text-[10px] text-yellow-600 bg-yellow-500/10 p-2 rounded border border-yellow-500/20 inline-block mt-2">
+                                            <p className="status-alert-warning text-[10px] p-2 rounded inline-block mt-2">
                                                 Note: For security, existing sensitive keys (like Authorization) are masked as **** when fetched from the server.
                                                 If you need to change them, re-enter the full JSON object.
                                             </p>

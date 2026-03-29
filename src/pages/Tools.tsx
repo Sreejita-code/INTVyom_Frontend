@@ -1,6 +1,6 @@
 // src/pages/Tools.tsx
 import { useEffect, useState, useCallback } from "react";
-import { Wrench, Plus, Loader2, Save, Trash2, X } from "lucide-react";
+import { Wrench, Plus, Loader2, Save, Trash2, X, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +16,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getStoredUser } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 const API_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/tool`;
 
@@ -62,6 +63,7 @@ export default function ToolsPage() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
 
   const fetchList = useCallback(async () => {
     if (!user?.user_id) return;
@@ -89,12 +91,14 @@ export default function ToolsPage() {
     setHeadersList([]);
     setStaticValue("");
     setMode("create");
+    setMobileDetailOpen(true);
   };
 
   const handleSelectTool = async (id: string) => {
     if (!user?.user_id) return;
     setSelectedId(id);
     setMode("edit");
+    setMobileDetailOpen(true);
     setDetailLoading(true);
 
     try {
@@ -139,6 +143,7 @@ export default function ToolsPage() {
       if (selectedId === id) {
         setMode("empty");
         setSelectedId(null);
+        setMobileDetailOpen(false);
       }
       await fetchList();
     } catch (error: any) {
@@ -240,9 +245,14 @@ export default function ToolsPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-background">
+    <div className="page-shell flex">
       {/* SIDEBAR */}
-      <div className="w-80 border-r border-border flex flex-col bg-card/30">
+      <div
+        className={cn(
+          "w-full lg:w-80 border-r border-border flex flex-col bg-card/30",
+          mobileDetailOpen ? "hidden lg:flex" : "flex",
+        )}
+      >
         <div className="p-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Wrench className="h-5 w-5 text-primary" />
@@ -291,7 +301,12 @@ export default function ToolsPage() {
       </div>
 
       {/* MAIN PANEL */}
-      <div className="flex-1 flex flex-col relative">
+      <div
+        className={cn(
+          "flex-1 relative",
+          !mobileDetailOpen ? "hidden lg:flex lg:flex-col" : "flex flex-col",
+        )}
+      >
         {mode === "empty" ? (
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
             <Wrench className="h-16 w-16 mb-4 opacity-20" />
@@ -303,8 +318,17 @@ export default function ToolsPage() {
         ) : (
           <div className="flex-1 flex flex-col h-full z-10">
             {/* HEADER */}
-            <div className="p-6 border-b border-border bg-card/20 flex justify-between">
+            <div className="p-4 md:p-6 border-b border-border bg-card/20 flex flex-wrap items-start justify-between gap-3">
               <div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="lg:hidden -ml-2 mb-2 text-muted-foreground"
+                  onClick={() => setMobileDetailOpen(false)}
+                >
+                  <ArrowLeft className="h-4 w-4 mr-1" />
+                  Back
+                </Button>
                 <h2 className="text-xl font-bold">{mode === "create" ? "Create New Tool" : formData.tool_name}</h2>
                 {mode === "edit" && <p className="text-sm text-muted-foreground font-mono">{formData.tool_id}</p>}
               </div>
@@ -313,8 +337,8 @@ export default function ToolsPage() {
               </Button>
             </div>
 
-            <ScrollArea className="flex-1 p-8">
-              <div className="max-w-3xl mx-auto space-y-8 pb-20">
+            <ScrollArea className="flex-1 p-4 md:p-8">
+              <div className="max-w-3xl mx-auto space-y-6 md:space-y-8 pb-20">
                 
                 {/* Basic Info */}
                 <div className="space-y-4 glass p-6 rounded-xl border border-border/50">
@@ -365,7 +389,7 @@ export default function ToolsPage() {
                           onChange={(e) => setFormData({ ...formData, tool_execution_config: { ...formData.tool_execution_config, url: e.target.value }})}
                         />
                       </div>
-                      <div className="grid gap-2 w-48">
+                      <div className="grid gap-2 w-full sm:w-48">
                         <Label>Timeout (Seconds)</Label>
                         <Input
                           type="number"
@@ -424,7 +448,7 @@ export default function ToolsPage() {
                         <Trash2 className="h-4 w-4" />
                       </Button>
                       
-                      <div className="grid grid-cols-2 gap-4 mr-8">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mr-8">
                         <div className="grid gap-2">
                           <Label>Parameter Name *</Label>
                           <Input value={param.name} onChange={(e) => updateParameter(index, "name", e.target.value)} placeholder="e.g. location" />

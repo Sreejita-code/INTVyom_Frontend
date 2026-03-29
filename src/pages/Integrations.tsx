@@ -93,13 +93,14 @@ const Integrations = () => {
     };
 
     return (
-        <div className="p-8 max-w-5xl mx-auto space-y-12 pb-20">
+        <div className="page-shell overflow-auto">
+            <div className="page-padding max-w-5xl mx-auto space-y-10 md:space-y-12 pb-20">
             <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.5 }}
             >
-                <h1 className="text-4xl font-extrabold tracking-tight mb-2 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+                <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-2 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
                     Integrations
                 </h1>
                 <p className="text-muted-foreground text-lg">Power your virtual assistants with world-class voice providers.</p>
@@ -193,7 +194,7 @@ const Integrations = () => {
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.1 }}
-                            className="space-y-4"
+                            className="space-y-4 relative"
                         >
                             <button
                                 onClick={() => setSelectedProvider(selectedProvider === provider ? null : provider)}
@@ -227,7 +228,7 @@ const Integrations = () => {
                                         initial={{ opacity: 0, height: 0, scale: 0.95 }}
                                         animate={{ opacity: 1, height: "auto", scale: 1 }}
                                         exit={{ opacity: 0, height: 0, scale: 0.95 }}
-                                        className="overflow-hidden absolute z-50 left-0 right-0 mt-2 mx-8 md:mx-auto md:w-[400px]"
+                                        className="overflow-hidden z-30 mt-2 w-full"
                                     >
                                         <Card className="neon-border bg-card/90 backdrop-blur-xl shadow-2xl border-primary/30">
                                             <CardHeader className="p-4 pb-2">
@@ -273,6 +274,7 @@ const Integrations = () => {
                         </motion.div>
                     ))}
                 </div>
+            </div>
             </div>
         </div>
     );
