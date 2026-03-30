@@ -22,7 +22,7 @@ const Integrations = () => {
     const [showKeys, setShowKeys] = useState<{ [key: string]: boolean }>({});
     const user = getStoredUser();
 
-    const providers = ["cartesia", "sarvam", "elevenlabs", "mistral"];
+    const providers = ["cartesia", "sarvam", "elevenlabs", "mistral", "gemini"];
 
     const fetchIntegrations = async () => {
         if (!user?.user_id) return;
@@ -65,7 +65,7 @@ const Integrations = () => {
                 },
                 body: JSON.stringify({
                     user_id: user.user_id,
-                    service_type: "TTS",
+                    service_type: selectedProvider === "gemini" ? "LLM" : "TTS",
                     service_name: selectedProvider,
                     api_key: apiKey,
                 }),
@@ -102,7 +102,7 @@ const Integrations = () => {
                 <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-2 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
                     Integrations
                 </h1>
-                <p className="text-muted-foreground text-lg">Power your virtual assistants with world-class voice providers.</p>
+                <p className="text-muted-foreground text-lg">Manage model and voice provider keys used by your assistants.</p>
             </motion.div>
 
             {/* Connected Section */}
@@ -175,7 +175,7 @@ const Integrations = () => {
                 )}
             </AnimatePresence>
 
-            {/* Voice Providers Section */}
+            {/* Providers Section */}
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
                     <h2 className="text-xl font-bold flex items-center gap-2">

@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getStoredUser } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -31,6 +32,8 @@ const TOOL_API_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/tool`;
 interface AssistantItem {
   assistant_id: string;
   assistant_name: string;
+  assistant_llm_mode?: "pipeline" | "realtime";
+  assistant_llm_config?: Record<string, any>;
   assistant_created_at?: string;
   _id?: string;
   name?: string;
@@ -41,6 +44,13 @@ interface AssistantDetail {
   assistant_name: string;
   assistant_description: string;
   assistant_prompt: string;
+  assistant_llm_mode: "pipeline" | "realtime";
+  assistant_llm_config?: {
+    provider?: string;
+    model?: string;
+    voice?: string;
+    api_key?: string;
+  };
   assistant_tts_model: "cartesia" | "sarvam" | "elevenlabs" | "mistral";
   assistant_tts_config: {
     voice_id?: string;
@@ -64,6 +74,13 @@ const emptyForm: AssistantDetail = {
   assistant_name: "",
   assistant_description: "",
   assistant_prompt: "",
+  assistant_llm_mode: "realtime",
+  assistant_llm_config: {
+    provider: "gemini",
+    model: "",
+    voice: "",
+    api_key: "",
+  },
   assistant_tts_model: "cartesia",
   assistant_tts_config: {
     voice_id: "",
@@ -82,6 +99,37 @@ const emptyForm: AssistantDetail = {
   assistant_end_call_agent_message: "",
   assistant_end_call_url: "",
 };
+
+const buildFormSnapshot = (form: AssistantDetail) =>
+  JSON.stringify({
+    assistant_name: form.assistant_name.trim(),
+    assistant_description: form.assistant_description.trim(),
+    assistant_prompt: form.assistant_prompt.trim(),
+    assistant_llm_mode: form.assistant_llm_mode,
+    assistant_llm_config: {
+      provider: form.assistant_llm_config?.provider?.trim() || "gemini",
+      model: form.assistant_llm_config?.model?.trim() || "",
+      voice: form.assistant_llm_config?.voice?.trim() || "",
+      api_key: form.assistant_llm_config?.api_key?.trim() || "",
+    },
+    assistant_tts_model: form.assistant_tts_model,
+    assistant_tts_config: {
+      voice_id: form.assistant_tts_config.voice_id || "",
+      target_language_code: form.assistant_tts_config.target_language_code || "",
+    },
+    assistant_start_instruction: form.assistant_start_instruction.trim(),
+    assistant_interaction_config: {
+      speaks_first: form.assistant_interaction_config?.speaks_first ?? true,
+      filler_words: form.assistant_interaction_config?.filler_words ?? false,
+      silence_reprompts: form.assistant_interaction_config?.silence_reprompts ?? false,
+      silence_reprompt_interval: form.assistant_interaction_config?.silence_reprompt_interval ?? 10.0,
+      silence_max_reprompts: form.assistant_interaction_config?.silence_max_reprompts ?? 2,
+    },
+    assistant_end_call_enabled: form.assistant_end_call_enabled ?? false,
+    assistant_end_call_trigger_phrase: form.assistant_end_call_trigger_phrase?.trim() || "",
+    assistant_end_call_agent_message: form.assistant_end_call_agent_message?.trim() || "",
+    assistant_end_call_url: form.assistant_end_call_url?.trim() || "",
+  });
 
 // --- ANIMATED MESSAGE COMPONENT ---
 const AnimatedMessage = ({ text, isBot }: { text: string; isBot: boolean }) => {
@@ -295,6 +343,7 @@ export default function AssistantPage() {
   }, [mode]);
 
   const [formData, setFormData] = useState<AssistantDetail>(emptyForm);
+  const [initialFormSnapshot, setInitialFormSnapshot] = useState(() => buildFormSnapshot(emptyForm));
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -320,6 +369,7 @@ export default function AssistantPage() {
   
   // --- Copy State ---
   const [copied, setCopied] = useState(false);
+  const isFormDirty = useMemo(() => buildFormSnapshot(formData) !== initialFormSnapshot, [formData, initialFormSnapshot]);
 
   // --- Actions ---
 
@@ -350,6 +400,12 @@ export default function AssistantPage() {
         ...item,
         assistant_id: item.assistant_id || item._id || "",
         assistant_name: item.assistant_name || item.name || "Unnamed Assistant",
+        assistant_llm_mode:
+          item.assistant_llm_mode === "pipeline" || item.assistant_llm_mode === "realtime"
+            ? item.assistant_llm_mode
+            : item.assistant_llm_config
+              ? "realtime"
+              : "pipeline",
       }));
       setAssistants(normalised);
     } catch (error) {
@@ -505,6 +561,7 @@ export default function AssistantPage() {
   const handleCreateNew = () => {
     setSelectedId(null);
     setFormData(emptyForm);
+    setInitialFormSnapshot(buildFormSnapshot(emptyForm));
     setAttachedToolIds([]);
     setMode("create");
     setMobileDetailOpen(true);
@@ -527,11 +584,24 @@ export default function AssistantPage() {
 
       if (res.ok && json.data) {
         const d = json.data;
-        setFormData({
+        const inferredMode: "pipeline" | "realtime" =
+          d.assistant_llm_mode === "pipeline" || d.assistant_llm_mode === "realtime"
+            ? d.assistant_llm_mode
+            : d.assistant_llm_config
+              ? "realtime"
+              : "pipeline";
+        const nextForm: AssistantDetail = {
           assistant_id: d.assistant_id,
           assistant_name: d.assistant_name || "",
           assistant_description: d.assistant_description || "",
           assistant_prompt: d.assistant_prompt || "",
+          assistant_llm_mode: inferredMode,
+          assistant_llm_config: {
+            provider: d.assistant_llm_config?.provider || "gemini",
+            model: d.assistant_llm_config?.model || "",
+            voice: d.assistant_llm_config?.voice || "",
+            api_key: d.assistant_llm_config?.api_key || "",
+          },
           assistant_tts_model: d.assistant_tts_model || "cartesia",
           assistant_tts_config: {
             voice_id: d.assistant_tts_config?.voice_id || d.assistant_tts_config?.speaker || "",
@@ -551,7 +621,9 @@ export default function AssistantPage() {
           assistant_end_call_trigger_phrase: d.assistant_end_call_trigger_phrase || "",
           assistant_end_call_agent_message: d.assistant_end_call_agent_message || "",
           assistant_end_call_url: d.assistant_end_call_url || "",
-        });
+        };
+        setFormData(nextForm);
+        setInitialFormSnapshot(buildFormSnapshot(nextForm));
 
         const attached = d.tools?.map((t: any) => t.tool_id || t.id || t) || d.tool_ids || [];
         setAttachedToolIds(attached);
@@ -596,32 +668,74 @@ export default function AssistantPage() {
 
   const handleSubmit = async () => {
     if (!user?.user_id) return;
+
+    const name = formData.assistant_name.trim();
+    const description = formData.assistant_description.trim();
+    const prompt = formData.assistant_prompt.trim();
+    if (!name || !description || !prompt) {
+      toast({
+        variant: "destructive",
+        title: "Missing Required Fields",
+        description: "Assistant name, description, and system prompt are required.",
+      });
+      return;
+    }
+
+    if (
+      formData.assistant_end_call_enabled &&
+      (!formData.assistant_end_call_trigger_phrase?.trim() || !formData.assistant_end_call_agent_message?.trim())
+    ) {
+      toast({
+        variant: "destructive",
+        title: "End Call Fields Required",
+        description: "Trigger phrase and agent message are required when End Call Tool is enabled.",
+      });
+      return;
+    }
+
     setSaving(true);
 
     try {
+      const interactionConfig = {
+        ...formData.assistant_interaction_config,
+        ...(formData.assistant_llm_mode === "realtime" ? { filler_words: false } : {}),
+      };
+      const realtimeProvider = formData.assistant_llm_config?.provider?.trim() || "gemini";
       const payload: any = {
         user_id: user.user_id,
-        assistant_name: formData.assistant_name,
-        assistant_description: formData.assistant_description,
-        assistant_prompt: formData.assistant_prompt,
-        assistant_tts_model: formData.assistant_tts_model,
+        assistant_name: name,
+        assistant_description: description,
+        assistant_prompt: prompt,
+        assistant_llm_mode: formData.assistant_llm_mode,
         assistant_start_instruction: formData.assistant_start_instruction,
         
-        // Include new config fields
-        assistant_interaction_config: formData.assistant_interaction_config,
+        assistant_interaction_config: interactionConfig,
         assistant_end_call_enabled: formData.assistant_end_call_enabled,
-        assistant_end_call_trigger_phrase: formData.assistant_end_call_trigger_phrase,
-        assistant_end_call_agent_message: formData.assistant_end_call_agent_message,
-        assistant_end_call_url: formData.assistant_end_call_url,
+        assistant_end_call_trigger_phrase: formData.assistant_end_call_trigger_phrase?.trim(),
+        assistant_end_call_agent_message: formData.assistant_end_call_agent_message?.trim(),
+        assistant_end_call_url: formData.assistant_end_call_url?.trim(),
       };
 
-      if (formData.assistant_tts_model === "sarvam") {
-        payload.assistant_tts_config = {
-          speaker: formData.assistant_tts_config.voice_id,
-          target_language_code: formData.assistant_tts_config.target_language_code || "hi-IN",
+      if (formData.assistant_llm_mode === "realtime") {
+        const llmConfig: Record<string, string> = {
+          provider: realtimeProvider,
+          model: formData.assistant_llm_config?.model?.trim() || undefined,
+          voice: formData.assistant_llm_config?.voice?.trim() || undefined,
         };
+        if (realtimeProvider.toLowerCase() !== "gemini" && formData.assistant_llm_config?.api_key?.trim()) {
+          llmConfig.api_key = formData.assistant_llm_config.api_key.trim();
+        }
+        payload.assistant_llm_config = llmConfig;
       } else {
-        payload.assistant_tts_config = { voice_id: formData.assistant_tts_config.voice_id };
+        payload.assistant_tts_model = formData.assistant_tts_model;
+        if (formData.assistant_tts_model === "sarvam") {
+          payload.assistant_tts_config = {
+            speaker: formData.assistant_tts_config.voice_id,
+            target_language_code: formData.assistant_tts_config.target_language_code || "hi-IN",
+          };
+        } else {
+          payload.assistant_tts_config = { voice_id: formData.assistant_tts_config.voice_id };
+        }
       }
 
       let res;
@@ -647,6 +761,7 @@ export default function AssistantPage() {
         title: mode === "create" ? "Assistant Created" : "Assistant Updated",
         description: `Successfully saved ${formData.assistant_name}`
       });
+      setInitialFormSnapshot(buildFormSnapshot(formData));
 
       await fetchList();
 
@@ -693,6 +808,16 @@ export default function AssistantPage() {
     setFormData(prev => ({ ...prev, assistant_tts_config: { ...prev.assistant_tts_config, [field]: value } }));
   };
 
+  const updateLLMConfig = (field: keyof NonNullable<AssistantDetail["assistant_llm_config"]>, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      assistant_llm_config: {
+        ...(prev.assistant_llm_config || emptyForm.assistant_llm_config!),
+        [field]: value,
+      },
+    }));
+  };
+
   const updateInteractionConfig = (field: keyof NonNullable<AssistantDetail["assistant_interaction_config"]>, value: any) => {
     setFormData(prev => ({
       ...prev,
@@ -702,6 +827,9 @@ export default function AssistantPage() {
       }
     }));
   };
+  const isRealtimeMode = formData.assistant_llm_mode === "realtime";
+  const getAssistantMode = (assistant: AssistantItem): "pipeline" | "realtime" =>
+    assistant.assistant_llm_mode === "realtime" ? "realtime" : "pipeline";
 
   return (
     <div className="page-shell flex">
@@ -737,12 +865,13 @@ export default function AssistantPage() {
               ) : (
                 assistants.map((item) => {
                   const itemId = item.assistant_id || (item as any)._id;
+                  const assistantMode = getAssistantMode(item);
                   return (
                     <div
                       key={itemId}
                       onClick={() => handleSelectAssistant(itemId)}
                       className={`
-                        group flex items-center gap-3 p-3 rounded-md cursor-pointer transition-all border
+                        group flex items-start gap-3 p-3 rounded-md cursor-pointer transition-all border
                         ${selectedId === itemId
                           ? "bg-accent/50 border-primary/50 shadow-[0_0_15px_-3px_rgba(var(--primary),0.3)]"
                           : "bg-transparent border-transparent hover:bg-accent/30 hover:border-border"
@@ -755,11 +884,23 @@ export default function AssistantPage() {
                       `}>
                         <Bot className="h-5 w-5" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className={`text-sm font-medium truncate ${selectedId === itemId ? "text-primary" : "text-foreground"}`}>
-                          {item.assistant_name}
-                        </h4>
-                        <p className="text-xs text-muted-foreground truncate font-mono opacity-70">
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex min-w-0 flex-wrap items-start gap-2">
+                          <h4 className={`min-w-0 flex-1 text-sm font-medium leading-snug break-words ${selectedId === itemId ? "text-primary" : "text-foreground"}`}>
+                            {item.assistant_name}
+                          </h4>
+                          <span
+                            className={cn(
+                              "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider border",
+                              assistantMode === "realtime"
+                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                : "bg-sky-500/10 text-sky-400 border-sky-500/30",
+                            )}
+                          >
+                            {assistantMode}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate font-mono opacity-70 pr-2">
                           {itemId.slice(0, 8)}...
                         </p>
                       </div>
@@ -1019,7 +1160,7 @@ export default function AssistantPage() {
 )}
 
                   {/* SAVE BUTTON */}
-                  <Button onClick={handleSubmit} disabled={saving || !!deletingId} className="min-w-[100px] shadow-lg shadow-primary/20">
+                  <Button onClick={handleSubmit} disabled={saving || !!deletingId || !isFormDirty} className="min-w-[100px] shadow-lg shadow-primary/20 disabled:shadow-none">
                     {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                     Save
                   </Button>
@@ -1031,21 +1172,71 @@ export default function AssistantPage() {
                 <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-8 md:space-y-10 pb-20">
 
                   {/* General Configuration */}
-                  {mode === "create" && (
-                    <div className="grid gap-6">
-                      <div className="grid gap-2">
-                        <Label>Assistant Name</Label>
-                        <Input placeholder="e.g. Support Bot" value={formData.assistant_name} onChange={(e) => updateField("assistant_name", e.target.value)} />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label>Assistant Description</Label>
-                        <Input placeholder="Description..." value={formData.assistant_description} onChange={(e) => updateField("assistant_description", e.target.value)} />
-                      </div>
+                  <div className="grid gap-6">
+                    {mode === "create" && (
+                      <>
+                        <div className="grid gap-2">
+                          <Label>Assistant Name *</Label>
+                          <Input
+                            placeholder="e.g. Support Bot"
+                            value={formData.assistant_name}
+                            onChange={(e) => updateField("assistant_name", e.target.value)}
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div className="grid gap-2">
+                      <Label>Assistant Description *</Label>
+                      <Input
+                        placeholder="Briefly describe the assistant purpose"
+                        value={formData.assistant_description}
+                        onChange={(e) => updateField("assistant_description", e.target.value)}
+                      />
                     </div>
-                  )}
+
+                    <div className="grid gap-2 rounded-xl border border-border/60 bg-card/60 p-4">
+                      <Label className="text-base font-semibold">Mode</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Choose how speech and model processing are orchestrated.
+                      </p>
+                      <RadioGroup
+                        value={formData.assistant_llm_mode}
+                        onValueChange={(value) => updateField("assistant_llm_mode", value as "pipeline" | "realtime")}
+                        className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2"
+                      >
+                        <Label
+                          htmlFor="mode-pipeline"
+                          className={cn(
+                            "flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors",
+                            !isRealtimeMode ? "border-sky-500/40 bg-sky-500/10 text-sky-300" : "border-border/60 bg-background/40",
+                          )}
+                        >
+                          <RadioGroupItem id="mode-pipeline" value="pipeline" />
+                          <div className="space-y-0.5">
+                            <p className="text-sm font-semibold">Pipeline</p>
+                            <p className="text-xs text-muted-foreground">STT and LLM run in the core flow; TTS is handled as a separate stage.</p>
+                          </div>
+                        </Label>
+                        <Label
+                          htmlFor="mode-realtime"
+                          className={cn(
+                            "flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors",
+                            isRealtimeMode ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-border/60 bg-background/40",
+                          )}
+                        >
+                          <RadioGroupItem id="mode-realtime" value="realtime" />
+                          <div className="space-y-0.5">
+                            <p className="text-sm font-semibold">Realtime</p>
+                            <p className="text-xs text-muted-foreground">STT, LLM, and TTS run together in one realtime interaction loop.</p>
+                          </div>
+                        </Label>
+                      </RadioGroup>
+                    </div>
+                  </div>
 
                   <div className="space-y-4">
-                    {mode === "edit" ? <h3 className="text-lg font-semibold border-b border-border/50 pb-2">System Prompt</h3> : <Label className="text-base font-semibold">System Prompt</Label>}
+                    {mode === "edit" ? <h3 className="text-lg font-semibold border-b border-border/50 pb-2">System Prompt *</h3> : <Label className="text-base font-semibold">System Prompt *</Label>}
                     <Textarea
                       placeholder="You are a helpful support agent..."
                       className="min-h-[150px] font-mono text-sm leading-relaxed"
@@ -1061,43 +1252,94 @@ export default function AssistantPage() {
                     </div>
                   </div>
 
-                  {/* TTS Section */}
-                  <div className="space-y-4 pt-4">
-                    <h3 className="text-lg font-semibold border-b border-border/50 pb-2">TTS Section</h3>
-                    <div className="grid gap-4">
-                      <div className="grid gap-2">
-                        <Label>Model</Label>
-                        <Select value={formData.assistant_tts_model} onValueChange={(v) => updateField("assistant_tts_model", v)}>
-                          <SelectTrigger><SelectValue placeholder="Select Model" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="cartesia">Cartesia</SelectItem>
-                            <SelectItem value="sarvam">Sarvam</SelectItem>
-                            <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
-                            <SelectItem value="mistral">Mistral</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label>Voice Id</Label>
-                        <Input placeholder="e.g. a167e0f3-df7e-4277-976b-be2f952fa275" value={formData.assistant_tts_config.voice_id} onChange={(e) => updateTTS("voice_id", e.target.value)} className="font-mono" />
-                      </div>
-
-                      {formData.assistant_tts_model === "sarvam" && (
+                  {/* Mode-Specific Config */}
+                  {isRealtimeMode ? (
+                    <div className="space-y-4 pt-4">
+                      <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Realtime LLM Settings</h3>
+                      <div className="grid gap-4 rounded-xl border border-border/60 bg-card/60 p-4">
                         <div className="grid gap-2">
-                          <Label>Target Language Code</Label>
-                          <Select value={formData.assistant_tts_config.target_language_code || "hi-IN"} onValueChange={(v) => updateTTS("target_language_code", v)}>
-                            <SelectTrigger><SelectValue placeholder="Select Language" /></SelectTrigger>
+                          <Label>Provider</Label>
+                          <Input
+                            value={formData.assistant_llm_config?.provider || ""}
+                            placeholder="gemini"
+                            onChange={(e) => updateLLMConfig("provider", e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            For Gemini, API key is sourced from Integrations.
+                          </p>
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Model</Label>
+                          <Input
+                            value={formData.assistant_llm_config?.model || ""}
+                            placeholder="Optional model override"
+                            onChange={(e) => updateLLMConfig("model", e.target.value)}
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>Voice</Label>
+                          <Input
+                            value={formData.assistant_llm_config?.voice || ""}
+                            placeholder="Optional voice setting"
+                            onChange={(e) => updateLLMConfig("voice", e.target.value)}
+                          />
+                        </div>
+                        {(formData.assistant_llm_config?.provider || "").toLowerCase() !== "gemini" && (
+                          <div className="grid gap-2">
+                            <Label>API Key (Optional)</Label>
+                            <Input
+                              type="password"
+                              value={formData.assistant_llm_config?.api_key || ""}
+                              placeholder="Optional override for non-Gemini providers"
+                              onChange={(e) => updateLLMConfig("api_key", e.target.value)}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4 pt-4">
+                      <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Pipeline Voice Settings</h3>
+                      <div className="grid gap-4 rounded-xl border border-border/60 bg-card/60 p-4">
+                        <div className="grid gap-2">
+                          <Label>Model</Label>
+                          <Select value={formData.assistant_tts_model} onValueChange={(v) => updateField("assistant_tts_model", v)}>
+                            <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="bn-IN">bn-IN</SelectItem>
-                              <SelectItem value="hi-IN">hi-IN</SelectItem>
-                              <SelectItem value="en-IN">en-IN</SelectItem>
+                              <SelectItem value="cartesia">Cartesia</SelectItem>
+                              <SelectItem value="sarvam">Sarvam</SelectItem>
+                              <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
+                              <SelectItem value="mistral">Mistral</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
-                      )}
+
+                        <div className="grid gap-2">
+                          <Label>Voice ID</Label>
+                          <Input
+                            placeholder="e.g. a167e0f3-df7e-4277-976b-be2f952fa275"
+                            value={formData.assistant_tts_config.voice_id}
+                            onChange={(e) => updateTTS("voice_id", e.target.value)}
+                            className="font-mono"
+                          />
+                        </div>
+
+                        {formData.assistant_tts_model === "sarvam" && (
+                          <div className="grid gap-2">
+                            <Label>Target Language Code</Label>
+                            <Select value={formData.assistant_tts_config.target_language_code || "hi-IN"} onValueChange={(v) => updateTTS("target_language_code", v)}>
+                              <SelectTrigger><SelectValue placeholder="Select language" /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="bn-IN">bn-IN</SelectItem>
+                                <SelectItem value="hi-IN">hi-IN</SelectItem>
+                                <SelectItem value="en-IN">en-IN</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Interaction Config */}
                   <div className="space-y-4 pt-4">
@@ -1114,9 +1356,15 @@ export default function AssistantPage() {
                       <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
                         <div>
                           <Label>Filler Words</Label>
-                          <p className="text-sm text-muted-foreground mt-1">Use short phrases like "Um" or "Let me see" to reduce perceived latency.</p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Realtime mode always forces this off in backend.
+                          </p>
                         </div>
-                        <Switch checked={formData.assistant_interaction_config?.filler_words} onCheckedChange={(v) => updateInteractionConfig("filler_words", v)} />
+                        <Switch
+                          checked={isRealtimeMode ? false : formData.assistant_interaction_config?.filler_words}
+                          onCheckedChange={(v) => updateInteractionConfig("filler_words", v)}
+                          disabled={isRealtimeMode}
+                        />
                       </div>
 
                       <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
@@ -1131,23 +1379,23 @@ export default function AssistantPage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 p-4 border rounded-xl bg-card/50">
                           <div className="grid gap-2">
                             <Label>Reprompt Interval (seconds)</Label>
-                            <Input 
-                              type="number" 
-                              step="0.5" 
-                              min="1" 
-                              max="60" 
-                              value={formData.assistant_interaction_config.silence_reprompt_interval} 
-                              onChange={(e) => updateInteractionConfig("silence_reprompt_interval", parseFloat(e.target.value) || 10.0)} 
+                            <Input
+                              type="number"
+                              step="0.5"
+                              min="1"
+                              max="60"
+                              value={formData.assistant_interaction_config.silence_reprompt_interval}
+                              onChange={(e) => updateInteractionConfig("silence_reprompt_interval", parseFloat(e.target.value) || 10.0)}
                             />
                           </div>
                           <div className="grid gap-2">
                             <Label>Max Reprompts</Label>
-                            <Input 
-                              type="number" 
-                              min="0" 
-                              max="5" 
-                              value={formData.assistant_interaction_config.silence_max_reprompts} 
-                              onChange={(e) => updateInteractionConfig("silence_max_reprompts", parseInt(e.target.value, 10) || 2)} 
+                            <Input
+                              type="number"
+                              min="0"
+                              max="5"
+                              value={formData.assistant_interaction_config.silence_max_reprompts}
+                              onChange={(e) => updateInteractionConfig("silence_max_reprompts", parseInt(e.target.value, 10) || 2)}
                             />
                           </div>
                         </div>
@@ -1184,7 +1432,7 @@ export default function AssistantPage() {
                       {formData.assistant_end_call_enabled && (
                         <div className="grid gap-4 p-4 border rounded-xl bg-card/50">
                           <div className="grid gap-2">
-                            <Label>Trigger Phrase (Optional)</Label>
+                            <Label>Trigger Phrase *</Label>
                             <Input 
                               placeholder="e.g. Thanks, you can end the call now" 
                               value={formData.assistant_end_call_trigger_phrase} 
@@ -1192,7 +1440,7 @@ export default function AssistantPage() {
                             />
                           </div>
                           <div className="grid gap-2">
-                            <Label>Agent Message (Optional)</Label>
+                            <Label>Agent Message *</Label>
                             <Input 
                               placeholder="Thank you for your time. Have a great day!" 
                               value={formData.assistant_end_call_agent_message} 

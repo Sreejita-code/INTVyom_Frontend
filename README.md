@@ -40,6 +40,25 @@ APP_PORT=8003
 
 > `.env` is git-ignored — never commit real secrets.
 
+## Assistant Editor Modes
+
+`/dashboard/assistant` supports two assistant runtime modes:
+
+- `realtime` (default for new assistants)
+  - Uses `assistant_llm_mode: "realtime"` and `assistant_llm_config`
+  - Configurable fields: `provider`, `model`, `voice`
+  - For `provider=gemini`, API key is expected from `/dashboard/integration`
+  - For non-Gemini providers, optional per-assistant `api_key` override is supported
+  - `filler_words` is enforced as `false` by backend in realtime mode
+- `pipeline`
+  - Uses `assistant_llm_mode: "pipeline"` and TTS settings
+  - Configurable fields: `assistant_tts_model` and `assistant_tts_config`
+
+Save validation:
+
+- `assistant_name`, `assistant_description`, and `assistant_prompt` are required.
+- If `assistant_end_call_enabled` is true, `assistant_end_call_trigger_phrase` and `assistant_end_call_agent_message` are required.
+
 ## Production Deployment (Docker)
 
 ```bash
