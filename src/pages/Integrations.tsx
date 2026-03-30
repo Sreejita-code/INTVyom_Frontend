@@ -22,8 +22,7 @@ const Integrations = () => {
     const [showKeys, setShowKeys] = useState<{ [key: string]: boolean }>({});
     const user = getStoredUser();
 
-    // Added elevenlabs to the providers array
-    const providers = ["cartesia", "sarvam", "elevenlabs"];
+    const providers = ["cartesia", "sarvam", "elevenlabs", "mistral"];
 
     const fetchIntegrations = async () => {
         if (!user?.user_id) return;

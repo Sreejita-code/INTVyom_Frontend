@@ -41,7 +41,7 @@ interface AssistantDetail {
   assistant_name: string;
   assistant_description: string;
   assistant_prompt: string;
-  assistant_tts_model: "cartesia" | "sarvam" | "elevenlabs";
+  assistant_tts_model: "cartesia" | "sarvam" | "elevenlabs" | "mistral";
   assistant_tts_config: {
     voice_id?: string;
     target_language_code?: string;
@@ -1073,6 +1073,7 @@ export default function AssistantPage() {
                             <SelectItem value="cartesia">Cartesia</SelectItem>
                             <SelectItem value="sarvam">Sarvam</SelectItem>
                             <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
+                            <SelectItem value="mistral">Mistral</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
