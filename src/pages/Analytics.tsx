@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BarChart3, Calendar as CalendarIcon, Filter, PieChart, TrendingUp, UserRound } from "lucide-react";
+import { BarChart3, Calendar as CalendarIcon, Filter, PieChart, TrendingUp, UserRound, Clock, Download } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, XAxis, YAxis } from "recharts";
 
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,8 @@ import {
   getCallsByTime,
   getDashboardMetrics,
   getDefaultAnalyticsDateRange,
+  getPlatformBillableMinutes,
+  PlatformBillableItem,
   ServiceBreakdownItem,
   TimeSeriesPoint,
 } from "@/lib/analytics";
@@ -90,6 +92,7 @@ export default function AnalyticsPage() {
   >([]);
   const [timeSeriesData, setTimeSeriesData] = useState<TimeSeriesPoint[]>([]);
   const [serviceData, setServiceData] = useState<ServiceBreakdownItem[]>([]);
+  const [billableData, setBillableData] = useState<PlatformBillableItem[]>([]);
 
   const [loading, setLoading] = useState({
     metrics: false,
@@ -97,6 +100,7 @@ export default function AnalyticsPage() {
     phone: false,
     time: false,
     service: false,
+    billable: false,
   });
 
   const baseFilters = useMemo<AnalyticsFilters | null>(() => {
@@ -235,7 +239,27 @@ export default function AnalyticsPage() {
         toast({ variant: "destructive", title: "Service analytics failed", description: error.message });
       })
       .finally(() => setSectionLoading("service", false));
+
+    setSectionLoading("billable", true);
+    getPlatformBillableMinutes(baseFilters)
+      .then((data) => setBillableData(data))
+      .catch((error: Error) => {
+        setBillableData([]);
+        toast({ variant: "destructive", title: "Billable minutes failed", description: error.message });
+      })
+      .finally(() => setSectionLoading("billable", false));
+
   }, [baseFilters, setSectionLoading, toast]);
+
+  const handleDownloadBillable = useCallback(() => {
+    if (!user?.user_id || !startDate || !endDate) return;
+    const query = new URLSearchParams({
+      user_id: user.user_id,
+      start_date: startDate.toISOString(),
+      end_date: endDate.toISOString(),
+    });
+    window.open(`${ASSISTANT_API_BASE}/platform-billable-minutes/download?${query.toString()}`, "_blank");
+  }, [user?.user_id, startDate, endDate]);
 
   useEffect(() => {
     fetchAssistants();
@@ -482,6 +506,49 @@ export default function AnalyticsPage() {
                     </div>
                   );
                 })
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4">
+          <Card>
+            <CardHeader className="flex flex-row items-start justify-between pb-2">
+              <div className="space-y-1">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-primary" />
+                  Billable Minutes
+                </CardTitle>
+                <CardDescription>Platform numbers and their total billable minutes</CardDescription>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleDownloadBillable} className="flex gap-2">
+                <Download className="h-4 w-4" />
+                Download Excel
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {loading.billable ? (
+                <Skeleton className="h-72 w-full" />
+              ) : billableData.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{emptyStateMessage}</p>
+              ) : (
+                <ChartContainer
+                  className="h-72 w-full"
+                  config={{ minutes: { label: "Billable Minutes", color: "hsl(var(--primary))" } }}
+                >
+                  <BarChart data={billableData}>
+                    <CartesianGrid vertical={false} />
+                    <XAxis
+                      dataKey="platformNumber"
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(value) => truncateLabel(String(value))}
+                    />
+                    <YAxis allowDecimals={false} />
+                    <ChartTooltip content={<ChartTooltipContent labelFormatter={(label) => String(label)} />} />
+                    <Bar dataKey="totalBillableMinutes" name="minutes" fill="var(--color-minutes)" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ChartContainer>
               )}
             </CardContent>
           </Card>

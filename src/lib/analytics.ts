@@ -42,6 +42,11 @@ export interface ServiceBreakdownItem {
   callCount: number;
 }
 
+export interface PlatformBillableItem {
+  platformNumber: string;
+  totalBillableMinutes: number;
+}
+
 const ANALYTICS_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/analytics`;
 
 const parseNumber = (value: unknown) => {
@@ -287,6 +292,19 @@ export const normalizeServiceBreakdown = (payload: unknown): ServiceBreakdownIte
   });
 };
 
+export const normalizePlatformBillable = (payload: unknown): PlatformBillableItem[] => {
+  const data = extractDataNode(payload);
+  const rows = extractArray(data.platform_wise_minutes || data);
+
+  return rows.map((row, index) => {
+    const item = (row || {}) as Record<string, unknown>;
+    return {
+      platformNumber: parseString(item.platform_number ?? `Platform ${index + 1}`),
+      totalBillableMinutes: parseNumber(item.total_billable_minutes ?? 0),
+    };
+  });
+};
+
 export async function getDashboardMetrics(filters: AnalyticsFilters): Promise<DashboardMetrics> {
   const query = buildAnalyticsQueryParams(filters);
   const payload = await requestAnalytics("/dashboard", query);
@@ -315,4 +333,22 @@ export async function getCallsByService(filters: AnalyticsFilters): Promise<Serv
   const query = buildAnalyticsQueryParams(filters);
   const payload = await requestAnalytics("/calls/by-service", query);
   return normalizeServiceBreakdown(payload);
+}
+
+export async function getPlatformBillableMinutes(filters: AnalyticsFilters): Promise<PlatformBillableItem[]> {
+  const query = new URLSearchParams({
+    user_id: filters.userId,
+  });
+  if (filters.startDate) query.set("start_date", filters.startDate.toISOString());
+  if (filters.endDate) query.set("end_date", filters.endDate.toISOString());
+
+  const url = `${import.meta.env.VITE_BACKEND_URL}/api/assistant/platform-billable-minutes?${query.toString()}`;
+  const response = await fetch(url);
+  const json = await response.json();
+
+  if (!response.ok) {
+    throw new Error(json.error || json.message || "Failed to load billable minutes");
+  }
+
+  return normalizePlatformBillable(json);
 }
