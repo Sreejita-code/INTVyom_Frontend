@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useLocation } from "react-router-dom";
-import { Bot, Plus, Loader2, Save, Trash2, Phone, Check, Wrench, Mic, X, Copy, MessageSquare, Send, PhoneOff, PhoneCall, ArrowLeft } from "lucide-react";
+import { Bot, Plus, Loader2, Save, Trash2, Phone, Check, Wrench, Mic, X, Copy, MessageSquare, Send, PhoneOff, PhoneCall, ArrowLeft, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,7 @@ interface AssistantItem {
   assistant_created_at?: string;
   _id?: string;
   name?: string;
+  description?: string;
 }
 
 interface AssistantDetail {
@@ -317,6 +318,27 @@ export default function AssistantPage() {
   const location = useLocation();
   const [assistants, setAssistants] = useState<AssistantItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // --- Pagination & Infinite Scroll State ---
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const limit = 15;
+
+  const observer = useRef<IntersectionObserver | null>(null);
+  const lastElementRef = useCallback((node: HTMLDivElement | null) => {
+    if (listLoading || isLoadingMore) return;
+    if (observer.current) observer.current.disconnect();
+    
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore) {
+        setPage(prevPage => prevPage + 1);
+      }
+    });
+    
+    if (node) observer.current.observe(node);
+  }, [listLoading, isLoadingMore, hasMore]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<"create" | "edit" | "empty" | "make-call">("empty");
@@ -371,27 +393,36 @@ export default function AssistantPage() {
   const [copied, setCopied] = useState(false);
   const isFormDirty = useMemo(() => buildFormSnapshot(formData) !== initialFormSnapshot, [formData, initialFormSnapshot]);
 
+  // --- Filtered Assistants ---
+  const filteredAssistants = assistants.filter((assistant) =>
+    assistant.assistant_name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   // --- Actions ---
 
-  const fetchList = useCallback(async () => {
+  const fetchList = useCallback(async (pageNum: number) => {
     if (!user?.user_id) {
       setListLoading(false);
       return;
     }
-    setListLoading(true);
+    
+    if (pageNum === 1) setListLoading(true);
+    else setIsLoadingMore(true);
+
     try {
-      const res = await fetch(`${API_BASE}/list?user_id=${user.user_id}`);
+      const res = await fetch(`${API_BASE}/list?user_id=${user.user_id}&page=${pageNum}&limit=${limit}`);
       const json = await res.json();
 
       if (!res.ok) {
         const errMsg = json?.error || json?.message || "Failed to load assistants";
         toast({ variant: "destructive", title: "Error", description: errMsg });
-        setAssistants([]);
+        if (pageNum === 1) setAssistants([]);
         return;
       }
 
       let list: AssistantItem[] = [];
       if (Array.isArray(json?.data?.assistants)) list = json.data.assistants;
+      else if (Array.isArray(json?.data?.logs)) list = json.data.logs; // Fallback
       else if (Array.isArray(json?.data)) list = json.data;
       else if (Array.isArray(json?.assistants)) list = json.assistants;
       else if (Array.isArray(json)) list = json;
@@ -407,14 +438,26 @@ export default function AssistantPage() {
               ? "realtime"
               : "pipeline",
       }));
-      setAssistants(normalised);
+      
+      if (pageNum === 1) {
+        setAssistants(normalised);
+      } else {
+        setAssistants(prev => [...prev, ...normalised]);
+      }
+      
+      setHasMore(normalised.length >= limit);
     } catch (error) {
       console.error(error);
       toast({ variant: "destructive", title: "Failed to load assistants" });
     } finally {
       setListLoading(false);
+      setIsLoadingMore(false);
     }
-  }, [user?.user_id, toast]);
+  }, [user?.user_id, toast, limit]);
+
+  useEffect(() => {
+    fetchList(page);
+  }, [fetchList, page]);
 
   const fetchTrunks = useCallback(async () => {
     if (!user?.user_id) return;
@@ -444,10 +487,9 @@ export default function AssistantPage() {
   }, [user?.user_id]);
 
   useEffect(() => {
-    fetchList();
     fetchTrunks();
     fetchTools();
-  }, [fetchList, fetchTrunks, fetchTools]);
+  }, [fetchTrunks, fetchTools]);
 
   const handleMakeCallClick = () => {
     setMode("make-call");
@@ -658,7 +700,10 @@ export default function AssistantPage() {
         setSelectedId(null);
         setMobileDetailOpen(false);
       }
-      await fetchList();
+      
+      // Reset pagination and refetch
+      setPage(1);
+      await fetchList(1);
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
@@ -763,7 +808,9 @@ export default function AssistantPage() {
       });
       setInitialFormSnapshot(buildFormSnapshot(formData));
 
-      await fetchList();
+      // Reset pagination and refetch
+      setPage(1);
+      await fetchList(1);
 
       if (mode === "create") {
         if (json.assistant?.external_assistant_id) handleSelectAssistant(json.assistant.external_assistant_id);
@@ -832,17 +879,17 @@ export default function AssistantPage() {
     assistant.assistant_llm_mode === "realtime" ? "realtime" : "pipeline";
 
   return (
-    <div className="page-shell flex">
+    <div className="page-shell flex h-screen overflow-hidden">
 
       {/* --- SIDEBAR --- */}
       {mode !== "make-call" && (
         <div
           className={cn(
-            "w-full lg:w-80 border-r border-border flex flex-col bg-card/30 animate-in slide-in-from-left duration-300",
+            "w-full lg:w-80 border-r border-border flex flex-col bg-card/30 animate-in slide-in-from-left duration-300 h-full",
             mobileDetailOpen ? "hidden lg:flex" : "flex",
           )}
         >
-          <div className="p-4 border-b border-border flex items-center justify-between sticky top-0 bg-background/50 backdrop-blur-sm z-10">
+          <div className="p-4 border-b border-border flex items-center justify-between bg-background/50 backdrop-blur-sm z-10 shrink-0">
             <div className="flex items-center gap-2">
               <Bot className="h-5 w-5 text-primary" />
               <span className="font-semibold text-foreground">Assistants</span>
@@ -852,71 +899,94 @@ export default function AssistantPage() {
             </Button>
           </div>
 
-          <ScrollArea className="flex-1">
+          <div className="p-4 border-b shrink-0">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Search assistants..."
+                className="pl-8 bg-background"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <ScrollArea className="flex-1 overflow-y-auto">
             <div className="p-3 space-y-2">
-              {listLoading ? (
+              {listLoading && page === 1 ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
-              ) : assistants.length === 0 ? (
+              ) : filteredAssistants.length === 0 ? (
                 <div className="text-center py-10 px-4 text-muted-foreground text-sm">
-                  No assistants found. Create one to get started.
+                  {searchQuery ? `No assistants found matching "${searchQuery}".` : "No assistants found. Create one to get started."}
                 </div>
               ) : (
-                assistants.map((item) => {
-                  const itemId = item.assistant_id || (item as any)._id;
-                  const assistantMode = getAssistantMode(item);
-                  return (
-                    <div
-                      key={itemId}
-                      onClick={() => handleSelectAssistant(itemId)}
-                      className={`
-                        group flex items-start gap-3 p-3 rounded-md cursor-pointer transition-all border
-                        ${selectedId === itemId
-                          ? "bg-accent/50 border-primary/50 shadow-[0_0_15px_-3px_rgba(var(--primary),0.3)]"
-                          : "bg-transparent border-transparent hover:bg-accent/30 hover:border-border"
-                        }
-                      `}
-                    >
-                      <div className={`
-                        w-10 h-10 rounded-full flex items-center justify-center shrink-0
-                        ${selectedId === itemId ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}
-                      `}>
-                        <Bot className="h-5 w-5" />
-                      </div>
-                      <div className="flex-1 min-w-0 space-y-1">
-                        <div className="flex min-w-0 flex-wrap items-start gap-2">
-                          <h4 className={`min-w-0 flex-1 text-sm font-medium leading-snug break-words ${selectedId === itemId ? "text-primary" : "text-foreground"}`}>
-                            {item.assistant_name}
-                          </h4>
-                          <span
-                            className={cn(
-                              "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider border",
-                              assistantMode === "realtime"
-                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                                : "bg-sky-500/10 text-sky-400 border-sky-500/30",
-                            )}
-                          >
-                            {assistantMode}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground truncate font-mono opacity-70 pr-2">
-                          {itemId.slice(0, 8)}...
-                        </p>
-                      </div>
+                <>
+                  {filteredAssistants.map((item, index) => {
+                    const itemId = item.assistant_id || (item as any)._id;
+                    const assistantMode = getAssistantMode(item);
+                    const isLastElement = index === filteredAssistants.length - 1;
 
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                        onClick={(e) => handleDeleteAssistant(itemId, e)}
-                        disabled={deletingId === itemId}
+                    return (
+                      <div
+                        key={itemId}
+                        ref={isLastElement ? lastElementRef : null}
+                        onClick={() => handleSelectAssistant(itemId)}
+                        className={`
+                          group flex items-start gap-3 p-3 rounded-md cursor-pointer transition-all border
+                          ${selectedId === itemId
+                            ? "bg-accent/50 border-primary/50 shadow-[0_0_15px_-3px_rgba(var(--primary),0.3)]"
+                            : "bg-transparent border-transparent hover:bg-accent/30 hover:border-border"
+                          }
+                        `}
                       >
-                        {deletingId === itemId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                      </Button>
+                        <div className={`
+                          w-10 h-10 rounded-full flex items-center justify-center shrink-0
+                          ${selectedId === itemId ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}
+                        `}>
+                          <Bot className="h-5 w-5" />
+                        </div>
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex min-w-0 flex-wrap items-start gap-2">
+                            <h4 className={`min-w-0 flex-1 text-sm font-medium leading-snug break-words ${selectedId === itemId ? "text-primary" : "text-foreground"}`}>
+                              {item.assistant_name}
+                            </h4>
+                            <span
+                              className={cn(
+                                "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider border",
+                                assistantMode === "realtime"
+                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                  : "bg-sky-500/10 text-sky-400 border-sky-500/30",
+                              )}
+                            >
+                              {assistantMode}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate font-mono opacity-70 pr-2">
+                            {itemId.slice(0, 8)}...
+                          </p>
+                        </div>
+
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                          onClick={(e) => handleDeleteAssistant(itemId, e)}
+                          disabled={deletingId === itemId}
+                        >
+                          {deletingId === itemId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                  {isLoadingMore && (
+                    <div className="flex justify-center py-4">
+                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                     </div>
-                  );
-                })
+                  )}
+                </>
               )}
             </div>
           </ScrollArea>
@@ -926,7 +996,7 @@ export default function AssistantPage() {
       {/* --- RIGHT MAIN PANEL --- */}
       <div
         className={cn(
-          "flex-1 bg-background relative",
+          "flex-1 bg-background relative h-full",
           mode !== "make-call" && !mobileDetailOpen ? "hidden lg:flex lg:flex-col" : "flex flex-col",
         )}
       >
@@ -945,7 +1015,7 @@ export default function AssistantPage() {
         ) : mode === "make-call" ? (
           <div className="flex-1 flex flex-col h-full overflow-hidden z-10">
             {/* MAKE CALL HEADER */}
-            <div className="p-4 md:p-8 border-b border-border bg-card/20 backdrop-blur-md flex flex-wrap items-center justify-between gap-3">
+            <div className="p-4 md:p-8 border-b border-border bg-card/20 backdrop-blur-md flex flex-wrap items-center justify-between gap-3 shrink-0">
               <Button
                 variant="ghost"
                 size="sm"
@@ -967,7 +1037,7 @@ export default function AssistantPage() {
             </div>
 
             {/* MAKE CALL CONTENT */}
-            <ScrollArea className="flex-1">
+            <ScrollArea className="flex-1 overflow-y-auto">
               <div className="p-4 md:p-10 max-w-2xl mx-auto">
                 <div className="glass rounded-2xl md:rounded-3xl p-5 md:p-10 space-y-6 md:space-y-8 border border-border/50 shadow-2xl relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-3xl" />
@@ -1069,7 +1139,7 @@ export default function AssistantPage() {
             <div className="flex-1 flex flex-col h-full overflow-hidden z-10">
 
               {/* EDITOR HEADER */}
-              <div className="p-4 md:p-6 border-b border-border bg-card/20 backdrop-blur-md flex flex-wrap items-start justify-between gap-4">
+              <div className="p-4 md:p-6 border-b border-border bg-card/20 backdrop-blur-md flex flex-wrap items-start justify-between gap-4 shrink-0">
                 <div className="space-y-1 flex-1 w-full max-w-2xl">
                   <Button
                     variant="ghost"
@@ -1168,7 +1238,7 @@ export default function AssistantPage() {
               </div>
 
               {/* FORM CONTENT */}
-              <ScrollArea className="flex-1">
+              <ScrollArea className="flex-1 overflow-y-auto">
                 <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-8 md:space-y-10 pb-20">
 
                   {/* General Configuration */}
