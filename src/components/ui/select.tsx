@@ -75,11 +75,16 @@ const SelectContent = React.forwardRef<
       {...props}
     >
       <SelectScrollUpButton />
+      {/* FIX APPLIED HERE:
+        - Removed custom inline styles to prevent conflicts.
+        - Removed the Radix h-[...] variable.
+        - Allowed Radix's native hidden overflow + button scrolling to take over safely.
+      */}
       <SelectPrimitive.Viewport
         className={cn(
           "p-1",
           position === "popper" &&
-            "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]",
+            "w-full min-w-[var(--radix-select-trigger-width)]",
         )}
       >
         {children}
