@@ -36,7 +36,8 @@ const DashboardLayout = () => {
   );
 
   const navSection = (
-    <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+    // ADDED min-h-0 here so the nav section scrolls independently if there are many items
+    <nav className="flex-1 p-3 space-y-1 overflow-y-auto min-h-0">
       {navItems.map((item) => {
         const active = item.path.includes("?")
           ? currentFullPath === item.path
@@ -83,7 +84,8 @@ const DashboardLayout = () => {
   );
 
   return (
-    <div className="flex min-h-svh w-full bg-background">
+    // CHANGED from min-h-svh to h-screen overflow-hidden to lock the layout completely
+    <div className="flex h-screen w-full bg-background overflow-hidden">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-60 border-r border-border bg-sidebar flex-col">
         <div className="p-6 border-b border-border">
@@ -96,7 +98,7 @@ const DashboardLayout = () => {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 relative min-w-0 overflow-hidden flex flex-col">
+      <main className="flex-1 relative min-w-0 overflow-hidden flex flex-col h-full">
         {/* Mobile Top Bar */}
         <div className="md:hidden sticky top-0 z-30 h-14 border-b border-border bg-background/95 backdrop-blur-sm px-4 flex items-center justify-between">
           <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>

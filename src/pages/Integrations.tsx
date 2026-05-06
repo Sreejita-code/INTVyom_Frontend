@@ -22,7 +22,8 @@ const Integrations = () => {
     const [showKeys, setShowKeys] = useState<{ [key: string]: boolean }>({});
     const user = getStoredUser();
 
-    const providers = ["cartesia", "sarvam", "elevenlabs", "mistral", "gemini"];
+    // UPDATED: Added "openai" to the list of available providers
+    const providers = ["cartesia", "sarvam", "elevenlabs", "mistral", "gemini", "openai"];
 
     const fetchIntegrations = async () => {
         if (!user?.user_id) return;
@@ -65,7 +66,8 @@ const Integrations = () => {
                 },
                 body: JSON.stringify({
                     user_id: user.user_id,
-                    service_type: selectedProvider === "gemini" ? "LLM" : "TTS",
+                    // UPDATED: Properly categorize both Gemini and OpenAI as LLMs
+                    service_type: ["gemini", "openai"].includes(selectedProvider) ? "LLM" : "TTS",
                     service_name: selectedProvider,
                     api_key: apiKey,
                 }),

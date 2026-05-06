@@ -64,6 +64,11 @@ interface AssistantDetail {
     silence_reprompts?: boolean;
     silence_reprompt_interval?: number;
     silence_max_reprompts?: number;
+    // --- NEW FIELDS ---
+    background_sound_enabled?: boolean;
+    thinking_sound_enabled?: boolean;
+    preferred_languages?: string[];
+    _preferred_languages_str?: string; // UI Helper
   };
   assistant_end_call_enabled?: boolean;
   assistant_end_call_trigger_phrase?: string;
@@ -94,6 +99,10 @@ const emptyForm: AssistantDetail = {
     silence_reprompts: false,
     silence_reprompt_interval: 10.0,
     silence_max_reprompts: 2,
+    background_sound_enabled: false,
+    thinking_sound_enabled: false,
+    preferred_languages: ["en-US", "hi-IN"],
+    _preferred_languages_str: "en-US, hi-IN",
   },
   assistant_end_call_enabled: false,
   assistant_end_call_trigger_phrase: "",
@@ -125,6 +134,9 @@ const buildFormSnapshot = (form: AssistantDetail) =>
       silence_reprompts: form.assistant_interaction_config?.silence_reprompts ?? false,
       silence_reprompt_interval: form.assistant_interaction_config?.silence_reprompt_interval ?? 10.0,
       silence_max_reprompts: form.assistant_interaction_config?.silence_max_reprompts ?? 2,
+      background_sound_enabled: form.assistant_interaction_config?.background_sound_enabled ?? false,
+      thinking_sound_enabled: form.assistant_interaction_config?.thinking_sound_enabled ?? false,
+      preferred_languages: form.assistant_interaction_config?.preferred_languages ?? [],
     },
     assistant_end_call_enabled: form.assistant_end_call_enabled ?? false,
     assistant_end_call_trigger_phrase: form.assistant_end_call_trigger_phrase?.trim() || "",
@@ -632,6 +644,7 @@ export default function AssistantPage() {
             : d.assistant_llm_config
               ? "realtime"
               : "pipeline";
+        
         const nextForm: AssistantDetail = {
           assistant_id: d.assistant_id,
           assistant_name: d.assistant_name || "",
@@ -658,6 +671,10 @@ export default function AssistantPage() {
             silence_reprompts: d.assistant_interaction_config?.silence_reprompts ?? false,
             silence_reprompt_interval: d.assistant_interaction_config?.silence_reprompt_interval ?? 10.0,
             silence_max_reprompts: d.assistant_interaction_config?.silence_max_reprompts ?? 2,
+            background_sound_enabled: d.assistant_interaction_config?.background_sound_enabled ?? false,
+            thinking_sound_enabled: d.assistant_interaction_config?.thinking_sound_enabled ?? false,
+            preferred_languages: d.assistant_interaction_config?.preferred_languages ?? [],
+            _preferred_languages_str: (d.assistant_interaction_config?.preferred_languages ?? []).join(", "),
           },
           assistant_end_call_enabled: d.assistant_end_call_enabled ?? false,
           assistant_end_call_trigger_phrase: d.assistant_end_call_trigger_phrase || "",
@@ -741,10 +758,20 @@ export default function AssistantPage() {
     setSaving(true);
 
     try {
+      // Extract preferred languages string back into an array
+      const langs = formData.assistant_interaction_config?._preferred_languages_str
+        ? formData.assistant_interaction_config._preferred_languages_str.split(",").map((s: string) => s.trim()).filter(Boolean)
+        : [];
+
       const interactionConfig = {
         ...formData.assistant_interaction_config,
         ...(formData.assistant_llm_mode === "realtime" ? { filler_words: false } : {}),
+        preferred_languages: langs
       };
+      
+      // Remove UI helper property before sending to the backend
+      delete (interactionConfig as any)._preferred_languages_str;
+
       const realtimeProvider = formData.assistant_llm_config?.provider?.trim() || "gemini";
       const payload: any = {
         user_id: user.user_id,
@@ -767,9 +794,12 @@ export default function AssistantPage() {
           model: formData.assistant_llm_config?.model?.trim() || undefined,
           voice: formData.assistant_llm_config?.voice?.trim() || undefined,
         };
-        if (realtimeProvider.toLowerCase() !== "gemini" && formData.assistant_llm_config?.api_key?.trim()) {
+        
+        // We now allow api key overrides for any provider, including Gemini and OpenAI
+        if (formData.assistant_llm_config?.api_key?.trim()) {
           llmConfig.api_key = formData.assistant_llm_config.api_key.trim();
         }
+        
         payload.assistant_llm_config = llmConfig;
       } else {
         payload.assistant_tts_model = formData.assistant_tts_model;
@@ -874,6 +904,7 @@ export default function AssistantPage() {
       }
     }));
   };
+
   const isRealtimeMode = formData.assistant_llm_mode === "realtime";
   const getAssistantMode = (assistant: AssistantItem): "pipeline" | "realtime" =>
     assistant.assistant_llm_mode === "realtime" ? "realtime" : "pipeline";
@@ -1215,19 +1246,19 @@ export default function AssistantPage() {
                     </Button>
                   )}
                   {mode === 'edit' && selectedId && (
-  <Button
-    variant="secondary"
-    onClick={handleStartChat}
-    disabled={chatLoading || saving}
-    className="shadow-lg bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"
-  >
-    {chatLoading
-      ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
-      : <MessageSquare className="h-4 w-4 mr-2" />
-    }
-    Chat
-  </Button>
-)}
+                    <Button
+                      variant="secondary"
+                      onClick={handleStartChat}
+                      disabled={chatLoading || saving}
+                      className="shadow-lg bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"
+                    >
+                      {chatLoading
+                        ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        : <MessageSquare className="h-4 w-4 mr-2" />
+                      }
+                      Chat
+                    </Button>
+                  )}
 
                   {/* SAVE BUTTON */}
                   <Button onClick={handleSubmit} disabled={saving || !!deletingId || !isFormDirty} className="min-w-[100px] shadow-lg shadow-primary/20 disabled:shadow-none">
@@ -1329,13 +1360,15 @@ export default function AssistantPage() {
                       <div className="grid gap-4 rounded-xl border border-border/60 bg-card/60 p-4">
                         <div className="grid gap-2">
                           <Label>Provider</Label>
-                          <Input
-                            value={formData.assistant_llm_config?.provider || ""}
-                            placeholder="gemini"
-                            onChange={(e) => updateLLMConfig("provider", e.target.value)}
-                          />
+                          <Select value={formData.assistant_llm_config?.provider || "gemini"} onValueChange={(v) => updateLLMConfig("provider", v)}>
+                            <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="gemini">Gemini</SelectItem>
+                              <SelectItem value="openai">OpenAI</SelectItem>
+                            </SelectContent>
+                          </Select>
                           <p className="text-xs text-muted-foreground">
-                            For Gemini, API key is sourced from Integrations.
+                            Keys for Gemini and OpenAI are automatically fetched from Integrations if left blank.
                           </p>
                         </div>
                         <div className="grid gap-2">
@@ -1354,17 +1387,15 @@ export default function AssistantPage() {
                             onChange={(e) => updateLLMConfig("voice", e.target.value)}
                           />
                         </div>
-                        {(formData.assistant_llm_config?.provider || "").toLowerCase() !== "gemini" && (
-                          <div className="grid gap-2">
-                            <Label>API Key (Optional)</Label>
-                            <Input
-                              type="password"
-                              value={formData.assistant_llm_config?.api_key || ""}
-                              placeholder="Optional override for non-Gemini providers"
-                              onChange={(e) => updateLLMConfig("api_key", e.target.value)}
-                            />
-                          </div>
-                        )}
+                        <div className="grid gap-2">
+                          <Label>API Key Override (Optional)</Label>
+                          <Input
+                            type="password"
+                            value={formData.assistant_llm_config?.api_key || ""}
+                            placeholder="Leave blank to use integrated key"
+                            onChange={(e) => updateLLMConfig("api_key", e.target.value)}
+                          />
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -1470,6 +1501,33 @@ export default function AssistantPage() {
                           </div>
                         </div>
                       )}
+                      
+                      <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
+                        <div>
+                          <Label>Background Sound</Label>
+                          <p className="text-sm text-muted-foreground mt-1">Simulate realistic background noise.</p>
+                        </div>
+                        <Switch checked={formData.assistant_interaction_config?.background_sound_enabled} onCheckedChange={(v) => updateInteractionConfig("background_sound_enabled", v)} />
+                      </div>
+
+                      <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
+                        <div>
+                          <Label>Thinking Sound</Label>
+                          <p className="text-sm text-muted-foreground mt-1">Play an audible thinking sound while the LLM is generating.</p>
+                        </div>
+                        <Switch checked={formData.assistant_interaction_config?.thinking_sound_enabled} onCheckedChange={(v) => updateInteractionConfig("thinking_sound_enabled", v)} />
+                      </div>
+
+                      <div className="grid gap-2 p-4 border rounded-xl bg-card">
+                        <Label>Preferred Languages</Label>
+                        <Input
+                          value={formData.assistant_interaction_config?._preferred_languages_str || ""}
+                          onChange={(e) => updateInteractionConfig("_preferred_languages_str", e.target.value)}
+                          placeholder="e.g. en-US, hi-IN"
+                        />
+                        <p className="text-[10px] text-muted-foreground">Comma-separated language codes to hint STT/TTS (e.g. en-US, hi-IN).</p>
+                      </div>
+
                     </div>
                   </div>
 
