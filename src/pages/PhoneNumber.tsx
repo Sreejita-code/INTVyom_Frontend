@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Phone, Plus, Loader2, Save, Trash2, ExternalLink, Shield, Globe, Hash, Info, User, Lock, MapPin, ArrowLeft } from "lucide-react";
+import { Phone, Plus, Loader2, Trash2, ExternalLink, Shield, Globe, Hash, Info, User, Lock, MapPin, ArrowLeft, Webhook } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 import { getStoredUser } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -42,6 +43,8 @@ interface TrunkDetail {
         password?: string;
         exotel_number?: string;
     };
+    passthrough_mode: boolean;
+    passthrough_webhook_url?: string;
     createdAt: string;
     updatedAt: string;
 }
@@ -68,7 +71,9 @@ export default function PhoneNumberPage() {
         numbers: "",
         username: "",
         password: "",
-        exotel_number: ""
+        exotel_number: "",
+        passthrough_mode: false,
+        passthrough_webhook_url: ""
     });
     const [isDeleting, setIsDeleting] = useState(false);
 
@@ -145,7 +150,9 @@ export default function PhoneNumberPage() {
                 external_trunk_id: trunk.external_trunk_id || trunk.trunk_id,
                 trunk_name: trunk.trunk_name,
                 trunk_type: trunk.trunk_type,
-                trunk_config: trunk.trunk_config || {}, // Use config if it came with the list
+                trunk_config: trunk.trunk_config || {},
+                passthrough_mode: trunk.passthrough_mode ?? false,
+                passthrough_webhook_url: trunk.passthrough_webhook_url,
                 createdAt: trunk.trunk_created_at || trunk.createdAt,
                 updatedAt: trunk.trunk_created_at || trunk.updatedAt,
             });
@@ -188,12 +195,16 @@ export default function PhoneNumberPage() {
                 trunk_config.exotel_number = modalForm.exotel_number;
             }
 
-            const payload = {
+            const payload: any = {
                 user_id: user.user_id,
                 trunk_name: modalForm.trunk_name,
                 trunk_type: activeTab,
-                trunk_config
+                trunk_config,
+                passthrough_mode: modalForm.passthrough_mode,
             };
+            if (modalForm.passthrough_mode && modalForm.passthrough_webhook_url) {
+                payload.passthrough_webhook_url = modalForm.passthrough_webhook_url;
+            }
 
             const res = await fetch(`${API_BASE}/create-outbound-trunk`, {
                 method: "POST",
@@ -211,7 +222,9 @@ export default function PhoneNumberPage() {
                     numbers: "",
                     username: "",
                     password: "",
-                    exotel_number: ""
+                    exotel_number: "",
+                    passthrough_mode: false,
+                    passthrough_webhook_url: ""
                 });
                 await fetchList();
             } else {
@@ -393,6 +406,39 @@ export default function PhoneNumberPage() {
                                                 />
                                             </div>
                                         )}
+                                        {/* Passthrough Mode */}
+                                        <div className="space-y-4 pt-2">
+                                            <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/50 hover:border-primary/30 transition-colors">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                                                        <Webhook className="h-4 w-4" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-medium">Passthrough Mode</p>
+                                                        <p className="text-xs text-muted-foreground">Forward calls to external webhook</p>
+                                                    </div>
+                                                </div>
+                                                <Switch
+                                                    checked={modalForm.passthrough_mode}
+                                                    onCheckedChange={(checked) => setModalForm({ ...modalForm, passthrough_mode: checked, passthrough_webhook_url: checked ? modalForm.passthrough_webhook_url : "" })}
+                                                />
+                                            </div>
+
+                                            {modalForm.passthrough_mode && (
+                                                <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                    <Label htmlFor="passthrough_webhook_url" className="text-sm font-medium flex items-center gap-2">
+                                                        <Webhook className="h-4 w-4 text-primary" /> Webhook URL
+                                                    </Label>
+                                                    <Input
+                                                        id="passthrough_webhook_url"
+                                                        value={modalForm.passthrough_webhook_url}
+                                                        onChange={(e) => setModalForm({ ...modalForm, passthrough_webhook_url: e.target.value })}
+                                                        placeholder="https://your-server.com/webhook"
+                                                        className="bg-muted/30 border-border/50 focus:border-primary font-mono text-xs"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </ScrollArea>
 
@@ -590,6 +636,37 @@ export default function PhoneNumberPage() {
 
                                     {/* Right Column: Configuration */}
                                     <div className="lg:col-span-2 space-y-8">
+
+                                        {/* Passthrough Section */}
+                                        <section className="space-y-4">
+                                            <h3 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
+                                                <Webhook className="h-3 w-3" /> Passthrough
+                                            </h3>
+                                            <div className="glass rounded-2xl p-6 space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="space-y-0.5">
+                                                        <p className="text-sm font-semibold">Passthrough Mode</p>
+                                                        <p className="text-xs text-muted-foreground">Forward inbound calls to external webhook</p>
+                                                    </div>
+                                                    <div className={cn(
+                                                        "px-3 py-1 rounded-full text-xs font-bold border",
+                                                        selectedTrunk.passthrough_mode
+                                                            ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                                                            : "bg-muted/50 text-muted-foreground border-border/50"
+                                                    )}>
+                                                        {selectedTrunk.passthrough_mode ? "Enabled" : "Disabled"}
+                                                    </div>
+                                                </div>
+                                                {selectedTrunk.passthrough_mode && selectedTrunk.passthrough_webhook_url && (
+                                                    <div className="space-y-1 pt-2 border-t border-border/50">
+                                                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Webhook URL</Label>
+                                                        <div className="bg-muted/30 p-3 rounded-lg border border-border/50">
+                                                            <p className="text-xs font-mono break-all text-primary">{selectedTrunk.passthrough_webhook_url}</p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </section>
                                         <section className="space-y-4">
                                             <h3 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
                                                 <Shield className="h-3 w-3" /> Configuration

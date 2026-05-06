@@ -15,6 +15,8 @@ const navItems = [
   { label: "Phone number", icon: Phone, path: "/dashboard/phone-number" },
   { label: "Inbound Routes", icon: PhoneIncoming, path: "/dashboard/inbound" },
   { label: "Inbound Context", icon: Webhook, path: "/dashboard/inbound-context" },
+  { label: "Passthrough Calls", icon: PhoneCall, path: "/dashboard/passthrough-calls" },
+  { label: "Passthrough Records", icon: List, path: "/dashboard/passthrough-call-records" },
   { label: "API Keys", icon: KeyRound, path: "/dashboard/api-keys" },
   { label: "Integration", icon: Blocks, path: "/dashboard/integration" },
 ];
