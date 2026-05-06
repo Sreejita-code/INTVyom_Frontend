@@ -353,22 +353,8 @@ export default function AssistantPage() {
   }, [listLoading, isLoadingMore, hasMore]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [mode, setMode] = useState<"create" | "edit" | "empty" | "make-call">("empty");
+  const [mode, setMode] = useState<"create" | "edit" | "empty">("empty");
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
-
-  // Sync mode with URL param
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const m = params.get("mode");
-    if (m === "make-call") {
-      setMode("make-call");
-      setSelectedId(null);
-      setMobileDetailOpen(true);
-    } else if (mode === "make-call") {
-      setMode("empty");
-      setMobileDetailOpen(false);
-    }
-  }, [location.search, mode]);
 
   useEffect(() => {
     if (mode === "empty") {
@@ -388,13 +374,6 @@ export default function AssistantPage() {
   const [allTools, setAllTools] = useState<any[]>([]);
   const [attachedToolIds, setAttachedToolIds] = useState<string[]>([]);
   const [selectedToolToAdd, setSelectedToolToAdd] = useState<string>("");
-
-  const [callFormData, setCallFormData] = useState({
-    customer_number: "",
-    assistant_id: "",
-    trunk_id: "",
-  });
-  const [callLoading, setCallLoading] = useState(false);
 
   // --- Web Call State ---
   const [webCallToken, setWebCallToken] = useState<string>("");
@@ -502,42 +481,6 @@ export default function AssistantPage() {
     fetchTrunks();
     fetchTools();
   }, [fetchTrunks, fetchTools]);
-
-  const handleMakeCallClick = () => {
-    setMode("make-call");
-    setSelectedId(null);
-  };
-
-  const handleTriggerCall = async () => {
-    if (!user?.user_id) return;
-    if (!callFormData.customer_number || !callFormData.assistant_id || !callFormData.trunk_id) {
-      toast({ variant: "destructive", title: "Missing Fields", description: "Please fill all fields" });
-      return;
-    }
-    setCallLoading(true);
-    try {
-      const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/call/outbound`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: user.user_id,
-          assistant_id: callFormData.assistant_id,
-          trunk_id: callFormData.trunk_id,
-          to_number: callFormData.customer_number,
-        }),
-      });
-      const json = await res.json();
-      if (res.ok) {
-        toast({ title: "Call Triggered", description: json.message || "Outbound call triggered successfully" });
-      } else {
-        toast({ variant: "destructive", title: "Error", description: json.error || "Failed to trigger call" });
-      }
-    } catch (error) {
-      toast({ variant: "destructive", title: "Error", description: "Failed to connect to API" });
-    } finally {
-      setCallLoading(false);
-    }
-  };
 
   const handleStartChat = async () => {
     if (!user?.user_id || !selectedId) return;
@@ -913,13 +856,12 @@ export default function AssistantPage() {
     <div className="page-shell flex h-screen overflow-hidden">
 
       {/* --- SIDEBAR --- */}
-      {mode !== "make-call" && (
-        <div
-          className={cn(
-            "w-full lg:w-80 border-r border-border flex flex-col bg-card/30 animate-in slide-in-from-left duration-300 h-full",
-            mobileDetailOpen ? "hidden lg:flex" : "flex",
-          )}
-        >
+      <div
+        className={cn(
+          "w-full lg:w-80 border-r border-border flex flex-col bg-card/30 animate-in slide-in-from-left duration-300 h-full",
+          mobileDetailOpen ? "hidden lg:flex" : "flex",
+        )}
+      >
           <div className="p-4 border-b border-border flex items-center justify-between bg-background/50 backdrop-blur-sm z-10 shrink-0">
             <div className="flex items-center gap-2">
               <Bot className="h-5 w-5 text-primary" />
@@ -1022,13 +964,13 @@ export default function AssistantPage() {
             </div>
           </ScrollArea>
         </div>
-      )}
+      
 
       {/* --- RIGHT MAIN PANEL --- */}
       <div
         className={cn(
           "flex-1 bg-background relative h-full",
-          mode !== "make-call" && !mobileDetailOpen ? "hidden lg:flex lg:flex-col" : "flex flex-col",
+          !mobileDetailOpen ? "hidden lg:flex lg:flex-col" : "flex flex-col",
         )}
       >
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.02]">
@@ -1043,126 +985,7 @@ export default function AssistantPage() {
               Select an assistant from the sidebar or click "New Assistant" to get started.
             </p>
           </div>
-        ) : mode === "make-call" ? (
-          <div className="flex-1 flex flex-col h-full overflow-hidden z-10">
-            {/* MAKE CALL HEADER */}
-            <div className="p-4 md:p-8 border-b border-border bg-card/20 backdrop-blur-md flex flex-wrap items-center justify-between gap-3 shrink-0">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="lg:hidden text-muted-foreground"
-                onClick={() => setMobileDetailOpen(false)}
-              >
-                <ArrowLeft className="h-4 w-4 mr-1" />
-                Back
-              </Button>
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shadow-inner">
-                  <PhoneCall className="h-6 w-6" />
-                </div>
-                <div>
-                  <h2 className="text-3xl font-black tracking-tight text-foreground">Outbound Call</h2>
-                  <p className="text-sm text-muted-foreground font-medium uppercase tracking-widest opacity-70">Initialize a new conversation</p>
-                </div>
-              </div>
-            </div>
-
-            {/* MAKE CALL CONTENT */}
-            <ScrollArea className="flex-1 overflow-y-auto">
-              <div className="p-4 md:p-10 max-w-2xl mx-auto">
-                <div className="glass rounded-2xl md:rounded-3xl p-5 md:p-10 space-y-6 md:space-y-8 border border-border/50 shadow-2xl relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 blur-3xl" />
-
-                  <div className="grid gap-8">
-                    <div className="space-y-3">
-                      <Label className="text-xs font-black uppercase tracking-widest text-primary/70 ml-1">Customer Number</Label>
-                      <div className="relative group">
-                        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-muted-foreground group-focus-within:text-primary transition-colors">
-                          <Phone className="h-4 w-4" />
-                        </div>
-                        <Input
-                          placeholder="+1 234 567 8900"
-                          className="pl-12 h-14 bg-muted/30 border-border/50 focus:border-primary focus:ring-primary/20 rounded-2xl text-lg font-medium transition-all"
-                          value={callFormData.customer_number}
-                          onChange={(e) => setCallFormData({ ...callFormData, customer_number: e.target.value })}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <Label className="text-xs font-black uppercase tracking-widest text-primary/70 ml-1">Select Assistant</Label>
-                      <Select value={callFormData.assistant_id} onValueChange={(v) => setCallFormData({ ...callFormData, assistant_id: v })}>
-                        <SelectTrigger className="h-14 bg-muted/30 border-border/50 rounded-2xl text-base font-medium">
-                          <SelectValue placeholder="Which AI should call?">
-                            {assistants.find(a => (a.assistant_id || (a as any)._id) === callFormData.assistant_id)?.assistant_name}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl border-border/50 shadow-xl">
-                          {assistants.map((a) => {
-                            const aId = a.assistant_id || (a as any)._id;
-                            return (
-                              <SelectItem key={aId} value={aId} className={`h-12 rounded-lg m-1 transition-all ${callFormData.assistant_id === aId ? 'bg-primary/10 text-primary font-bold' : ''}`}>
-                                <div className="flex items-center justify-between w-full">
-                                  <div className="flex items-center gap-2">
-                                    <div className={`w-2 h-2 rounded-full ${callFormData.assistant_id === aId ? 'bg-primary animate-pulse' : 'bg-primary/30'}`} />
-                                    {a.assistant_name}
-                                  </div>
-                                  {callFormData.assistant_id === aId && <Check className="h-4 w-4" />}
-                                </div>
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-3">
-                      <Label className="text-xs font-black uppercase tracking-widest text-primary/70 ml-1">SIP Trunk</Label>
-                      <Select value={callFormData.trunk_id} onValueChange={(v) => setCallFormData({ ...callFormData, trunk_id: v })}>
-                        <SelectTrigger className="h-14 bg-muted/30 border-border/50 rounded-2xl text-base font-medium">
-                          <SelectValue placeholder="Choose outbound trunk">
-                            {trunks.find(t => (t.trunk_id || t._id || t.external_trunk_id) === callFormData.trunk_id)?.trunk_name}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl border-border/50 shadow-xl">
-                          {trunks.map((t) => {
-                            const tId = t.trunk_id || t._id || t.external_trunk_id;
-                            return (
-                              <SelectItem key={tId} value={tId} className={`h-12 rounded-lg m-1 transition-all ${callFormData.trunk_id === tId ? 'bg-primary/10 text-primary font-bold' : ''}`}>
-                                <div className="flex items-center justify-between w-full">
-                                  <div className="flex items-center gap-2">
-                                    <div className={`w-2 h-2 rounded-full ${t.trunk_type === 'twilio' ? 'bg-red-500' : 'bg-blue-500'} ${callFormData.trunk_id === tId ? 'ring-2 ring-primary/20' : ''}`} />
-                                    <span>{t.trunk_name}</span>
-                                    <span className={`text-[10px] uppercase px-1.5 py-0.5 border rounded ${callFormData.trunk_id === tId ? 'border-primary' : 'opacity-50 border-current'}`}>{t.trunk_type}</span>
-                                  </div>
-                                  {callFormData.trunk_id === tId && <Check className="h-4 w-4" />}
-                                </div>
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="pt-6">
-                    <Button onClick={handleTriggerCall} disabled={callLoading} className="w-full h-16 rounded-2xl text-lg font-bold shadow-xl shadow-primary/20 hover:shadow-primary/30 active:scale-[0.98] transition-all">
-                      {callLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : <><PhoneCall className="h-5 w-5 mr-3" /> Initiate Outbound Call</>}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="mt-8 p-6 bg-primary/5 border border-primary/10 rounded-2xl text-center">
-                  <p className="text-sm text-muted-foreground font-medium">
-                    This will initiate a real-time call using the selected assistant and SIP trunk.
-                    Charges may apply based on your provider.
-                  </p>
-                </div>
-              </div>
-            </ScrollArea>
-          </div>
-        ) : (
-          detailLoading ? (
+        ) : detailLoading ? (
             <div className="flex-1 flex items-center justify-center">
               <Loader2 className="h-10 w-10 animate-spin text-primary" />
             </div>
@@ -1690,8 +1513,7 @@ export default function AssistantPage() {
                 </div>
               </ScrollArea>
             </div>
-          )
-        )}
+          )}
       </div>
 
       {/* --- LIVEKIT WEB CALL OVERLAY --- */}
