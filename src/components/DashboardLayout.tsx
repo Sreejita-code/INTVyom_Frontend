@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { label: "Make a Call", icon: PhoneCall, path: "/dashboard/assistant?mode=make-call" },
+  { label: "Make a Call", icon: PhoneCall, path: "/dashboard/make-call" },
   { label: "Assistant", icon: Bot, path: "/dashboard/assistant" },
   { label: "Tools", icon: Wrench, path: "/dashboard/tools" },
   { label: "Call Logs", icon: List, path: "/dashboard/call-logs" },
@@ -15,7 +15,6 @@ const navItems = [
   { label: "Phone number", icon: Phone, path: "/dashboard/phone-number" },
   { label: "Inbound Routes", icon: PhoneIncoming, path: "/dashboard/inbound" },
   { label: "Inbound Context", icon: Webhook, path: "/dashboard/inbound-context" },
-  { label: "Passthrough Calls", icon: PhoneCall, path: "/dashboard/passthrough-calls" },
   { label: "Passthrough Records", icon: List, path: "/dashboard/passthrough-call-records" },
   { label: "API Keys", icon: KeyRound, path: "/dashboard/api-keys" },
   { label: "Integration", icon: Blocks, path: "/dashboard/integration" },

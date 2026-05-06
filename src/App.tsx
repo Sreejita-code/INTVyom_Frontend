@@ -16,7 +16,7 @@ import Inbound from "./pages/Inbound";
 import InboundContext from "./pages/InboundContext"; // <-- Import new page
 import Integrations from "./pages/Integrations";
 import Analytics from "./pages/Analytics";
-import PassthroughCalls from "./pages/PassthroughCalls";
+import MakeCall from "./pages/MakeCall";
 import PassthroughCallRecords from "./pages/PassthroughCallRecords";
 import NotFound from "./pages/NotFound";
 
@@ -41,7 +41,7 @@ const App = () => (
               <Route path="phone-number" element={<PhoneNumber />} />
               <Route path="inbound" element={<Inbound />} />
               <Route path="inbound-context" element={<InboundContext />} /> {/* <-- Add Route */}
-              <Route path="passthrough-calls" element={<PassthroughCalls />} />
+              <Route path="make-call" element={<MakeCall />} />
               <Route path="passthrough-call-records" element={<PassthroughCallRecords />} />
               <Route path="api-keys" element={<ApiKeys />} />
               <Route path="integration" element={<Integrations />} />

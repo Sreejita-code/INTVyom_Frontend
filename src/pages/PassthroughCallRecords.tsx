@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import {
     Loader2, Filter, Calendar as CalendarIcon,
-    Search, PhoneOff, Clock, ChevronLeft, ChevronRight
+    Search, PhoneOff, Clock, ChevronLeft, ChevronRight, Download, Play
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,12 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
     Popover,
     PopoverContent,
     PopoverTrigger,
@@ -35,13 +41,21 @@ import { cn } from "@/lib/utils";
 const PASSTHROUGH_API = `${import.meta.env.VITE_BACKEND_URL}/api/passthrough-call`;
 
 interface CallRecord {
-    call_id?: string;
+    room_name?: string;
+    queue_id?: string;
+    assistant_id?: string | null;
+    assistant_name?: string | null;
+    is_passthrough?: boolean;
     to_number?: string;
-    from_number?: string;
     call_status?: string;
+    call_status_reason?: string | null;
+    answered_at?: string | null;
+    recording_path?: string | null;
+    recording_egress_id?: string;
     started_at?: string;
     ended_at?: string;
-    duration_seconds?: number;
+    call_duration_minutes?: number;
+    billable_duration_minutes?: number;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -52,13 +66,16 @@ const STATUS_STYLES: Record<string, string> = {
     ringing: "bg-blue-500/10 text-blue-400 border-blue-500/20",
 };
 
-const formatDuration = (seconds?: number) => {
-    if (!seconds) return "—";
-    if (seconds < 60) return `${seconds}s`;
-    return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+const formatDuration = (minutes?: number) => {
+    if (!minutes) return "—";
+    if (minutes < 1) return `${Math.round(minutes * 60)}s`;
+    const mins = Math.floor(minutes);
+    const secs = Math.round((minutes - mins) * 60);
+    return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
 };
 
 export default function PassthroughCallRecordsPage() {
+    const [selectedRecording, setSelectedRecording] = useState<string | null>(null);
     const user = getStoredUser();
     const { toast } = useToast();
 
@@ -99,8 +116,8 @@ export default function PassthroughCallRecordsPage() {
             const res = await fetch(`${PASSTHROUGH_API}/call-records?${params.toString()}`);
             const json = await res.json();
             if (res.ok) {
-                const data = Array.isArray(json.data) ? json.data : Array.isArray(json.records) ? json.records : [];
-                const total = json.total ?? json.total_count ?? data.length;
+                const data = Array.isArray(json.data?.records) ? json.data.records : [];
+                const total = json.data?.pagination?.total ?? data.length;
                 setRecords(data);
                 setTotalRecords(total);
                 setHasMore(currentOffset + limit < total);
@@ -228,9 +245,9 @@ export default function PassthroughCallRecordsPage() {
                             <TableRow>
                                 <TableHead>Date / Time</TableHead>
                                 <TableHead>To Number</TableHead>
-                                <TableHead>From Number</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead>Duration</TableHead>
+                                <TableHead>Recording</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -254,7 +271,7 @@ export default function PassthroughCallRecordsPage() {
                                 </TableRow>
                             ) : (
                                 records.map((rec, idx) => (
-                                    <TableRow key={rec.call_id ?? idx} className="hover:bg-muted/20">
+                                    <TableRow key={rec.queue_id ?? idx} className="hover:bg-muted/20">
                                         <TableCell>
                                             {rec.started_at ? (
                                                 <>
@@ -265,9 +282,6 @@ export default function PassthroughCallRecordsPage() {
                                         </TableCell>
                                         <TableCell>
                                             <span className="font-mono text-sm">{rec.to_number || "—"}</span>
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className="font-mono text-sm text-muted-foreground">{rec.from_number || "—"}</span>
                                         </TableCell>
                                         <TableCell>
                                             {rec.call_status ? (
@@ -281,8 +295,22 @@ export default function PassthroughCallRecordsPage() {
                                         </TableCell>
                                         <TableCell>
                                             <Badge variant="outline" className="font-mono bg-background text-xs">
-                                                {formatDuration(rec.duration_seconds)}
+                                                {formatDuration(rec.call_duration_minutes)}
                                             </Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            {rec.recording_path ? (
+                                                <Button 
+                                                    variant="secondary" 
+                                                    size="sm" 
+                                                    onClick={() => setSelectedRecording(rec.recording_path!)}
+                                                >
+                                                    <Play className="h-4 w-4 mr-2" />
+                                                    Listen to recording
+                                                </Button>
+                                            ) : (
+                                                <span className="text-xs text-muted-foreground italic">No recording</span>
+                                            )}
                                         </TableCell>
                                     </TableRow>
                                 ))
@@ -316,6 +344,26 @@ export default function PassthroughCallRecordsPage() {
                     )}
                 </div>
             </div>
+
+            {/* Recording Player Dialog */}
+            <Dialog open={!!selectedRecording} onOpenChange={(open) => !open && setSelectedRecording(null)}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Play className="h-5 w-5 text-primary" />
+                            Call Recording
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="flex flex-col p-4 bg-muted/20 rounded-xl border border-border/50 shadow-inner mt-2">
+                        <audio
+                            controls
+                            src={selectedRecording || ""}
+                            className="w-full"
+                            autoPlay
+                        />
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
