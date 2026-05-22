@@ -85,7 +85,7 @@
   }
 
   .page-shell {
-    @apply w-full h-full min-h-0 overflow-hidden bg-background;
+    @apply w-full h-full min-h-0 bg-background;
   }
 
   .page-padding {
