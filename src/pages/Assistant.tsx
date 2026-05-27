@@ -185,12 +185,14 @@ const ChatInner: React.FC<{ assistantName: string; onClose: () => void }> = ({ a
   }, [localParticipant]);
 
   const allMessages = useMemo(() => {
-    const chats = chatMessages.map((m) => ({
-      id: m.id || `chat-${m.timestamp}`,
-      role: m.from?.identity === localParticipant?.identity ? 'user' as const : 'bot' as const,
-      text: m.message,
-      timestamp: m.timestamp,
-    }));
+    const chats = chatMessages
+      .filter((m) => m.from?.identity === localParticipant?.identity)
+      .map((m) => ({
+        id: m.id || `chat-${m.timestamp}`,
+        role: 'user' as const,
+        text: m.message,
+        timestamp: m.timestamp,
+      }));
 
     const transcribed = liveTranscriptions.map((m: any) => ({
       id: m.id || `trans-${m.timestamp}`,
@@ -489,7 +491,8 @@ export default function AssistantPage() {
       const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/web-call/get-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.user_id, assistant_id: selectedId }),
+        // Added text_only: true for Text Chat
+        body: JSON.stringify({ user_id: user.user_id, assistant_id: selectedId, text_only: true }), 
       });
       const json = await res.json();
       if (res.ok && json.data?.token) {
@@ -519,6 +522,7 @@ export default function AssistantPage() {
       const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/web-call/get-token`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // Does NOT include text_only for Voice Web Call
         body: JSON.stringify({ 
           user_id: user.user_id, 
           assistant_id: selectedId 
