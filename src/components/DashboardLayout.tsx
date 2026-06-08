@@ -1,5 +1,5 @@
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
-import { Bot, KeyRound, LogOut, Phone, Blocks, PhoneCall, Wrench, List, PhoneIncoming, Webhook, BarChart3, Menu } from "lucide-react";
+import { Bot, KeyRound, LogOut, Phone, Blocks, PhoneCall, Wrench, List, PhoneIncoming, Webhook, BarChart3, Menu, Music } from "lucide-react";
 import { clearUser, getStoredUser } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -10,6 +10,7 @@ const navItems = [
   { label: "Make a Call", icon: PhoneCall, path: "/dashboard/make-call" },
   { label: "Assistant", icon: Bot, path: "/dashboard/assistant" },
   { label: "Tools", icon: Wrench, path: "/dashboard/tools" },
+  { label: "Audio Library", icon: Music, path: "/dashboard/audio-library" },
   { label: "Call Logs", icon: List, path: "/dashboard/call-logs" },
   { label: "Analytics", icon: BarChart3, path: "/dashboard/analytics" },
   { label: "Phone number", icon: Phone, path: "/dashboard/phone-number" },

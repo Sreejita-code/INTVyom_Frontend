@@ -18,6 +18,7 @@ import Integrations from "./pages/Integrations";
 import Analytics from "./pages/Analytics";
 import MakeCall from "./pages/MakeCall";
 import PassthroughCallRecords from "./pages/PassthroughCallRecords";
+import AudioLibrary from "./pages/AudioLibrary";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,6 +37,7 @@ const App = () => (
               <Route index element={<Navigate to="assistant" replace />} />
               <Route path="assistant" element={<Assistant />} />
               <Route path="tools" element={<Tools />} />
+              <Route path="audio-library" element={<AudioLibrary />} /> {/* <-- 2. Add Route */}
               <Route path="call-logs" element={<CallLogs />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="phone-number" element={<PhoneNumber />} />
