@@ -28,6 +28,7 @@ import "@livekit/components-styles";
 // --- Types ---
 const API_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/assistant`;
 const TOOL_API_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/tool`;
+const AUDIO_API_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/audio`;
 
 interface AssistantItem {
   assistant_id: string;
@@ -74,6 +75,10 @@ interface AssistantDetail {
   assistant_end_call_trigger_phrase?: string;
   assistant_end_call_agent_message?: string;
   assistant_end_call_url?: string;
+  assistant_greeting_audio?: {
+    enabled: boolean;
+    audio_id: string;
+  };
 }
 
 const emptyForm: AssistantDetail = {
@@ -108,6 +113,7 @@ const emptyForm: AssistantDetail = {
   assistant_end_call_trigger_phrase: "",
   assistant_end_call_agent_message: "",
   assistant_end_call_url: "",
+  assistant_greeting_audio: { enabled: false, audio_id: "" },
 };
 
 const buildFormSnapshot = (form: AssistantDetail) =>
@@ -142,6 +148,10 @@ const buildFormSnapshot = (form: AssistantDetail) =>
     assistant_end_call_trigger_phrase: form.assistant_end_call_trigger_phrase?.trim() || "",
     assistant_end_call_agent_message: form.assistant_end_call_agent_message?.trim() || "",
     assistant_end_call_url: form.assistant_end_call_url?.trim() || "",
+    assistant_greeting_audio: {
+      enabled: form.assistant_greeting_audio?.enabled ?? false,
+      audio_id: form.assistant_greeting_audio?.audio_id ?? "",
+    },
   });
 
 // --- ANIMATED MESSAGE COMPONENT ---
@@ -371,6 +381,9 @@ export default function AssistantPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [trunks, setTrunks] = useState<any[]>([]);
   const [trunksLoading, setTrunksLoading] = useState(false);
+
+  // --- Audio Library State ---
+  const [audioList, setAudioList] = useState<{ audio_id: string; audio_name: string; s3_url?: string }[]>([]);
   
   // --- Tools State ---
   const [allTools, setAllTools] = useState<any[]>([]);
@@ -479,10 +492,24 @@ export default function AssistantPage() {
     }
   }, [user?.user_id]);
 
+  const fetchAudios = useCallback(async () => {
+    if (!user?.user_id) return;
+    try {
+      const res = await fetch(`${AUDIO_API_BASE}/list?user_id=${user.user_id}&page=1&limit=100`);
+      const json = await res.json();
+      if (res.ok && json.data?.audios) {
+        setAudioList(json.data.audios);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  }, [user?.user_id]);
+
   useEffect(() => {
     fetchTrunks();
     fetchTools();
-  }, [fetchTrunks, fetchTools]);
+    fetchAudios();
+  }, [fetchTrunks, fetchTools, fetchAudios]);
 
   const handleStartChat = async () => {
     if (!user?.user_id || !selectedId) return;
@@ -627,6 +654,7 @@ export default function AssistantPage() {
           assistant_end_call_trigger_phrase: d.assistant_end_call_trigger_phrase || "",
           assistant_end_call_agent_message: d.assistant_end_call_agent_message || "",
           assistant_end_call_url: d.assistant_end_call_url || "",
+          assistant_greeting_audio: d.assistant_greeting_audio || { enabled: false, audio_id: "" },
         };
         setFormData(nextForm);
         setInitialFormSnapshot(buildFormSnapshot(nextForm));
@@ -733,6 +761,7 @@ export default function AssistantPage() {
         assistant_end_call_trigger_phrase: formData.assistant_end_call_trigger_phrase?.trim(),
         assistant_end_call_agent_message: formData.assistant_end_call_agent_message?.trim(),
         assistant_end_call_url: formData.assistant_end_call_url?.trim(),
+        assistant_greeting_audio: formData.assistant_greeting_audio,
       };
 
       if (formData.assistant_llm_mode === "realtime") {
@@ -849,6 +878,16 @@ export default function AssistantPage() {
         ...(prev.assistant_interaction_config || emptyForm.assistant_interaction_config!),
         [field]: value
       }
+    }));
+  };
+
+  const updateGreetingAudio = (key: "enabled" | "audio_id", value: boolean | string) => {
+    setFormData(prev => ({
+      ...prev,
+      assistant_greeting_audio: {
+        ...(prev.assistant_greeting_audio || { enabled: false, audio_id: "" }),
+        [key]: value,
+      },
     }));
   };
 
@@ -1357,6 +1396,57 @@ export default function AssistantPage() {
 
                     </div>
                   </div>
+
+                  {/* Greeting Audio Section */}
+                  {mode === "edit" && (
+                    <div className="space-y-4 pt-4">
+                      <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Greeting Audio</h3>
+                      <div className="grid gap-4">
+                        <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
+                          <div>
+                            <Label>Enable Greeting Audio</Label>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Play a pre-recorded greeting instead of the AI-generated greeting.
+                            </p>
+                          </div>
+                          <Switch
+                            checked={formData.assistant_greeting_audio?.enabled ?? false}
+                            onCheckedChange={(v) => updateGreetingAudio("enabled", v)}
+                          />
+                        </div>
+                        {formData.assistant_greeting_audio?.enabled && (
+                          <div className="grid gap-2 p-4 border rounded-xl bg-card/50">
+                            <Label>Select Audio File</Label>
+                            <Select
+                              value={formData.assistant_greeting_audio?.audio_id || ""}
+                              onValueChange={(v) => updateGreetingAudio("audio_id", v)}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Choose an audio file..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {audioList.length === 0 ? (
+                                  <div className="p-3 text-sm text-muted-foreground text-center">No audio files found</div>
+                                ) : (
+                                  audioList.map((a) => (
+                                    <SelectItem key={a.audio_id} value={a.audio_id}>
+                                      {a.audio_name}
+                                    </SelectItem>
+                                  ))
+                                )}
+                              </SelectContent>
+                            </Select>
+                            {(() => {
+                              const selectedAudio = audioList.find(a => a.audio_id === formData.assistant_greeting_audio?.audio_id);
+                              return selectedAudio?.s3_url ? (
+                                <audio controls className="mt-2 w-full" src={selectedAudio.s3_url} />
+                              ) : null;
+                            })()}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* End Call Config */}
                   <div className="space-y-4 pt-4">
