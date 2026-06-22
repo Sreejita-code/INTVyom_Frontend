@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 
 interface ApiKeyData {
   api_key: string;
+  user_id: string;
 }
 
 const ApiKeys = () => {
@@ -68,7 +69,7 @@ const ApiKeys = () => {
               <KeyRound className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-foreground">API Keys</h2>
+              <h2 className="text-xl font-semibold text-foreground">Livekit Keys</h2>
               <p className="text-sm text-muted-foreground">
                 Manage your API keys for integration
               </p>
@@ -91,32 +92,57 @@ const ApiKeys = () => {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.1 }}
-                className="glass rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                className="glass rounded-lg p-4 space-y-4"
               >
-                <code className="text-sm font-mono text-foreground flex-1 truncate w-full">
-                  {visible[i] ? k.api_key : maskKey(k.api_key)}
-                </code>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => toggleVisibility(i)}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    {visible[i] ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => copyKey(k.api_key)}
-                    className="text-muted-foreground hover:text-primary"
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                    Api key
+                  </p>
+                  <div className="flex items-center justify-between gap-4">
+                    <code className="text-sm font-mono text-foreground flex-1 truncate">
+                      {visible[i] ? k.api_key : maskKey(k.api_key)}
+                    </code>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => toggleVisibility(i)}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        {visible[i] ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => copyKey(k.api_key)}
+                        className="text-muted-foreground hover:text-primary"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+                    User Key
+                  </p>
+                  <div className="flex items-center justify-between gap-4">
+                    <code className="text-sm font-mono text-foreground">
+                      {k.user_id}
+                    </code>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => copyKey(k.user_id)}
+                      className="text-muted-foreground hover:text-primary shrink-0"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </motion.div>
             ))}
