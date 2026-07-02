@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getStoredUser } from "@/lib/auth";
 import { toast } from "sonner";
-import { Link2, Mic2, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { Link2, Mic2, Eye, EyeOff, ShieldCheck, Loader2, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface IntegrationData {
@@ -14,13 +14,74 @@ interface IntegrationData {
     api_key: string;
 }
 
+interface ResyncData {
+    status: "running" | "completed" | "error" | "interrupted";
+    total?: number;
+    processed?: number;
+    succeeded?: number;
+    failed?: { assistant_id: string; error: string }[];
+    error?: string;
+}
+
 const Integrations = () => {
     const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
     const [apiKey, setApiKey] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [connectedServices, setConnectedServices] = useState<IntegrationData[]>([]);
     const [showKeys, setShowKeys] = useState<{ [key: string]: boolean }>({});
+    const [resync, setResync] = useState<{ [service: string]: ResyncData }>({});
+    const timers = useRef<{ [service: string]: ReturnType<typeof setTimeout> }>({});
     const user = getStoredUser();
+
+    const pollResync = async (service: string) => {
+        if (!user?.user_id) return;
+        // drop any pending poll for this service so we never stack concurrent pollers
+        if (timers.current[service]) clearTimeout(timers.current[service]);
+        try {
+            const BACKEND = import.meta.env.VITE_BACKEND_URL;
+            const res = await fetch(
+                `${BACKEND}/api/integration/resync-status?user_id=${user.user_id}&service_name=${service}`
+            );
+            if (res.status === 404) {
+                // no re-sync has run for this (user, service) yet — nothing to sync
+                setResync(prev => { const n = { ...prev }; delete n[service]; return n; });
+                return;
+            }
+            const json = await res.json();
+            if (!json.success || !json.data) return;
+            const data: ResyncData = json.data;
+            setResync(prev => ({ ...prev, [service]: data }));
+            if (data.status === "running") {
+                timers.current[service] = setTimeout(() => pollResync(service), 2000);
+            }
+        } catch (error) {
+            console.error(`Error polling resync for ${service}:`, error);
+        }
+    };
+
+    const handleResync = async (service: string) => {
+        if (!user?.user_id) return;
+        try {
+            const BACKEND = import.meta.env.VITE_BACKEND_URL;
+            const res = await fetch(`${BACKEND}/api/integration/resync`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user_id: user.user_id, service_name: service }),
+            });
+            const json = await res.json();
+            if (json.success) {
+                setResync(prev => ({ ...prev, [service]: { status: "running", processed: 0 } }));
+                pollResync(service);
+            } else {
+                toast.error(json.error || "Failed to start re-sync");
+            }
+        } catch (error) {
+            toast.error("An error occurred while starting re-sync");
+        }
+    };
+
+    // clear pending pollers on unmount
+    useEffect(() => () => Object.values(timers.current).forEach(clearTimeout), []);
 
     // UPDATED: Added "openai" to the list of available providers
     const providers = ["cartesia", "sarvam", "elevenlabs", "mistral", "gemini", "openai"];
@@ -44,6 +105,8 @@ const Integrations = () => {
             }
         }
         setConnectedServices(results);
+        // resume any re-sync job still running after a reload (404 = no-op for idle providers)
+        results.forEach(s => pollResync(s.service_name));
     };
 
     useEffect(() => {
@@ -76,9 +139,14 @@ const Integrations = () => {
             const data = await response.json();
             if (data.success) {
                 toast.success(data.message);
+                const savedProvider = selectedProvider;
                 setApiKey("");
                 setSelectedProvider(null);
                 fetchIntegrations();
+                if (data.resync?.status === "running") {
+                    setResync(prev => ({ ...prev, [savedProvider]: { status: "running", processed: 0 } }));
+                    pollResync(savedProvider);
+                }
             } else {
                 toast.error(data.error || "Failed to save integration");
             }
@@ -168,6 +236,59 @@ const Integrations = () => {
                                                     </div>
                                                 </div>
                                             </div>
+
+                                            {/* Re-sync status */}
+                                            {(() => {
+                                                const rs = resync[service.service_name];
+                                                const running = rs?.status === "running";
+                                                return (
+                                                    <div className="space-y-2">
+                                                        {running && (
+                                                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                                                <span>Syncing {rs.processed ?? 0}/{rs.total ?? 0}</span>
+                                                            </div>
+                                                        )}
+                                                        {rs?.status === "completed" && (
+                                                            <div className="space-y-1">
+                                                                <div className="flex items-center gap-2 text-xs text-green-600">
+                                                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                                                    <span>{rs.succeeded ?? 0} synced</span>
+                                                                </div>
+                                                                {rs.failed && rs.failed.length > 0 && (
+                                                                    <ul className="text-xs text-destructive list-disc pl-4">
+                                                                        {rs.failed.map(f => (
+                                                                            <li key={f.assistant_id} className="break-words">{f.assistant_id}: {f.error}</li>
+                                                                        ))}
+                                                                    </ul>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        {rs?.status === "error" && (
+                                                            <div className="flex items-start gap-2 text-xs text-destructive">
+                                                                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                                                <span className="break-words min-w-0">Sync failed{rs.error ? `: ${rs.error}` : ""}</span>
+                                                            </div>
+                                                        )}
+                                                        {rs?.status === "interrupted" && (
+                                                            <div className="flex items-center gap-2 text-xs text-amber-600">
+                                                                <AlertTriangle className="h-3.5 w-3.5" />
+                                                                <span>Sync stopped</span>
+                                                            </div>
+                                                        )}
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="w-full h-8 text-xs"
+                                                            disabled={running}
+                                                            onClick={() => handleResync(service.service_name)}
+                                                        >
+                                                            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${running ? "animate-spin" : ""}`} />
+                                                            Re-sync
+                                                        </Button>
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                     </CardContent>
                                 </Card>

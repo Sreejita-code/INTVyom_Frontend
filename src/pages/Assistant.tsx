@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useLocation } from "react-router-dom";
-import { Bot, Plus, Loader2, Save, Trash2, Phone, Check, Wrench, Mic, X, Copy, MessageSquare, Send, PhoneOff, PhoneCall, ArrowLeft, Search } from "lucide-react";
+import { Bot, Plus, Loader2, Save, Trash2, Phone, Check, Wrench, Mic, X, Copy, MessageSquare, Send, PhoneOff, PhoneCall, ArrowLeft, Search, ChevronDown } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -626,7 +627,7 @@ export default function AssistantPage() {
           assistant_prompt: d.assistant_prompt || "",
           assistant_llm_mode: inferredMode,
           assistant_llm_config: {
-            provider: d.assistant_llm_config?.provider || "gemini",
+            provider: d.assistant_llm_config?.provider || "openai",
             model: d.assistant_llm_config?.model || "",
             voice: d.assistant_llm_config?.voice || "",
             api_key: d.assistant_llm_config?.api_key || "",
@@ -747,7 +748,7 @@ export default function AssistantPage() {
       // Remove UI helper property before sending to the backend
       delete (interactionConfig as any)._preferred_languages_str;
 
-      const realtimeProvider = formData.assistant_llm_config?.provider?.trim() || "gemini";
+      const llmProvider = formData.assistant_llm_config?.provider?.trim() || "openai";
       const payload: any = {
         user_id: user.user_id,
         assistant_name: name,
@@ -764,20 +765,17 @@ export default function AssistantPage() {
         assistant_greeting_audio: formData.assistant_greeting_audio,
       };
 
-      if (formData.assistant_llm_mode === "realtime") {
-        const llmConfig: Record<string, string> = {
-          provider: realtimeProvider,
-          model: formData.assistant_llm_config?.model?.trim() || undefined,
-          voice: formData.assistant_llm_config?.voice?.trim() || undefined,
-        };
-        
-        // We now allow api key overrides for any provider, including Gemini and OpenAI
-        if (formData.assistant_llm_config?.api_key?.trim()) {
-          llmConfig.api_key = formData.assistant_llm_config.api_key.trim();
-        }
-        
-        payload.assistant_llm_config = llmConfig;
-      } else {
+      // provider config is symmetric across modes and persists across a mode switch
+      const llmConfig: Record<string, string> = { provider: llmProvider };
+      if (formData.assistant_llm_config?.model?.trim()) llmConfig.model = formData.assistant_llm_config.model.trim();
+      if (formData.assistant_llm_config?.api_key?.trim()) llmConfig.api_key = formData.assistant_llm_config.api_key.trim();
+      // voice is emitted by the realtime model; in pipeline the voice lives in the TTS config
+      if (formData.assistant_llm_mode === "realtime" && formData.assistant_llm_config?.voice?.trim()) {
+        llmConfig.voice = formData.assistant_llm_config.voice.trim();
+      }
+      payload.assistant_llm_config = llmConfig;
+
+      if (formData.assistant_llm_mode !== "realtime") {
         payload.assistant_tts_model = formData.assistant_tts_model;
         if (formData.assistant_tts_model === "sarvam") {
           payload.assistant_tts_config = {
@@ -1219,54 +1217,68 @@ export default function AssistantPage() {
                     </div>
                   </div>
 
-                  {/* Mode-Specific Config */}
-                  {isRealtimeMode ? (
-                    <div className="space-y-4 pt-4">
-                      <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Realtime LLM Settings</h3>
-                      <div className="grid gap-4 rounded-xl border border-border/60 bg-card/60 p-4">
-                        <div className="grid gap-2">
-                          <Label>Provider</Label>
-                          <Select value={formData.assistant_llm_config?.provider || "gemini"} onValueChange={(v) => updateLLMConfig("provider", v)}>
-                            <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="gemini">Gemini</SelectItem>
-                              <SelectItem value="openai">OpenAI</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <p className="text-xs text-muted-foreground">
-                            Keys for Gemini and OpenAI are automatically fetched from Integrations if left blank.
-                          </p>
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Model</Label>
-                          <Input
-                            value={formData.assistant_llm_config?.model || ""}
-                            placeholder="Optional model override"
-                            onChange={(e) => updateLLMConfig("model", e.target.value)}
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>Voice</Label>
-                          <Input
-                            value={formData.assistant_llm_config?.voice || ""}
-                            placeholder="Optional voice setting"
-                            onChange={(e) => updateLLMConfig("voice", e.target.value)}
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>API Key Override (Optional)</Label>
-                          <Input
-                            type="password"
-                            value={formData.assistant_llm_config?.api_key || ""}
-                            placeholder="Leave blank to use integrated key"
-                            onChange={(e) => updateLLMConfig("api_key", e.target.value)}
-                          />
-                        </div>
+                  {/* Language Model — identical config in both modes; key comes from Integrations */}
+                  <div className="space-y-4 pt-4">
+                    <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Language Model</h3>
+                    <div className="grid gap-4 rounded-xl border border-border/60 bg-card/60 p-4">
+                      <div className="grid gap-2">
+                        <Label>Provider</Label>
+                        <Select value={formData.assistant_llm_config?.provider || "openai"} onValueChange={(v) => updateLLMConfig("provider", v)}>
+                          <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="openai">OpenAI</SelectItem>
+                            <SelectItem value="gemini">Gemini</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          {formData.assistant_llm_config?.api_key?.trim()
+                            ? "Using a custom key for this assistant."
+                            : `Using your Integrations key for ${(formData.assistant_llm_config?.provider || "openai") === "gemini" ? "Gemini" : "OpenAI"}.`}
+                        </p>
                       </div>
+
+                      <Collapsible defaultOpen={!!(formData.assistant_llm_config?.model || formData.assistant_llm_config?.voice || formData.assistant_llm_config?.api_key)}>
+                        <CollapsibleTrigger className="group flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                          <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+                          Advanced
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="grid gap-4 pt-4">
+                          <div className="grid gap-2">
+                            <Label>Model</Label>
+                            <Input
+                              value={formData.assistant_llm_config?.model || ""}
+                              placeholder="Optional model override"
+                              onChange={(e) => updateLLMConfig("model", e.target.value)}
+                            />
+                          </div>
+                          {isRealtimeMode && (
+                            <div className="grid gap-2">
+                              <Label>Voice</Label>
+                              <Input
+                                value={formData.assistant_llm_config?.voice || ""}
+                                placeholder="Optional voice setting"
+                                onChange={(e) => updateLLMConfig("voice", e.target.value)}
+                              />
+                            </div>
+                          )}
+                          <div className="grid gap-2">
+                            <Label>API Key</Label>
+                            <Input
+                              type="password"
+                              value={formData.assistant_llm_config?.api_key || ""}
+                              placeholder="Leave blank to use your Integrations key"
+                              onChange={(e) => updateLLMConfig("api_key", e.target.value)}
+                            />
+                          </div>
+                        </CollapsibleContent>
+                      </Collapsible>
                     </div>
-                  ) : (
+                  </div>
+
+                  {/* Voice (Text-to-Speech) — pipeline only; realtime voice lives in the model above */}
+                  {!isRealtimeMode && (
                     <div className="space-y-4 pt-4">
-                      <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Pipeline Voice Settings</h3>
+                      <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Voice (Text-to-Speech)</h3>
                       <div className="grid gap-4 rounded-xl border border-border/60 bg-card/60 p-4">
                         <div className="grid gap-2">
                           <Label>Model</Label>
