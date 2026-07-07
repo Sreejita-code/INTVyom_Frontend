@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useLocation } from "react-router-dom";
-import { Bot, Plus, Loader2, Save, Trash2, Phone, Check, Wrench, Mic, X, Copy, MessageSquare, Send, PhoneOff, PhoneCall, ArrowLeft, Search, ChevronDown } from "lucide-react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Bot, Plus, Loader2, Save, Trash2, Phone, Check, Wrench, Mic, X, Copy, MessageSquare, Send, PhoneOff, PhoneCall, ArrowLeft, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,7 +87,7 @@ const emptyForm: AssistantDetail = {
   assistant_prompt: "",
   assistant_llm_mode: "realtime",
   assistant_llm_config: {
-    provider: "gemini",
+    provider: "openai",
     model: "",
     voice: "",
     api_key: "",
@@ -766,9 +765,8 @@ export default function AssistantPage() {
       };
 
       // provider config is symmetric across modes and persists across a mode switch
+      // model + api_key come from Integrations (baked in by the backend); not editable per-assistant
       const llmConfig: Record<string, string> = { provider: llmProvider };
-      if (formData.assistant_llm_config?.model?.trim()) llmConfig.model = formData.assistant_llm_config.model.trim();
-      if (formData.assistant_llm_config?.api_key?.trim()) llmConfig.api_key = formData.assistant_llm_config.api_key.trim();
       // voice is emitted by the realtime model; in pipeline the voice lives in the TTS config
       if (formData.assistant_llm_mode === "realtime" && formData.assistant_llm_config?.voice?.trim()) {
         llmConfig.voice = formData.assistant_llm_config.voice.trim();
@@ -1231,47 +1229,20 @@ export default function AssistantPage() {
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                          {formData.assistant_llm_config?.api_key?.trim()
-                            ? "Using a custom key for this assistant."
-                            : `Using your Integrations key for ${(formData.assistant_llm_config?.provider || "openai") === "gemini" ? "Gemini" : "OpenAI"}.`}
+                          {`Using your Integrations key for ${(formData.assistant_llm_config?.provider || "openai") === "gemini" ? "Gemini" : "OpenAI"}.`}
                         </p>
                       </div>
 
-                      <Collapsible defaultOpen={!!(formData.assistant_llm_config?.model || formData.assistant_llm_config?.voice || formData.assistant_llm_config?.api_key)}>
-                        <CollapsibleTrigger className="group flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-                          <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
-                          Advanced
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="grid gap-4 pt-4">
-                          <div className="grid gap-2">
-                            <Label>Model</Label>
-                            <Input
-                              value={formData.assistant_llm_config?.model || ""}
-                              placeholder="Optional model override"
-                              onChange={(e) => updateLLMConfig("model", e.target.value)}
-                            />
-                          </div>
-                          {isRealtimeMode && (
-                            <div className="grid gap-2">
-                              <Label>Voice</Label>
-                              <Input
-                                value={formData.assistant_llm_config?.voice || ""}
-                                placeholder="Optional voice setting"
-                                onChange={(e) => updateLLMConfig("voice", e.target.value)}
-                              />
-                            </div>
-                          )}
-                          <div className="grid gap-2">
-                            <Label>API Key</Label>
-                            <Input
-                              type="password"
-                              value={formData.assistant_llm_config?.api_key || ""}
-                              placeholder="Leave blank to use your Integrations key"
-                              onChange={(e) => updateLLMConfig("api_key", e.target.value)}
-                            />
-                          </div>
-                        </CollapsibleContent>
-                      </Collapsible>
+                      {isRealtimeMode && (
+                        <div className="grid gap-2">
+                          <Label>Voice</Label>
+                          <Input
+                            value={formData.assistant_llm_config?.voice || ""}
+                            placeholder="Voice name (e.g. alloy)"
+                            onChange={(e) => updateLLMConfig("voice", e.target.value)}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
 
