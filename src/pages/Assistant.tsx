@@ -58,6 +58,11 @@ interface AssistantDetail {
     voice_id?: string;
     target_language_code?: string;
   };
+  assistant_stt_model: "sarvam" | "native";
+  assistant_stt_config: {
+    model?: string;
+    language?: string;
+  };
   assistant_start_instruction: string;
   assistant_interaction_config?: {
     speaks_first?: boolean;
@@ -97,6 +102,11 @@ const emptyForm: AssistantDetail = {
     voice_id: "",
     target_language_code: "hi-IN",
   },
+  assistant_stt_model: "sarvam",
+  assistant_stt_config: {
+    model: "saaras:v3",
+    language: "unknown",
+  },
   assistant_start_instruction: "",
   assistant_interaction_config: {
     speaks_first: true,
@@ -132,6 +142,11 @@ const buildFormSnapshot = (form: AssistantDetail) =>
     assistant_tts_config: {
       voice_id: form.assistant_tts_config.voice_id || "",
       target_language_code: form.assistant_tts_config.target_language_code || "",
+    },
+    assistant_stt_model: form.assistant_stt_model,
+    assistant_stt_config: {
+      model: form.assistant_stt_config.model || "",
+      language: form.assistant_stt_config.language || "",
     },
     assistant_start_instruction: form.assistant_start_instruction.trim(),
     assistant_interaction_config: {
@@ -636,6 +651,11 @@ export default function AssistantPage() {
             voice_id: d.assistant_tts_config?.voice_id || d.assistant_tts_config?.speaker || "",
             target_language_code: d.assistant_tts_config?.target_language_code || "hi-IN",
           },
+          assistant_stt_model: d.assistant_stt_model || "sarvam",
+          assistant_stt_config: {
+            model: d.assistant_stt_config?.model || "saaras:v3",
+            language: d.assistant_stt_config?.language || "unknown",
+          },
           assistant_start_instruction: d.assistant_start_instruction || "",
           
           // Mapped New Fields
@@ -783,6 +803,16 @@ export default function AssistantPage() {
         } else {
           payload.assistant_tts_config = { voice_id: formData.assistant_tts_config.voice_id };
         }
+
+        payload.assistant_stt_model = formData.assistant_stt_model;
+        if (formData.assistant_stt_model === "sarvam") {
+          payload.assistant_stt_config = {
+            model: formData.assistant_stt_config.model || "saaras:v3",
+            language: formData.assistant_stt_config.language || "unknown",
+          };
+        } else {
+          payload.assistant_stt_config = {};
+        }
       }
 
       let res;
@@ -855,6 +885,10 @@ export default function AssistantPage() {
 
   const updateTTS = (field: "voice_id" | "target_language_code", value: string) => {
     setFormData(prev => ({ ...prev, assistant_tts_config: { ...prev.assistant_tts_config, [field]: value } }));
+  };
+
+  const updateSTT = (field: "model" | "language", value: string) => {
+    setFormData(prev => ({ ...prev, assistant_stt_config: { ...prev.assistant_stt_config, [field]: value } }));
   };
 
   const updateLLMConfig = (field: keyof NonNullable<AssistantDetail["assistant_llm_config"]>, value: string) => {
@@ -1245,6 +1279,55 @@ export default function AssistantPage() {
                       )}
                     </div>
                   </div>
+
+                  {/* Speech-to-Text — pipeline only */}
+                  {!isRealtimeMode && (
+                    <div className="space-y-4 pt-4">
+                      <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Speech-to-Text</h3>
+                      <div className="grid gap-4 rounded-xl border border-border/60 bg-card/60 p-4">
+                        <div className="grid gap-2">
+                          <Label>Model</Label>
+                          <Select value={formData.assistant_stt_model} onValueChange={(v) => updateField("assistant_stt_model", v)}>
+                            <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="sarvam">Sarvam (Parallel)</SelectItem>
+                              <SelectItem value="native">Native (LLM Transcribes)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {formData.assistant_stt_model === "sarvam" && (
+                          <>
+                            <div className="grid gap-2">
+                              <Label>Model Version</Label>
+                              <Select value={formData.assistant_stt_config.model || "saaras:v3"} onValueChange={(v) => updateSTT("model", v)}>
+                                <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="saaras:v3">saaras:v3</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="grid gap-2">
+                              <Label>Language</Label>
+                              <Select value={formData.assistant_stt_config.language || "unknown"} onValueChange={(v) => updateSTT("language", v)}>
+                                <SelectTrigger><SelectValue placeholder="Select language" /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="unknown">Auto-detect</SelectItem>
+                                  <SelectItem value="hi-IN">hi-IN</SelectItem>
+                                  <SelectItem value="bn-IN">bn-IN</SelectItem>
+                                  <SelectItem value="en-IN">en-IN</SelectItem>
+                                  <SelectItem value="ta-IN">ta-IN</SelectItem>
+                                  <SelectItem value="te-IN">te-IN</SelectItem>
+                                  <SelectItem value="mr-IN">mr-IN</SelectItem>
+                                  <SelectItem value="gu-IN">gu-IN</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Voice (Text-to-Speech) — pipeline only; realtime voice lives in the model above */}
                   {!isRealtimeMode && (
