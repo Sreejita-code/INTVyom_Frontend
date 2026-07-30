@@ -127,10 +127,10 @@ const Integrations = () => {
                 headers: {
                     "Content-Type": "application/json",
                 },
+                // service_type is intentionally omitted: the backend derives it from its own
+                // provider map, so adding a provider there needs no change here.
                 body: JSON.stringify({
                     user_id: user.user_id,
-                    // UPDATED: Properly categorize both Gemini and OpenAI as LLMs
-                    service_type: ["gemini", "openai"].includes(selectedProvider) ? "LLM" : "TTS",
                     service_name: selectedProvider,
                     api_key: apiKey,
                 }),

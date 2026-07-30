@@ -16,6 +16,9 @@ import {
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getStoredUser } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useChatTranscriptions } from "@/hooks/useChatTranscriptions";
@@ -51,7 +54,6 @@ interface AssistantDetail {
     provider?: string;
     model?: string;
     voice?: string;
-    api_key?: string;
   };
   assistant_tts_model: "cartesia" | "sarvam" | "elevenlabs" | "mistral";
   assistant_tts_config: {
@@ -70,11 +72,13 @@ interface AssistantDetail {
     silence_reprompts?: boolean;
     silence_reprompt_interval?: number;
     silence_max_reprompts?: number;
-    // --- NEW FIELDS ---
     background_sound_enabled?: boolean;
     thinking_sound_enabled?: boolean;
+    allow_interruptions?: boolean;
+    input_guard_window_sec?: number;
+    // null = no ceiling set, the platform default of 30 minutes applies.
+    max_call_duration_minutes?: number | null;
     preferred_languages?: string[];
-    _preferred_languages_str?: string; // UI Helper
   };
   assistant_end_call_enabled?: boolean;
   assistant_end_call_trigger_phrase?: string;
@@ -86,6 +90,24 @@ interface AssistantDetail {
   };
 }
 
+// BCP-47 codes Sarvam supports. One list drives all three language surfaces: the STT
+// language select, the TTS target_language_code select, and the preferred-languages picker.
+// Keep them in sync — a code offered for speech-in should be offered for speech-out.
+const LANGUAGE_CODES = [
+  "en-IN",
+  "en-US",
+  "hi-IN",
+  "bn-IN",
+  "ta-IN",
+  "te-IN",
+  "mr-IN",
+  "gu-IN",
+  "kn-IN",
+  "ml-IN",
+  "pa-IN",
+  "od-IN",
+] as const;
+
 const emptyForm: AssistantDetail = {
   assistant_name: "",
   assistant_description: "",
@@ -95,7 +117,6 @@ const emptyForm: AssistantDetail = {
     provider: "openai",
     model: "",
     voice: "",
-    api_key: "",
   },
   assistant_tts_model: "cartesia",
   assistant_tts_config: {
@@ -108,16 +129,20 @@ const emptyForm: AssistantDetail = {
     language: "unknown",
   },
   assistant_start_instruction: "",
+  // Defaults mirror the backend's own defaults so a freshly created assistant behaves the
+  // same whether or not the form was touched.
   assistant_interaction_config: {
     speaks_first: true,
     filler_words: false,
     silence_reprompts: false,
     silence_reprompt_interval: 10.0,
     silence_max_reprompts: 2,
-    background_sound_enabled: false,
-    thinking_sound_enabled: false,
+    background_sound_enabled: true,
+    thinking_sound_enabled: true,
+    allow_interruptions: false,
+    input_guard_window_sec: 3.0,
+    max_call_duration_minutes: null,
     preferred_languages: ["en-US", "hi-IN"],
-    _preferred_languages_str: "en-US, hi-IN",
   },
   assistant_end_call_enabled: false,
   assistant_end_call_trigger_phrase: "",
@@ -136,7 +161,6 @@ const buildFormSnapshot = (form: AssistantDetail) =>
       provider: form.assistant_llm_config?.provider?.trim() || "gemini",
       model: form.assistant_llm_config?.model?.trim() || "",
       voice: form.assistant_llm_config?.voice?.trim() || "",
-      api_key: form.assistant_llm_config?.api_key?.trim() || "",
     },
     assistant_tts_model: form.assistant_tts_model,
     assistant_tts_config: {
@@ -155,8 +179,11 @@ const buildFormSnapshot = (form: AssistantDetail) =>
       silence_reprompts: form.assistant_interaction_config?.silence_reprompts ?? false,
       silence_reprompt_interval: form.assistant_interaction_config?.silence_reprompt_interval ?? 10.0,
       silence_max_reprompts: form.assistant_interaction_config?.silence_max_reprompts ?? 2,
-      background_sound_enabled: form.assistant_interaction_config?.background_sound_enabled ?? false,
-      thinking_sound_enabled: form.assistant_interaction_config?.thinking_sound_enabled ?? false,
+      background_sound_enabled: form.assistant_interaction_config?.background_sound_enabled ?? true,
+      thinking_sound_enabled: form.assistant_interaction_config?.thinking_sound_enabled ?? true,
+      allow_interruptions: form.assistant_interaction_config?.allow_interruptions ?? false,
+      input_guard_window_sec: form.assistant_interaction_config?.input_guard_window_sec ?? 3.0,
+      max_call_duration_minutes: form.assistant_interaction_config?.max_call_duration_minutes ?? null,
       preferred_languages: form.assistant_interaction_config?.preferred_languages ?? [],
     },
     assistant_end_call_enabled: form.assistant_end_call_enabled ?? false,
@@ -452,12 +479,8 @@ export default function AssistantPage() {
         ...item,
         assistant_id: item.assistant_id || item._id || "",
         assistant_name: item.assistant_name || item.name || "Unnamed Assistant",
-        assistant_llm_mode:
-          item.assistant_llm_mode === "pipeline" || item.assistant_llm_mode === "realtime"
-            ? item.assistant_llm_mode
-            : item.assistant_llm_config
-              ? "realtime"
-              : "pipeline",
+        // Same rule as the details mapper: read the mode, don't infer it from llm_config.
+        assistant_llm_mode: item.assistant_llm_mode === "realtime" ? "realtime" : "pipeline",
       }));
       
       if (pageNum === 1) {
@@ -627,24 +650,24 @@ export default function AssistantPage() {
 
       if (res.ok && json.data) {
         const d = json.data;
+        // Read the mode, never guess it. assistant_llm_config is legal in pipeline mode
+        // (it carries the provider and api_key there), so its presence means nothing.
         const inferredMode: "pipeline" | "realtime" =
-          d.assistant_llm_mode === "pipeline" || d.assistant_llm_mode === "realtime"
-            ? d.assistant_llm_mode
-            : d.assistant_llm_config
-              ? "realtime"
-              : "pipeline";
-        
+          d.assistant_llm_mode === "realtime" ? "realtime" : "pipeline";
+
+
         const nextForm: AssistantDetail = {
           assistant_id: d.assistant_id,
           assistant_name: d.assistant_name || "",
           assistant_description: d.assistant_description || "",
           assistant_prompt: d.assistant_prompt || "",
           assistant_llm_mode: inferredMode,
+          // api_key is deliberately not mapped: the API returns it masked, and sending a
+          // masked value back is rejected. Keys are managed in Integrations.
           assistant_llm_config: {
             provider: d.assistant_llm_config?.provider || "openai",
             model: d.assistant_llm_config?.model || "",
             voice: d.assistant_llm_config?.voice || "",
-            api_key: d.assistant_llm_config?.api_key || "",
           },
           assistant_tts_model: d.assistant_tts_model || "cartesia",
           assistant_tts_config: {
@@ -658,17 +681,18 @@ export default function AssistantPage() {
           },
           assistant_start_instruction: d.assistant_start_instruction || "",
           
-          // Mapped New Fields
           assistant_interaction_config: {
             speaks_first: d.assistant_interaction_config?.speaks_first ?? true,
             filler_words: d.assistant_interaction_config?.filler_words ?? false,
             silence_reprompts: d.assistant_interaction_config?.silence_reprompts ?? false,
             silence_reprompt_interval: d.assistant_interaction_config?.silence_reprompt_interval ?? 10.0,
             silence_max_reprompts: d.assistant_interaction_config?.silence_max_reprompts ?? 2,
-            background_sound_enabled: d.assistant_interaction_config?.background_sound_enabled ?? false,
-            thinking_sound_enabled: d.assistant_interaction_config?.thinking_sound_enabled ?? false,
+            background_sound_enabled: d.assistant_interaction_config?.background_sound_enabled ?? true,
+            thinking_sound_enabled: d.assistant_interaction_config?.thinking_sound_enabled ?? true,
+            allow_interruptions: d.assistant_interaction_config?.allow_interruptions ?? false,
+            input_guard_window_sec: d.assistant_interaction_config?.input_guard_window_sec ?? 3.0,
+            max_call_duration_minutes: d.assistant_interaction_config?.max_call_duration_minutes ?? null,
             preferred_languages: d.assistant_interaction_config?.preferred_languages ?? [],
-            _preferred_languages_str: (d.assistant_interaction_config?.preferred_languages ?? []).join(", "),
           },
           assistant_end_call_enabled: d.assistant_end_call_enabled ?? false,
           assistant_end_call_trigger_phrase: d.assistant_end_call_trigger_phrase || "",
@@ -753,19 +777,11 @@ export default function AssistantPage() {
     setSaving(true);
 
     try {
-      // Extract preferred languages string back into an array
-      const langs = formData.assistant_interaction_config?._preferred_languages_str
-        ? formData.assistant_interaction_config._preferred_languages_str.split(",").map((s: string) => s.trim()).filter(Boolean)
-        : [];
-
       const interactionConfig = {
         ...formData.assistant_interaction_config,
+        // Realtime has no external TTS, so the backend forces this off anyway.
         ...(formData.assistant_llm_mode === "realtime" ? { filler_words: false } : {}),
-        preferred_languages: langs
       };
-      
-      // Remove UI helper property before sending to the backend
-      delete (interactionConfig as any)._preferred_languages_str;
 
       const llmProvider = formData.assistant_llm_config?.provider?.trim() || "openai";
       const payload: any = {
@@ -909,6 +925,17 @@ export default function AssistantPage() {
         [field]: value
       }
     }));
+  };
+
+  const selectedLanguages = formData.assistant_interaction_config?.preferred_languages ?? [];
+
+  // Keep the stored order stable in LANGUAGE_CODES order, so the chips don't reshuffle
+  // as the user checks boxes.
+  const toggleLanguage = (code: string) => {
+    const next = selectedLanguages.includes(code)
+      ? selectedLanguages.filter((c) => c !== code)
+      : LANGUAGE_CODES.filter((c) => c === code || selectedLanguages.includes(c));
+    updateInteractionConfig("preferred_languages", [...next]);
   };
 
   const updateGreetingAudio = (key: "enabled" | "audio_id", value: boolean | string) => {
@@ -1313,13 +1340,9 @@ export default function AssistantPage() {
                                 <SelectTrigger><SelectValue placeholder="Select language" /></SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="unknown">Auto-detect</SelectItem>
-                                  <SelectItem value="hi-IN">hi-IN</SelectItem>
-                                  <SelectItem value="bn-IN">bn-IN</SelectItem>
-                                  <SelectItem value="en-IN">en-IN</SelectItem>
-                                  <SelectItem value="ta-IN">ta-IN</SelectItem>
-                                  <SelectItem value="te-IN">te-IN</SelectItem>
-                                  <SelectItem value="mr-IN">mr-IN</SelectItem>
-                                  <SelectItem value="gu-IN">gu-IN</SelectItem>
+                                  {LANGUAGE_CODES.map((code) => (
+                                    <SelectItem key={code} value={code}>{code}</SelectItem>
+                                  ))}
                                 </SelectContent>
                               </Select>
                             </div>
@@ -1363,9 +1386,9 @@ export default function AssistantPage() {
                             <Select value={formData.assistant_tts_config.target_language_code || "hi-IN"} onValueChange={(v) => updateTTS("target_language_code", v)}>
                               <SelectTrigger><SelectValue placeholder="Select language" /></SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="bn-IN">bn-IN</SelectItem>
-                                <SelectItem value="hi-IN">hi-IN</SelectItem>
-                                <SelectItem value="en-IN">en-IN</SelectItem>
+                                {LANGUAGE_CODES.map((code) => (
+                                  <SelectItem key={code} value={code}>{code}</SelectItem>
+                                ))}
                               </SelectContent>
                             </Select>
                           </div>
@@ -1398,6 +1421,34 @@ export default function AssistantPage() {
                           onCheckedChange={(v) => updateInteractionConfig("filler_words", v)}
                           disabled={isRealtimeMode}
                         />
+                      </div>
+
+                      <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
+                        <div>
+                          <Label>Allow Interruptions</Label>
+                          <p className="text-sm text-muted-foreground mt-1">Let the caller talk over the opening greeting.</p>
+                        </div>
+                        <Switch
+                          checked={formData.assistant_interaction_config?.allow_interruptions ?? false}
+                          onCheckedChange={(v) => updateInteractionConfig("allow_interruptions", v)}
+                        />
+                      </div>
+
+                      <div className="grid gap-2 p-4 border rounded-xl bg-card">
+                        <Label>Input Guard Window (seconds)</Label>
+                        <Input
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          max="10"
+                          value={formData.assistant_interaction_config?.input_guard_window_sec ?? 3.0}
+                          onChange={(e) => updateInteractionConfig("input_guard_window_sec", parseFloat(e.target.value) || 0)}
+                        />
+                        <p className="text-[10px] text-muted-foreground">
+                          Ignores caller audio for this long at the start of every reply, so &ldquo;hello?&rdquo; and
+                          &ldquo;um&rdquo; stop cutting the assistant off. Releases early when the reply ends.
+                          Raise it to catch more fillers; set 0 to always let the caller in.
+                        </p>
                       </div>
 
                       <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
@@ -1452,12 +1503,78 @@ export default function AssistantPage() {
 
                       <div className="grid gap-2 p-4 border rounded-xl bg-card">
                         <Label>Preferred Languages</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="justify-between font-normal">
+                              {selectedLanguages.length > 0
+                                ? `${selectedLanguages.length} selected`
+                                : "Detect automatically"}
+                              <Plus className="h-4 w-4 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-56 p-1" align="start">
+                            <ScrollArea className="h-56">
+                              <div className="grid gap-0.5 pr-2">
+                                {LANGUAGE_CODES.map((code) => (
+                                  <label
+                                    key={code}
+                                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
+                                  >
+                                    <Checkbox
+                                      checked={selectedLanguages.includes(code)}
+                                      onCheckedChange={() => toggleLanguage(code)}
+                                    />
+                                    <span className="font-mono">{code}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </ScrollArea>
+                          </PopoverContent>
+                        </Popover>
+
+                        {selectedLanguages.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {selectedLanguages.map((code) => (
+                              <Badge key={code} variant="secondary" className="gap-1 font-mono font-normal">
+                                {code}
+                                <button
+                                  type="button"
+                                  onClick={() => toggleLanguage(code)}
+                                  aria-label={`Remove ${code}`}
+                                  className="rounded-sm opacity-60 hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+
+                        <p className="text-[10px] text-muted-foreground">
+                          Hints the transcriber when the caller switches languages mid-call. Leave empty
+                          to let it detect them on its own.
+                        </p>
+                      </div>
+
+                      <div className="grid gap-2 p-4 border rounded-xl bg-card">
+                        <Label>Max Call Duration (minutes)</Label>
                         <Input
-                          value={formData.assistant_interaction_config?._preferred_languages_str || ""}
-                          onChange={(e) => updateInteractionConfig("_preferred_languages_str", e.target.value)}
-                          placeholder="e.g. en-US, hi-IN"
+                          type="number"
+                          min="1"
+                          placeholder="30"
+                          value={formData.assistant_interaction_config?.max_call_duration_minutes ?? ""}
+                          onChange={(e) =>
+                            updateInteractionConfig(
+                              "max_call_duration_minutes",
+                              // Blank means "no ceiling set" — send null, not 0, which the API rejects.
+                              e.target.value === "" ? null : parseInt(e.target.value, 10) || null
+                            )
+                          }
                         />
-                        <p className="text-[10px] text-muted-foreground">Comma-separated language codes to hint STT/TTS (e.g. en-US, hi-IN).</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          The assistant says a short goodbye and hangs up at this limit. Leave empty for
+                          the 30-minute default.
+                        </p>
                       </div>
 
                     </div>
