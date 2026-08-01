@@ -36,7 +36,7 @@ const AUDIO_API_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/audio`;
 interface AssistantItem {
   assistant_id: string;
   assistant_name: string;
-  assistant_llm_mode?: "pipeline" | "realtime";
+  assistant_mode?: "pipeline" | "realtime" | "cascade";
   assistant_llm_config?: Record<string, any>;
   assistant_created_at?: string;
   _id?: string;
@@ -49,7 +49,7 @@ interface AssistantDetail {
   assistant_name: string;
   assistant_description: string;
   assistant_prompt: string;
-  assistant_llm_mode: "pipeline" | "realtime";
+  assistant_mode: "pipeline" | "realtime" | "cascade";
   assistant_llm_config?: {
     provider?: string;
     model?: string;
@@ -60,10 +60,11 @@ interface AssistantDetail {
     voice_id?: string;
     target_language_code?: string;
   };
-  assistant_stt_model: "sarvam" | "native";
+  assistant_stt_model: "sarvam" | "native" | "cartesia";
   assistant_stt_config: {
     model?: string;
     language?: string;
+    mode?: string;
   };
   assistant_start_instruction: string;
   assistant_interaction_config?: {
@@ -108,11 +109,39 @@ const LANGUAGE_CODES = [
   "od-IN",
 ] as const;
 
+// OpenAI chat models known to work in cascade mode. The model is free-form upstream —
+// these are the tested ones; anything else fails at the first API call, not at save time.
+const CASCADE_LLM_MODELS = [
+  "gpt-4.1",
+  "gpt-4.1-mini",
+  "gpt-4.1-nano",
+  "gpt-4o",
+  "gpt-4o-mini",
+  "gpt-5",
+  "gpt-5-mini",
+  "gpt-5-nano",
+  "gpt-5.1",
+  "gpt-5.2",
+  "gpt-5.4",
+  "gpt-5.4-mini",
+  "gpt-5.4-nano",
+  "gpt-5.5",
+  "chatgpt-4o-latest",
+] as const;
+
+const STT_MODE_DESCRIPTIONS: Record<string, string> = {
+  codemix: "Code-mixed output — English words stay English, Indic words in native script. Best for Hinglish/Tanglish calls.",
+  transcribe: "Standard transcription in the spoken language, with proper formatting and normalized numbers.",
+  translate: "Transcribes the speech and translates it to English.",
+  verbatim: "Word-for-word transcription — keeps filler words and spoken numbers as-is.",
+  translit: "Romanized output in Latin script (e.g. \"mera phone number hai 9840950950\").",
+};
+
 const emptyForm: AssistantDetail = {
   assistant_name: "",
   assistant_description: "",
   assistant_prompt: "",
-  assistant_llm_mode: "realtime",
+  assistant_mode: "realtime",
   assistant_llm_config: {
     provider: "openai",
     model: "",
@@ -127,6 +156,7 @@ const emptyForm: AssistantDetail = {
   assistant_stt_config: {
     model: "saaras:v3",
     language: "unknown",
+    mode: "codemix",
   },
   assistant_start_instruction: "",
   // Defaults mirror the backend's own defaults so a freshly created assistant behaves the
@@ -156,7 +186,7 @@ const buildFormSnapshot = (form: AssistantDetail) =>
     assistant_name: form.assistant_name.trim(),
     assistant_description: form.assistant_description.trim(),
     assistant_prompt: form.assistant_prompt.trim(),
-    assistant_llm_mode: form.assistant_llm_mode,
+    assistant_mode: form.assistant_mode,
     assistant_llm_config: {
       provider: form.assistant_llm_config?.provider?.trim() || "gemini",
       model: form.assistant_llm_config?.model?.trim() || "",
@@ -171,6 +201,7 @@ const buildFormSnapshot = (form: AssistantDetail) =>
     assistant_stt_config: {
       model: form.assistant_stt_config.model || "",
       language: form.assistant_stt_config.language || "",
+      mode: form.assistant_stt_config.mode || "",
     },
     assistant_start_instruction: form.assistant_start_instruction.trim(),
     assistant_interaction_config: {
@@ -480,7 +511,7 @@ export default function AssistantPage() {
         assistant_id: item.assistant_id || item._id || "",
         assistant_name: item.assistant_name || item.name || "Unnamed Assistant",
         // Same rule as the details mapper: read the mode, don't infer it from llm_config.
-        assistant_llm_mode: item.assistant_llm_mode === "realtime" ? "realtime" : "pipeline",
+        assistant_mode: item.assistant_mode === "realtime" ? "realtime" : item.assistant_mode === "cascade" ? "cascade" : "pipeline",
       }));
       
       if (pageNum === 1) {
@@ -652,8 +683,8 @@ export default function AssistantPage() {
         const d = json.data;
         // Read the mode, never guess it. assistant_llm_config is legal in pipeline mode
         // (it carries the provider and api_key there), so its presence means nothing.
-        const inferredMode: "pipeline" | "realtime" =
-          d.assistant_llm_mode === "realtime" ? "realtime" : "pipeline";
+        const inferredMode: "pipeline" | "realtime" | "cascade" =
+          d.assistant_mode === "realtime" ? "realtime" : d.assistant_mode === "cascade" ? "cascade" : "pipeline";
 
 
         const nextForm: AssistantDetail = {
@@ -661,7 +692,7 @@ export default function AssistantPage() {
           assistant_name: d.assistant_name || "",
           assistant_description: d.assistant_description || "",
           assistant_prompt: d.assistant_prompt || "",
-          assistant_llm_mode: inferredMode,
+          assistant_mode: inferredMode,
           // api_key is deliberately not mapped: the API returns it masked, and sending a
           // masked value back is rejected. Keys are managed in Integrations.
           assistant_llm_config: {
@@ -678,6 +709,7 @@ export default function AssistantPage() {
           assistant_stt_config: {
             model: d.assistant_stt_config?.model || "saaras:v3",
             language: d.assistant_stt_config?.language || "unknown",
+            mode: d.assistant_stt_config?.mode || "codemix",
           },
           assistant_start_instruction: d.assistant_start_instruction || "",
           
@@ -780,7 +812,7 @@ export default function AssistantPage() {
       const interactionConfig = {
         ...formData.assistant_interaction_config,
         // Realtime has no external TTS, so the backend forces this off anyway.
-        ...(formData.assistant_llm_mode === "realtime" ? { filler_words: false } : {}),
+        ...(formData.assistant_mode === "realtime" ? { filler_words: false } : {}),
       };
 
       const llmProvider = formData.assistant_llm_config?.provider?.trim() || "openai";
@@ -789,7 +821,7 @@ export default function AssistantPage() {
         assistant_name: name,
         assistant_description: description,
         assistant_prompt: prompt,
-        assistant_llm_mode: formData.assistant_llm_mode,
+        assistant_mode: formData.assistant_mode,
         assistant_start_instruction: formData.assistant_start_instruction,
         
         assistant_interaction_config: interactionConfig,
@@ -804,12 +836,16 @@ export default function AssistantPage() {
       // model + api_key come from Integrations (baked in by the backend); not editable per-assistant
       const llmConfig: Record<string, string> = { provider: llmProvider };
       // voice is emitted by the realtime model; in pipeline the voice lives in the TTS config
-      if (formData.assistant_llm_mode === "realtime" && formData.assistant_llm_config?.voice?.trim()) {
+      if (formData.assistant_mode === "realtime" && formData.assistant_llm_config?.voice?.trim()) {
         llmConfig.voice = formData.assistant_llm_config.voice.trim();
+      }
+      // cascade runs a plain OpenAI chat model — the user's pick, default gpt-4.1
+      if (formData.assistant_mode === "cascade") {
+        llmConfig.model = formData.assistant_llm_config?.model?.trim() || "gpt-4.1";
       }
       payload.assistant_llm_config = llmConfig;
 
-      if (formData.assistant_llm_mode !== "realtime") {
+      if (formData.assistant_mode !== "realtime") {
         payload.assistant_tts_model = formData.assistant_tts_model;
         if (formData.assistant_tts_model === "sarvam") {
           payload.assistant_tts_config = {
@@ -825,6 +861,15 @@ export default function AssistantPage() {
           payload.assistant_stt_config = {
             model: formData.assistant_stt_config.model || "saaras:v3",
             language: formData.assistant_stt_config.language || "unknown",
+            // mode is honored only in cascade — the pipeline tap rejects it.
+            ...(formData.assistant_mode === "cascade"
+              ? { mode: formData.assistant_stt_config.mode || "codemix" }
+              : {}),
+          };
+        } else if (formData.assistant_stt_model === "cartesia") {
+          payload.assistant_stt_config = {
+            model: formData.assistant_stt_config.model || "ink-whisper",
+            language: formData.assistant_stt_config.language || "en-IN",
           };
         } else {
           payload.assistant_stt_config = {};
@@ -903,7 +948,7 @@ export default function AssistantPage() {
     setFormData(prev => ({ ...prev, assistant_tts_config: { ...prev.assistant_tts_config, [field]: value } }));
   };
 
-  const updateSTT = (field: "model" | "language", value: string) => {
+  const updateSTT = (field: "model" | "language" | "mode", value: string) => {
     setFormData(prev => ({ ...prev, assistant_stt_config: { ...prev.assistant_stt_config, [field]: value } }));
   };
 
@@ -948,9 +993,10 @@ export default function AssistantPage() {
     }));
   };
 
-  const isRealtimeMode = formData.assistant_llm_mode === "realtime";
-  const getAssistantMode = (assistant: AssistantItem): "pipeline" | "realtime" =>
-    assistant.assistant_llm_mode === "realtime" ? "realtime" : "pipeline";
+  const isRealtimeMode = formData.assistant_mode === "realtime";
+  const isCascadeMode = formData.assistant_mode === "cascade";
+  const getAssistantMode = (assistant: AssistantItem): "pipeline" | "realtime" | "cascade" =>
+    assistant.assistant_mode === "realtime" ? "realtime" : assistant.assistant_mode === "cascade" ? "cascade" : "pipeline";
 
   return (
     <div className="page-shell flex h-screen overflow-hidden">
@@ -1031,7 +1077,9 @@ export default function AssistantPage() {
                                 "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider border",
                                 assistantMode === "realtime"
                                   ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                                  : "bg-sky-500/10 text-sky-400 border-sky-500/30",
+                                  : assistantMode === "cascade"
+                                    ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                                    : "bg-sky-500/10 text-sky-400 border-sky-500/30",
                               )}
                             >
                               {assistantMode}
@@ -1225,15 +1273,45 @@ export default function AssistantPage() {
                         Choose how speech and model processing are orchestrated.
                       </p>
                       <RadioGroup
-                        value={formData.assistant_llm_mode}
-                        onValueChange={(value) => updateField("assistant_llm_mode", value as "pipeline" | "realtime")}
-                        className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2"
+                        value={formData.assistant_mode}
+                        onValueChange={(value) => {
+                          const nextMode = value as "pipeline" | "realtime" | "cascade";
+                          if (nextMode === "pipeline" && formData.assistant_stt_model === "cartesia") {
+                            // cartesia STT is cascade-only — fall back to sarvam.
+                            setFormData(prev => ({
+                              ...prev,
+                              assistant_mode: nextMode,
+                              assistant_stt_model: "sarvam",
+                              assistant_stt_config: { model: "saaras:v3", language: "unknown" },
+                            }));
+                            return;
+                          }
+                          if (nextMode === "cascade") {
+                            setFormData(prev => ({
+                              ...prev,
+                              assistant_mode: nextMode,
+                              // native STT is rejected in cascade — fall back to sarvam.
+                              ...(prev.assistant_stt_model === "native"
+                                ? { assistant_stt_model: "sarvam", assistant_stt_config: { model: "saaras:v3", language: "unknown", mode: "codemix" } }
+                                : {}),
+                              // cascade runs an OpenAI chat model — force provider and default the model.
+                              assistant_llm_config: {
+                                ...(prev.assistant_llm_config || {}),
+                                provider: "openai",
+                                model: prev.assistant_llm_config?.model?.trim() || "gpt-4.1",
+                              },
+                            }));
+                            return;
+                          }
+                          updateField("assistant_mode", nextMode);
+                        }}
+                        className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2 lg:grid-cols-3"
                       >
                         <Label
                           htmlFor="mode-pipeline"
                           className={cn(
                             "flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors",
-                            !isRealtimeMode ? "border-sky-500/40 bg-sky-500/10 text-sky-300" : "border-border/60 bg-background/40",
+                            formData.assistant_mode === "pipeline" ? "border-sky-500/40 bg-sky-500/10 text-sky-300" : "border-border/60 bg-background/40",
                           )}
                         >
                           <RadioGroupItem id="mode-pipeline" value="pipeline" />
@@ -1253,6 +1331,19 @@ export default function AssistantPage() {
                           <div className="space-y-0.5">
                             <p className="text-sm font-semibold">Realtime</p>
                             <p className="text-xs text-muted-foreground">STT, LLM, and TTS run together in one realtime interaction loop.</p>
+                          </div>
+                        </Label>
+                        <Label
+                          htmlFor="mode-cascade"
+                          className={cn(
+                            "flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors",
+                            isCascadeMode ? "border-amber-500/40 bg-amber-500/10 text-amber-300" : "border-border/60 bg-background/40",
+                          )}
+                        >
+                          <RadioGroupItem id="mode-cascade" value="cascade" />
+                          <div className="space-y-0.5">
+                            <p className="text-sm font-semibold">Cascade</p>
+                            <p className="text-xs text-muted-foreground">True STT → LLM → TTS pipeline — external STT feeds a chat model that drives the TTS stage.</p>
                           </div>
                         </Label>
                       </RadioGroup>
@@ -1286,13 +1377,32 @@ export default function AssistantPage() {
                           <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="openai">OpenAI</SelectItem>
-                            <SelectItem value="gemini">Gemini</SelectItem>
+                            {!isCascadeMode && <SelectItem value="gemini">Gemini</SelectItem>}
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                          {`Using your Integrations key for ${(formData.assistant_llm_config?.provider || "openai") === "gemini" ? "Gemini" : "OpenAI"}.`}
+                          {isCascadeMode
+                            ? "Cascade runs an OpenAI chat model; the TTS provider owns the voice."
+                            : `Using your Integrations key for ${(formData.assistant_llm_config?.provider || "openai") === "gemini" ? "Gemini" : "OpenAI"}.`}
                         </p>
                       </div>
+
+                      {isCascadeMode && (
+                        <div className="grid gap-2">
+                          <Label>Model</Label>
+                          <Select value={formData.assistant_llm_config?.model || "gpt-4.1"} onValueChange={(v) => updateLLMConfig("model", v)}>
+                            <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
+                            <SelectContent>
+                              {CASCADE_LLM_MODELS.map((m) => (
+                                <SelectItem key={m} value={m}>{m}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground">
+                            OpenAI chat model for the cascade LLM stage. Default: gpt-4.1.
+                          </p>
+                        </div>
+                      )}
 
                       {isRealtimeMode && (
                         <div className="grid gap-2">
@@ -1307,18 +1417,31 @@ export default function AssistantPage() {
                     </div>
                   </div>
 
-                  {/* Speech-to-Text — pipeline only */}
+                  {/* Speech-to-Text — pipeline & cascade; realtime transcribes inside the model */}
                   {!isRealtimeMode && (
                     <div className="space-y-4 pt-4">
                       <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Speech-to-Text</h3>
                       <div className="grid gap-4 rounded-xl border border-border/60 bg-card/60 p-4">
                         <div className="grid gap-2">
                           <Label>Model</Label>
-                          <Select value={formData.assistant_stt_model} onValueChange={(v) => updateField("assistant_stt_model", v)}>
+                          <Select
+                            value={formData.assistant_stt_model}
+                            onValueChange={(v) => {
+                              updateField("assistant_stt_model", v);
+                              if (v === "sarvam") {
+                                updateField("assistant_stt_config", { model: "saaras:v3", language: "unknown", mode: "codemix" });
+                              } else if (v === "cartesia") {
+                                updateField("assistant_stt_config", { model: "ink-whisper", language: "en-IN" });
+                              } else {
+                                updateField("assistant_stt_config", {});
+                              }
+                            }}
+                          >
                             <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="sarvam">Sarvam (Parallel)</SelectItem>
-                              <SelectItem value="native">Native (LLM Transcribes)</SelectItem>
+                              <SelectItem value="sarvam">Sarvam{isCascadeMode ? "" : " (Parallel)"}</SelectItem>
+                              {!isCascadeMode && <SelectItem value="native">Native (LLM Transcribes)</SelectItem>}
+                              {isCascadeMode && <SelectItem value="cartesia">Cartesia</SelectItem>}
                             </SelectContent>
                           </Select>
                         </div>
@@ -1331,6 +1454,8 @@ export default function AssistantPage() {
                                 <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="saaras:v3">saaras:v3</SelectItem>
+                                  <SelectItem value="saaras:v2.5">saaras:v2.5</SelectItem>
+                                  <SelectItem value="saarika:v2.5">saarika:v2.5</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -1346,13 +1471,85 @@ export default function AssistantPage() {
                                 </SelectContent>
                               </Select>
                             </div>
+                            {isCascadeMode && (
+                              <div className="grid gap-2">
+                                <Label>Transcription Mode</Label>
+                                <Select value={formData.assistant_stt_config.mode || "codemix"} onValueChange={(v) => updateSTT("mode", v)}>
+                                  <SelectTrigger><SelectValue placeholder="Select mode" /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="codemix">
+                                      <span className="flex flex-col">
+                                        <span>codemix <span className="font-normal text-primary">(recommended)</span></span>
+                                        <span className="text-xs text-muted-foreground">Keeps code-switched speech (Hinglish/Tanglish) natural.</span>
+                                      </span>
+                                    </SelectItem>
+                                    <SelectItem value="transcribe">
+                                      <span className="flex flex-col">
+                                        <span>transcribe</span>
+                                        <span className="text-xs text-muted-foreground">Standard transcription in the spoken language, with proper formatting and numbers.</span>
+                                      </span>
+                                    </SelectItem>
+                                    <SelectItem value="translate">
+                                      <span className="flex flex-col">
+                                        <span>translate</span>
+                                        <span className="text-xs text-muted-foreground">Transcribes the speech and translates it to English.</span>
+                                      </span>
+                                    </SelectItem>
+                                    <SelectItem value="verbatim">
+                                      <span className="flex flex-col">
+                                        <span>verbatim</span>
+                                        <span className="text-xs text-muted-foreground">Word-for-word — keeps filler words and spoken numbers as-is.</span>
+                                      </span>
+                                    </SelectItem>
+                                    <SelectItem value="translit">
+                                      <span className="flex flex-col">
+                                        <span>translit</span>
+                                        <span className="text-xs text-muted-foreground">Romanized output in Latin script (e.g. "mera phone number hai 9840950950").</span>
+                                      </span>
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <p className="text-xs text-muted-foreground">
+                                  {STT_MODE_DESCRIPTIONS[formData.assistant_stt_config.mode || "codemix"]} Only applies in cascade mode with saaras:v3.
+                                </p>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {formData.assistant_stt_model === "cartesia" && (
+                          <>
+                            <div className="grid gap-2">
+                              <Label>Model</Label>
+                              <Select value={formData.assistant_stt_config.model || "ink-whisper"} onValueChange={(v) => updateSTT("model", v)}>
+                                <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="ink-whisper">ink-whisper (multilingual)</SelectItem>
+                                  <SelectItem value="ink-2">ink-2 (English only)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="grid gap-2">
+                              <Label>Language</Label>
+                              <Select value={formData.assistant_stt_config.language || "en-IN"} onValueChange={(v) => updateSTT("language", v)}>
+                                <SelectTrigger><SelectValue placeholder="Select language" /></SelectTrigger>
+                                <SelectContent>
+                                  {LANGUAGE_CODES.map((code) => (
+                                    <SelectItem key={code} value={code}>{code}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <p className="text-xs text-muted-foreground">
+                                Fixed language — no auto-detect. Use Sarvam if the caller may switch languages.
+                              </p>
+                            </div>
                           </>
                         )}
                       </div>
                     </div>
                   )}
 
-                  {/* Voice (Text-to-Speech) — pipeline only; realtime voice lives in the model above */}
+                  {/* Voice (Text-to-Speech) — pipeline & cascade; realtime voice lives in the model above */}
                   {!isRealtimeMode && (
                     <div className="space-y-4 pt-4">
                       <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Voice (Text-to-Speech)</h3>

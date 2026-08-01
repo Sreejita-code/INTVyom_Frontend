@@ -181,12 +181,16 @@ export default function InboundPage() {
             toast({ variant: "destructive", title: "Validation Error", description: "Phone number is required" });
             return;
         }
+        if (!modalForm.assistant_id || modalForm.assistant_id === "none") {
+            toast({ variant: "destructive", title: "Validation Error", description: "Please select an assistant to attach" });
+            return;
+        }
 
         setIsCreating(true);
         try {
             const payload = {
                 user_id: user.user_id,
-                assistant_id: modalForm.assistant_id === "none" ? null : modalForm.assistant_id,
+                assistant_id: modalForm.assistant_id,
                 service: "exotel",
                 inbound_config: {
                     phone_number: modalForm.phone_number
@@ -397,7 +401,7 @@ export default function InboundPage() {
                                                     className="w-full justify-between bg-muted/30 h-11"
                                                 >
                                                     {modalForm.assistant_id === "none"
-                                                        ? <span className="status-text-warning font-medium">Unassigned (Do not route)</span>
+                                                        ? <span className="text-muted-foreground">Select an assistant...</span>
                                                         : assistants.find((a) => a.assistant_id === modalForm.assistant_id)?.name || "Search assistants..."}
                                                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                                 </Button>
@@ -408,17 +412,6 @@ export default function InboundPage() {
                                                     <CommandList>
                                                         <CommandEmpty>No assistants found.</CommandEmpty>
                                                         <CommandGroup>
-                                                            <CommandItem
-                                                                value="none"
-                                                                onSelect={() => {
-                                                                    setModalForm({ ...modalForm, assistant_id: "none" });
-                                                                    setOpenModalAssistantDropdown(false);
-                                                                }}
-                                                            >
-                                                                <Check className={cn("mr-2 h-4 w-4", modalForm.assistant_id === "none" ? "opacity-100" : "opacity-0")} />
-                                                                <Unlink className="h-4 w-4 mr-2 status-text-warning" />
-                                                                <span className="status-text-warning font-medium">Unassigned</span>
-                                                            </CommandItem>
                                                             {assistants.map((ast) => (
                                                                 <CommandItem
                                                                     key={ast.assistant_id}
