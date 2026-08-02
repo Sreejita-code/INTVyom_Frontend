@@ -4,22 +4,22 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
-import Index from "./pages/Index";
-import Auth from "./pages/Auth";
-import DashboardLayout from "./components/DashboardLayout";
-import Assistant from "./pages/Assistant";
-import Tools from "./pages/Tools";
-import CallLogs from "./pages/CallLogs";
-import ApiKeys from "./pages/ApiKeys";
-import PhoneNumber from "./pages/PhoneNumber";
-import Inbound from "./pages/Inbound";
-import InboundContext from "./pages/InboundContext"; // <-- Import new page
-import Integrations from "./pages/Integrations";
-import Analytics from "./pages/Analytics";
-import MakeCall from "./pages/MakeCall";
-import PassthroughCallRecords from "./pages/PassthroughCallRecords";
-import AudioLibrary from "./pages/AudioLibrary";
-import NotFound from "./pages/NotFound";
+import Index from "./routes/Index";
+import Auth from "./routes/Auth";
+import DashboardLayout from "./routes/dashboard";
+import Assistant from "./routes/dashboard/assistant";
+import Tools from "./routes/dashboard/tools";
+import CallLogs from "./routes/dashboard/call-logs";
+import ApiKeys from "./routes/dashboard/api-keys";
+import PhoneNumber from "./routes/dashboard/phone-number";
+import Inbound from "./routes/dashboard/inbound";
+import InboundContext from "./routes/dashboard/inbound-context";
+import Integrations from "./routes/dashboard/integrations";
+import Analytics from "./routes/dashboard/analytics";
+import MakeCall from "./routes/dashboard/make-call";
+import PassthroughCallRecords from "./routes/dashboard/passthrough-call-records";
+import AudioLibrary from "./routes/dashboard/audio-library";
+import NotFound from "./routes/NotFound";
 
 const queryClient = new QueryClient();
 
