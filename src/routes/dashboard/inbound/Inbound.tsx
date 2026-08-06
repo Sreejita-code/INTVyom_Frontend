@@ -333,16 +333,16 @@ export default function InboundPage() {
         }
     };
 
-    const strategyEmptyState = (
-        <CommandEmpty>
-            <span className="text-xs text-muted-foreground">
-                No strategies yet.{" "}
-                <Link to="/dashboard/inbound-context" className="text-primary underline underline-offset-2">
-                    Create one
-                </Link>{" "}
-                to fetch caller data before the assistant speaks.
-            </span>
-        </CommandEmpty>
+    // The "None" item always matches, so cmdk's count is never 0 and CommandEmpty never fires.
+    // Render the hint as a plain row instead, or the list just looks like one unselectable option.
+    const strategyEmptyState = strategies.length > 0 ? null : (
+        <div className="px-2 py-3 text-xs text-muted-foreground">
+            No strategies yet.{" "}
+            <Link to="/dashboard/inbound-context" className="text-primary underline underline-offset-2">
+                Create one
+            </Link>{" "}
+            to fetch caller data before the assistant speaks.
+        </div>
     );
 
     return (

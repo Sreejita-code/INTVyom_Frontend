@@ -5,6 +5,8 @@ const INBOUND_CONTEXT_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/inbound-co
 
 export async function callListStrategiesEndpoint(userId: string): Promise<unknown> {
   const res = await fetch(`${INBOUND_CONTEXT_BASE}/list?user_id=${userId}`);
+  // An error body condenses to [], which silently reads as "you have no strategies".
+  if (!res.ok) throw new Error(`Failed to list strategies (${res.status})`);
   return res.json();
 }
 
