@@ -22,6 +22,9 @@ export const condenseListStrategiesResponse = (json: unknown): StrategyItem[] =>
       strategy_id: String(raw.strategy_id || raw.external_strategy_id || raw.id || raw._id),
       name: String(raw.name || raw.strategy_name || "Unnamed Strategy"),
       type: String(raw.type || raw.strategy_type || "webhook"),
+      strategy_config: (raw.strategy_config || {}) as StrategyItem["strategy_config"],
+      created_at: (raw.strategy_created_at || raw.created_at) as string | undefined,
+      updated_at: (raw.strategy_updated_at || raw.updated_at) as string | undefined,
     } as StrategyItem;
   });
 };

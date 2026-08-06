@@ -1,11 +1,10 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Webhook, Plus, Loader2, Trash2, ExternalLink, Globe, Shield, Activity, Search, Code, ArrowLeft } from "lucide-react";
+import { Webhook, Plus, Loader2, Trash2, ExternalLink, Globe, Shield, Activity, Search, Timer, ArrowLeft, AlertTriangle } from "lucide-react";
 import { EmptyState } from "@/components/common/EmptyState";
 import { MasterDetailShell } from "@/components/common/MasterDetailShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getStoredUser } from "@/services/storage/storageService";
 import {
@@ -24,7 +23,30 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/toastError";
+import { HeaderEditor } from "./HeaderEditor";
+import { HeaderRow, buildConfigPatch, buildHeaderPatch, rowsFromHeaders } from "./headerDiff";
+import { isInsecureUrl, validateTimeoutSeconds, validateWebhookUrl } from "./strategyValidation";
+
+const DEFAULT_TIMEOUT = "2";
+
+const formatTimestamp = (value?: string) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+};
 
 export default function InboundContextPage() {
     const user = getStoredUser();
@@ -46,29 +68,34 @@ export default function InboundContextPage() {
     const [modalForm, setModalForm] = useState({
         name: "",
         url: "",
-        headersStr: "{\n  \n}" // For valid JSON parsing
+        timeoutSeconds: DEFAULT_TIMEOUT,
     });
+    const [modalHeaderRows, setModalHeaderRows] = useState<HeaderRow[]>([]);
 
     // Update Form States
     const [updateForm, setUpdateForm] = useState({
         name: "",
         url: "",
-        headersStr: ""
+        timeoutSeconds: DEFAULT_TIMEOUT,
     });
+    const [updateHeaderRows, setUpdateHeaderRows] = useState<HeaderRow[]>([]);
 
     // FIX: Removed internal selectedStrategy logic and dependencies to completely stop the infinite loop
     const fetchList = useCallback(async () => {
         if (!user?.user_id) {
             setListLoading(false);
-            return;
+            return [] as StrategyItem[];
         }
         setListLoading(true);
         try {
             const json = await callListStrategiesEndpoint(user.user_id);
-            setStrategies(condenseListStrategiesResponse(json));
+            const list = condenseListStrategiesResponse(json);
+            setStrategies(list);
+            return list;
         } catch (error) {
             console.error(error);
             toast({ variant: "destructive", title: "Failed to load strategies" });
+            return [] as StrategyItem[];
         } finally {
             setListLoading(false);
         }
@@ -78,48 +105,61 @@ export default function InboundContextPage() {
         fetchList();
     }, [fetchList]);
 
-    const handleSelectStrategy = (strategy: StrategyItem) => {
-        setSelectedStrategy(strategy);
-        setMobileDetailOpen(true);
+    const hydrateForm = useCallback((strategy: StrategyItem) => {
         setUpdateForm({
             name: strategy.name,
             url: strategy.strategy_config?.url || "",
-            headersStr: strategy.strategy_config?.headers ? JSON.stringify(strategy.strategy_config.headers, null, 2) : "{\n  \n}"
+            timeoutSeconds: String(strategy.strategy_config?.timeout_seconds ?? DEFAULT_TIMEOUT),
         });
+        setUpdateHeaderRows(rowsFromHeaders(strategy.strategy_config?.headers));
+    }, []);
+
+    const handleSelectStrategy = (strategy: StrategyItem) => {
+        setSelectedStrategy(strategy);
+        setMobileDetailOpen(true);
+        hydrateForm(strategy);
     };
 
     const filteredStrategies = useMemo(() => {
         if (!searchQuery.trim()) return strategies;
         const lowerQ = searchQuery.toLowerCase();
-        return strategies.filter(s => s.name.toLowerCase().includes(lowerQ));
+        return strategies.filter(s =>
+            s.name.toLowerCase().includes(lowerQ) ||
+            (s.strategy_config?.url || "").toLowerCase().includes(lowerQ)
+        );
     }, [strategies, searchQuery]);
 
     const handleCreate = async () => {
         if (!user?.user_id) return;
-        if (!modalForm.name || !modalForm.url) {
-            toast({ variant: "destructive", title: "Validation Error", description: "Name and Webhook URL are required" });
+        if (!modalForm.name.trim()) {
+            toast({ variant: "destructive", title: "Validation Error", description: "Strategy name is required" });
             return;
         }
 
-        let parsedHeaders = undefined;
-        try {
-            if (modalForm.headersStr.trim() && modalForm.headersStr.trim() !== "{}" && modalForm.headersStr.trim() !== "{\n  \n}") {
-                parsedHeaders = JSON.parse(modalForm.headersStr);
-            }
-        } catch (e) {
-            toast({ variant: "destructive", title: "Invalid JSON", description: "Headers must be valid JSON format" });
+        const urlCheck = validateWebhookUrl(modalForm.url);
+        if (!urlCheck.ok) {
+            toast({ variant: "destructive", title: "Invalid webhook URL", description: urlCheck.message });
             return;
         }
+
+        const timeoutCheck = validateTimeoutSeconds(modalForm.timeoutSeconds);
+        if (!timeoutCheck.ok) {
+            toast({ variant: "destructive", title: "Invalid timeout", description: timeoutCheck.message });
+            return;
+        }
+
+        const headers = buildHeaderPatch(modalHeaderRows);
 
         setIsCreating(true);
         try {
             const payload = {
                 user_id: user.user_id,
-                name: modalForm.name,
+                name: modalForm.name.trim(),
                 type: "webhook",
                 strategy_config: {
-                    url: modalForm.url,
-                    ...(parsedHeaders && { headers: parsedHeaders })
+                    url: modalForm.url.trim(),
+                    ...(headers && { headers }),
+                    ...(modalForm.timeoutSeconds.trim() && { timeout_seconds: Number(modalForm.timeoutSeconds) }),
                 }
             };
 
@@ -127,10 +167,11 @@ export default function InboundContextPage() {
             if (ok) {
                 toast({ title: "Success", description: "Strategy created successfully" });
                 setIsModalOpen(false);
-                setModalForm({ name: "", url: "", headersStr: "{\n  \n}" });
+                setModalForm({ name: "", url: "", timeoutSeconds: DEFAULT_TIMEOUT });
+                setModalHeaderRows([]);
                 await fetchList();
             } else {
-                toast({ variant: "destructive", title: "Error", description: (json as { error?: string })?.error || "Failed to create strategy" });
+                toast(toastError(json, "Failed to create strategy"));
             }
         } catch (error) {
             console.error(error);
@@ -142,18 +183,36 @@ export default function InboundContextPage() {
 
     const handleUpdate = async () => {
         if (!selectedStrategy || !user?.user_id) return;
-        if (!updateForm.name || !updateForm.url) {
-            toast({ variant: "destructive", title: "Validation Error", description: "Name and Webhook URL are required" });
+        if (!updateForm.name.trim()) {
+            toast({ variant: "destructive", title: "Validation Error", description: "Strategy name is required" });
             return;
         }
 
-        let parsedHeaders = undefined;
-        try {
-            if (updateForm.headersStr.trim() && updateForm.headersStr.trim() !== "{}") {
-                parsedHeaders = JSON.parse(updateForm.headersStr);
-            }
-        } catch (e) {
-            toast({ variant: "destructive", title: "Invalid JSON", description: "Headers must be valid JSON format" });
+        const urlCheck = validateWebhookUrl(updateForm.url);
+        if (!urlCheck.ok) {
+            toast({ variant: "destructive", title: "Invalid webhook URL", description: urlCheck.message });
+            return;
+        }
+
+        const timeoutCheck = validateTimeoutSeconds(updateForm.timeoutSeconds);
+        if (!timeoutCheck.ok) {
+            toast({ variant: "destructive", title: "Invalid timeout", description: timeoutCheck.message });
+            return;
+        }
+
+        // Only what changed. Headers merge key by key upstream, so an untouched secret must
+        // not appear in the payload at all.
+        const configPatch = buildConfigPatch({
+            url: updateForm.url,
+            originalUrl: selectedStrategy.strategy_config?.url || "",
+            timeoutSeconds: updateForm.timeoutSeconds,
+            originalTimeoutSeconds: selectedStrategy.strategy_config?.timeout_seconds,
+            rows: updateHeaderRows,
+        });
+        const nameChanged = updateForm.name.trim() !== selectedStrategy.name;
+
+        if (!nameChanged && !configPatch) {
+            toast({ title: "Nothing to save", description: "No changes were made to this strategy" });
             return;
         }
 
@@ -161,31 +220,22 @@ export default function InboundContextPage() {
         try {
             const payload = {
                 user_id: user.user_id,
-                name: updateForm.name,
-                strategy_config: {
-                    url: updateForm.url,
-                    ...(parsedHeaders && { headers: parsedHeaders })
-                }
+                ...(nameChanged && { name: updateForm.name.trim() }),
+                ...(configPatch && { strategy_config: configPatch }),
             };
 
             const { ok, json } = await callUpdateStrategyEndpoint(selectedStrategy.strategy_id, payload);
             if (ok) {
                 toast({ title: "Success", description: "Strategy updated successfully" });
-                
-                // Optimistic UI update instantly reflects changes without refetching the whole list
-                setSelectedStrategy(prev => prev ? {
-                    ...prev,
-                    name: updateForm.name,
-                    strategy_config: {
-                        ...prev.strategy_config,
-                        url: updateForm.url,
-                        ...(parsedHeaders && { headers: parsedHeaders })
-                    }
-                } : null);
 
-                await fetchList();
+                // Re-select from the refreshed list rather than merging locally: the server
+                // masks secrets and merges headers, so only its copy is the truth.
+                const list = await fetchList();
+                const refreshed = list.find(s => s.strategy_id === selectedStrategy.strategy_id) || null;
+                setSelectedStrategy(refreshed);
+                if (refreshed) hydrateForm(refreshed);
             } else {
-                toast({ variant: "destructive", title: "Error", description: (json as { error?: string })?.error || "Failed to update strategy" });
+                toast(toastError(json, "Failed to update strategy"));
             }
         } catch (error) {
             console.error(error);
@@ -197,7 +247,6 @@ export default function InboundContextPage() {
 
     const handleDelete = async () => {
         if (!selectedStrategy || !user?.user_id) return;
-        if (!window.confirm("Are you sure you want to delete this strategy? Inbound numbers using this will fallback to defaults.")) return;
 
         setIsDeleting(true);
         try {
@@ -212,7 +261,7 @@ export default function InboundContextPage() {
                 setMobileDetailOpen(false);
                 await fetchList();
             } else {
-                toast({ variant: "destructive", title: "Error", description: (json as { error?: string })?.error || "Failed to delete" });
+                toast(toastError(json, "Failed to delete"));
             }
         } catch (error) {
             console.error(error);
@@ -242,7 +291,7 @@ export default function InboundContextPage() {
                                     <Plus className="h-4 w-4 mr-1" /> Create
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-xl border-none shadow-2xl rounded-xl bg-background">
+                            <DialogContent className="w-[calc(100vw-1.5rem)] sm:w-full max-w-xl border-none shadow-2xl rounded-xl bg-background max-h-[90vh] overflow-y-auto">
                                 <DialogHeader className="p-6 border-b border-border bg-card/10">
                                     <DialogTitle className="text-xl flex items-center gap-2">
                                         <Webhook className="h-5 w-5 text-primary" /> New Strategy
@@ -268,19 +317,34 @@ export default function InboundContextPage() {
                                             onChange={(e) => setModalForm({ ...modalForm, url: e.target.value })}
                                             className="bg-muted/30 font-mono text-sm"
                                         />
+                                        {isInsecureUrl(modalForm.url) && (
+                                            <p className="status-text-warning text-[10px] flex items-center gap-1">
+                                                <AlertTriangle className="h-3 w-3" />
+                                                Plain http sends the caller's number and your headers in cleartext.
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div className="space-y-2">
                                         <Label className="text-sm font-medium flex items-center gap-2">
-                                            <Code className="h-4 w-4" /> Custom Headers (JSON) <span className="text-[10px] text-muted-foreground font-normal">(Optional)</span>
+                                            <Timer className="h-4 w-4 text-muted-foreground" /> Timeout (seconds)
                                         </Label>
-                                        <Textarea
-                                            placeholder='{"Authorization": "Bearer token"}'
-                                            value={modalForm.headersStr}
-                                            onChange={(e) => setModalForm({ ...modalForm, headersStr: e.target.value })}
-                                            className="bg-muted/30 font-mono text-xs h-32 resize-none"
+                                        <Input
+                                            type="number"
+                                            min={0.5}
+                                            max={10}
+                                            step={0.1}
+                                            value={modalForm.timeoutSeconds}
+                                            onChange={(e) => setModalForm({ ...modalForm, timeoutSeconds: e.target.value })}
+                                            className="bg-muted/30 max-w-[140px]"
                                         />
+                                        <p className="text-[10px] text-muted-foreground">
+                                            Blocks the start of the call — the caller hears silence for this long if your
+                                            endpoint is slow. 0.5 to 10 seconds, default 2.
+                                        </p>
                                     </div>
+
+                                    <HeaderEditor rows={modalHeaderRows} onChange={setModalHeaderRows} />
                                 </div>
 
                                 <div className="p-6 border-t border-border flex justify-end gap-3 bg-muted/10">
@@ -295,8 +359,8 @@ export default function InboundContextPage() {
 
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                            placeholder="Search strategies..." 
+                        <Input
+                            placeholder="Search strategies..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="pl-9 bg-muted/50 border-border/50 focus:border-primary"
@@ -367,7 +431,7 @@ export default function InboundContextPage() {
                     <EmptyState
                         icon={Webhook}
                         title="Inbound Context Strategies"
-                        description="Select a strategy to manage webhook configurations for fetching caller data before an assistant connects."
+                        description="Select a strategy to manage webhook configurations for fetching caller data before an assistant connects. Attach one to a number on the Inbound page."
                         descriptionClassName="max-w-sm"
                     />
                 ) : (
@@ -393,20 +457,42 @@ export default function InboundContextPage() {
                                         <p className="text-xs font-mono text-muted-foreground/60 flex items-center gap-2">
                                             ID: {selectedStrategy.strategy_id} <ExternalLink className="h-3 w-3" />
                                         </p>
+                                        {formatTimestamp(selectedStrategy.updated_at) && (
+                                            <p className="text-[10px] text-muted-foreground/60 mt-1">
+                                                Updated {formatTimestamp(selectedStrategy.updated_at)}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             </div>
                             <div className="flex flex-col md:items-end gap-3 w-full md:w-auto">
-                                <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    onClick={handleDelete}
-                                    disabled={isDeleting}
-                                    className="h-8 px-3 shadow-lg shadow-destructive/20"
-                                >
-                                    {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
-                                    Delete Strategy
-                                </Button>
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            disabled={isDeleting}
+                                            className="h-8 px-3 shadow-lg shadow-destructive/20"
+                                        >
+                                            {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                                            Delete Strategy
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Delete "{selectedStrategy.name}"?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                Every inbound number using this strategy is detached from it and keeps
+                                                routing calls — just without caller-context lookup. Prompts render
+                                                {" "}<span className="font-mono">{"{{context.*}}"}</span> as empty.
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                            <AlertDialogAction onClick={handleDelete}>Delete strategy</AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
                                 <div className="status-chip status-chip-info">
                                     {selectedStrategy.type}
                                 </div>
@@ -420,8 +506,8 @@ export default function InboundContextPage() {
                                         <h3 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
                                             <Shield className="h-3 w-3" /> Webhook Configuration
                                         </h3>
-                                        <Button 
-                                            onClick={handleUpdate} 
+                                        <Button
+                                            onClick={handleUpdate}
                                             disabled={isUpdating}
                                             className="h-9 shadow-lg shadow-primary/20"
                                         >
@@ -449,24 +535,36 @@ export default function InboundContextPage() {
                                                 className="bg-background font-mono text-sm"
                                             />
                                             <p className="text-[10px] text-muted-foreground">The worker will send a POST request with call details to this URL.</p>
+                                            {isInsecureUrl(updateForm.url) && (
+                                                <p className="status-text-warning text-[10px] flex items-center gap-1">
+                                                    <AlertTriangle className="h-3 w-3" />
+                                                    Plain http sends the caller's number and your headers in cleartext.
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label className="text-sm font-medium flex items-center gap-2">
+                                                <Timer className="h-4 w-4 text-muted-foreground" /> Timeout (seconds)
+                                            </Label>
+                                            <Input
+                                                type="number"
+                                                min={0.5}
+                                                max={10}
+                                                step={0.1}
+                                                value={updateForm.timeoutSeconds}
+                                                onChange={(e) => setUpdateForm({ ...updateForm, timeoutSeconds: e.target.value })}
+                                                className="bg-background max-w-[140px]"
+                                            />
+                                            <p className="text-[10px] text-muted-foreground">
+                                                Blocks the start of the call — the caller hears silence for this long if your
+                                                endpoint is slow. 0.5 to 10 seconds, default 2.
+                                            </p>
                                         </div>
 
                                         <div className="h-px w-full bg-border/50" />
 
-                                        <div className="space-y-2">
-                                            <Label className="text-sm font-medium flex items-center gap-2">
-                                                <Code className="h-4 w-4 text-muted-foreground" /> Custom Headers (JSON)
-                                            </Label>
-                                            <Textarea
-                                                value={updateForm.headersStr}
-                                                onChange={(e) => setUpdateForm({ ...updateForm, headersStr: e.target.value })}
-                                                className="bg-background font-mono text-sm h-48 resize-none"
-                                            />
-                                            <p className="status-alert-warning text-[10px] p-2 rounded inline-block mt-2">
-                                                Note: For security, existing sensitive keys (like Authorization) are masked as **** when fetched from the server.
-                                                If you need to change them, re-enter the full JSON object.
-                                            </p>
-                                        </div>
+                                        <HeaderEditor rows={updateHeaderRows} onChange={setUpdateHeaderRows} />
                                     </div>
                                 </section>
                             </div>

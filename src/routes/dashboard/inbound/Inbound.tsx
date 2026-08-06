@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { PhoneIncoming, Plus, Loader2, Trash2, ExternalLink, Bot, Shield, Link2, Unlink, Search, Check, ChevronsUpDown, ArrowLeft } from "lucide-react";
+import { Link } from "react-router-dom";
+import { PhoneIncoming, Plus, Loader2, Trash2, ExternalLink, Bot, Shield, Link2, Unlink, Search, Check, ChevronsUpDown, ArrowLeft, Webhook } from "lucide-react";
 import { EmptyState } from "@/components/common/EmptyState";
 import { MasterDetailShell } from "@/components/common/MasterDetailShell";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,9 @@ import {
 } from "@/services/inbound/inboundService";
 import { callListAssistantsEndpoint, condenseListAssistantsResponse } from "@/services/assistant/assistantService";
 import { callListTrunksEndpoint, condenseListTrunksResponse } from "@/services/sip/sipService";
+import { callListStrategiesEndpoint, condenseListStrategiesResponse } from "@/services/inboundContext/inboundContextService";
 import { InboundItem, InboundAssistantOption } from "@/types/inbound";
+import { InboundStrategyOption } from "@/types/inboundContext";
 import { ExotelNumber } from "@/types/sip";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -27,6 +30,17 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
     Command,
     CommandEmpty,
@@ -41,6 +55,10 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/toastError";
+
+/** Sentinel for "nothing attached" in the comboboxes; sent to the API as null. */
+const NONE = "none";
 
 export default function InboundPage() {
     const user = getStoredUser();
@@ -49,6 +67,7 @@ export default function InboundPage() {
     // Data States
     const [inbounds, setInbounds] = useState<InboundItem[]>([]);
     const [assistants, setAssistants] = useState<InboundAssistantOption[]>([]);
+    const [strategies, setStrategies] = useState<InboundStrategyOption[]>([]);
     const [exotelNumbers, setExotelNumbers] = useState<ExotelNumber[]>([]);
 
     // UI States
@@ -61,7 +80,9 @@ export default function InboundPage() {
     // Dropdown open states
     const [openPhoneDropdown, setOpenPhoneDropdown] = useState(false);
     const [openModalAssistantDropdown, setOpenModalAssistantDropdown] = useState(false);
+    const [openModalStrategyDropdown, setOpenModalStrategyDropdown] = useState(false);
     const [openMainAssistantDropdown, setOpenMainAssistantDropdown] = useState(false);
+    const [openMainStrategyDropdown, setOpenMainStrategyDropdown] = useState(false);
 
     // Form States
     const [isCreating, setIsCreating] = useState(false);
@@ -71,10 +92,12 @@ export default function InboundPage() {
 
     const [modalForm, setModalForm] = useState({
         phone_number: "",
-        assistant_id: "none"
+        assistant_id: NONE,
+        strategy_id: NONE
     });
 
-    const [updateAssistantId, setUpdateAssistantId] = useState<string>("none");
+    const [updateAssistantId, setUpdateAssistantId] = useState<string>(NONE);
+    const [updateStrategyId, setUpdateStrategyId] = useState<string>(NONE);
 
     const fetchData = useCallback(async () => {
         if (!user?.user_id) return;
@@ -102,10 +125,23 @@ export default function InboundPage() {
                     }));
                 setExotelNumbers(exotel);
             }
+
+            // Fetch Context Strategies (optional attachment for each number)
+            const strategyJson = await callListStrategiesEndpoint(user.user_id);
+            setStrategies(condenseListStrategiesResponse(strategyJson).map((st) => ({
+                strategy_id: st.strategy_id,
+                name: st.name
+            })));
         } catch (error) {
             console.error("Failed to fetch prerequisite data:", error);
+            // Without this the dropdowns just look empty, which reads as "you have none".
+            toast({
+                variant: "destructive",
+                title: "Could not load assistants, numbers or strategies",
+                description: "The dropdowns may be incomplete. Refresh to try again.",
+            });
         }
-    }, [user?.user_id]);
+    }, [user?.user_id, toast]);
 
     // FIX: Removed selectedInbound dependencies and added showLoading flag to prevent infinite loops
     const fetchList = async (showLoading = true) => {
@@ -134,7 +170,8 @@ export default function InboundPage() {
 
     const handleSelectInbound = (inbound: InboundItem) => {
         setSelectedInbound(inbound);
-        setUpdateAssistantId(inbound.assistant_id || "none");
+        setUpdateAssistantId(inbound.assistant_id || NONE);
+        setUpdateStrategyId(inbound.inbound_context_strategy_id || NONE);
         setMobileDetailOpen(true);
     };
 
@@ -143,9 +180,12 @@ export default function InboundPage() {
         const lowerQ = numberSearchQuery.toLowerCase();
         return inbounds.filter(i =>
             i.phone_number.toLowerCase().includes(lowerQ) ||
-            (i.assistant_name && i.assistant_name.toLowerCase().includes(lowerQ))
+            (i.assistant_name && i.assistant_name.toLowerCase().includes(lowerQ)) ||
+            (i.inbound_context_strategy_name && i.inbound_context_strategy_name.toLowerCase().includes(lowerQ))
         );
     }, [inbounds, numberSearchQuery]);
+
+    const strategyNameFor = (id: string) => strategies.find(s => s.strategy_id === id)?.name;
 
     const handleAssignInbound = async () => {
         if (!user?.user_id) return;
@@ -153,7 +193,7 @@ export default function InboundPage() {
             toast({ variant: "destructive", title: "Validation Error", description: "Phone number is required" });
             return;
         }
-        if (!modalForm.assistant_id || modalForm.assistant_id === "none") {
+        if (!modalForm.assistant_id || modalForm.assistant_id === NONE) {
             toast({ variant: "destructive", title: "Validation Error", description: "Please select an assistant to attach" });
             return;
         }
@@ -166,7 +206,9 @@ export default function InboundPage() {
                 service: "exotel",
                 inbound_config: {
                     phone_number: modalForm.phone_number
-                }
+                },
+                // Optional: omitted entirely means the number routes with no caller-context lookup.
+                ...(modalForm.strategy_id !== NONE && { inbound_context_strategy_id: modalForm.strategy_id })
             };
 
             const { ok, json } = await callAssignInboundEndpoint(payload);
@@ -174,10 +216,10 @@ export default function InboundPage() {
             if (ok) {
                 toast({ title: "Success", description: "Inbound number assigned successfully" });
                 setIsModalOpen(false);
-                setModalForm({ phone_number: "", assistant_id: "none" });
+                setModalForm({ phone_number: "", assistant_id: NONE, strategy_id: NONE });
                 await fetchList(false); // Fetch silently in background
             } else {
-                toast({ variant: "destructive", title: "Error", description: (json as { error?: string })?.error || "Failed to assign number" });
+                toast(toastError(json, "Failed to assign number"));
             }
         } catch (error) {
             console.error(error);
@@ -187,32 +229,41 @@ export default function InboundPage() {
         }
     };
 
+    const assistantChanged = updateAssistantId !== (selectedInbound?.assistant_id || NONE);
+    const strategyChanged = updateStrategyId !== (selectedInbound?.inbound_context_strategy_id || NONE);
+
     const handleUpdateMapping = async () => {
         if (!selectedInbound || !user?.user_id) return;
+        if (!assistantChanged && !strategyChanged) return;
+
         setIsUpdating(true);
 
         try {
+            // Send only what changed; the API rejects an update with no fields.
             const payload = {
                 user_id: user.user_id,
-                assistant_id: updateAssistantId === "none" ? null : updateAssistantId
+                ...(assistantChanged && { assistant_id: updateAssistantId === NONE ? null : updateAssistantId }),
+                ...(strategyChanged && { inbound_context_strategy_id: updateStrategyId === NONE ? null : updateStrategyId }),
             };
 
             const { ok, json } = await callUpdateInboundMappingEndpoint(selectedInbound.inbound_id, payload);
 
             if (ok) {
                 toast({ title: "Success", description: "Mapping updated successfully" });
-                
+
                 // Optimistic UI Update instantly reflects changes
                 const attachedAssistant = assistants.find(a => a.assistant_id === updateAssistantId);
                 setSelectedInbound(prev => prev ? {
                     ...prev,
-                    assistant_id: updateAssistantId === "none" ? null : updateAssistantId,
-                    assistant_name: attachedAssistant ? attachedAssistant.name : null
+                    assistant_id: updateAssistantId === NONE ? null : updateAssistantId,
+                    assistant_name: attachedAssistant ? attachedAssistant.name : null,
+                    inbound_context_strategy_id: updateStrategyId === NONE ? null : updateStrategyId,
+                    inbound_context_strategy_name: updateStrategyId === NONE ? null : strategyNameFor(updateStrategyId) || null
                 } : null);
 
                 await fetchList(false); // Fetch silently in background
             } else {
-                toast({ variant: "destructive", title: "Error", description: (json as { error?: string })?.error || "Failed to update mapping" });
+                toast(toastError(json, "Failed to update mapping"));
             }
         } catch (error) {
             console.error(error);
@@ -231,19 +282,22 @@ export default function InboundPage() {
                 inboundId: selectedInbound.inbound_id,
             });
             if (ok) {
-                toast({ title: "Success", description: "Assistant detached successfully" });
-                
-                // Optimistic Update
+                toast({ title: "Success", description: "Assistant and strategy detached" });
+
+                // Optimistic Update — detach clears both attachments server-side.
                 setSelectedInbound(prev => prev ? {
                     ...prev,
                     assistant_id: null,
-                    assistant_name: null
+                    assistant_name: null,
+                    inbound_context_strategy_id: null,
+                    inbound_context_strategy_name: null
                 } : null);
-                setUpdateAssistantId("none");
+                setUpdateAssistantId(NONE);
+                setUpdateStrategyId(NONE);
 
                 await fetchList(false); // Fetch silently in background
             } else {
-                toast({ variant: "destructive", title: "Error", description: (json as { error?: string })?.error || "Failed to detach" });
+                toast(toastError(json, "Failed to detach"));
             }
         } catch (error) {
             console.error(error);
@@ -255,7 +309,6 @@ export default function InboundPage() {
 
     const handleDeleteInbound = async () => {
         if (!selectedInbound || !user?.user_id) return;
-        if (!window.confirm("Are you sure you want to delete this inbound mapping entirely? This releases the number.")) return;
 
         setIsDeleting(true);
         try {
@@ -270,7 +323,7 @@ export default function InboundPage() {
                 setMobileDetailOpen(false);
                 await fetchList(false);
             } else {
-                toast({ variant: "destructive", title: "Error", description: (json as { error?: string })?.error || "Failed to delete" });
+                toast(toastError(json, "Failed to delete"));
             }
         } catch (error) {
             console.error(error);
@@ -279,6 +332,18 @@ export default function InboundPage() {
             setIsDeleting(false);
         }
     };
+
+    const strategyEmptyState = (
+        <CommandEmpty>
+            <span className="text-xs text-muted-foreground">
+                No strategies yet.{" "}
+                <Link to="/dashboard/inbound-context" className="text-primary underline underline-offset-2">
+                    Create one
+                </Link>{" "}
+                to fetch caller data before the assistant speaks.
+            </span>
+        </CommandEmpty>
+    );
 
     return (
         <MasterDetailShell
@@ -365,7 +430,7 @@ export default function InboundPage() {
                                                     aria-expanded={openModalAssistantDropdown}
                                                     className="w-full justify-between bg-muted/30 h-11"
                                                 >
-                                                    {modalForm.assistant_id === "none"
+                                                    {modalForm.assistant_id === NONE
                                                         ? <span className="text-muted-foreground">Select an assistant...</span>
                                                         : assistants.find((a) => a.assistant_id === modalForm.assistant_id)?.name || "Search assistants..."}
                                                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -396,6 +461,66 @@ export default function InboundPage() {
                                                 </Command>
                                             </PopoverContent>
                                         </Popover>
+                                    </div>
+
+                                    {/* Searchable Context Strategy Dropdown (optional) */}
+                                    <div className="space-y-2">
+                                        <Label className="text-sm font-medium">
+                                            Context Strategy <span className="text-[10px] text-muted-foreground font-normal">(Optional)</span>
+                                        </Label>
+                                        <Popover open={openModalStrategyDropdown} onOpenChange={setOpenModalStrategyDropdown}>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    role="combobox"
+                                                    aria-expanded={openModalStrategyDropdown}
+                                                    className="w-full justify-between bg-muted/30 h-11"
+                                                >
+                                                    {modalForm.strategy_id === NONE
+                                                        ? <span className="text-muted-foreground">No context lookup</span>
+                                                        : strategyNameFor(modalForm.strategy_id) || "Search strategies..."}
+                                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-[min(380px,calc(100vw-2rem))] p-0" align="start">
+                                                <Command>
+                                                    <CommandInput placeholder="Search strategies by name or ID..." />
+                                                    <CommandList>
+                                                        {strategyEmptyState}
+                                                        <CommandGroup>
+                                                            <CommandItem
+                                                                value={NONE}
+                                                                onSelect={() => {
+                                                                    setModalForm({ ...modalForm, strategy_id: NONE });
+                                                                    setOpenModalStrategyDropdown(false);
+                                                                }}
+                                                            >
+                                                                <Check className={cn("mr-2 h-4 w-4", modalForm.strategy_id === NONE ? "opacity-100" : "opacity-0")} />
+                                                                <span className="text-muted-foreground">No context lookup</span>
+                                                            </CommandItem>
+                                                            {strategies.map((st) => (
+                                                                <CommandItem
+                                                                    key={st.strategy_id}
+                                                                    value={`${st.name} ${st.strategy_id}`}
+                                                                    onSelect={() => {
+                                                                        setModalForm({ ...modalForm, strategy_id: st.strategy_id });
+                                                                        setOpenModalStrategyDropdown(false);
+                                                                    }}
+                                                                >
+                                                                    <Check className={cn("mr-2 h-4 w-4", modalForm.strategy_id === st.strategy_id ? "opacity-100" : "opacity-0")} />
+                                                                    <Webhook className="h-4 w-4 mr-2 text-muted-foreground" />
+                                                                    {st.name}
+                                                                </CommandItem>
+                                                            ))}
+                                                        </CommandGroup>
+                                                    </CommandList>
+                                                </Command>
+                                            </PopoverContent>
+                                        </Popover>
+                                        <p className="text-[10px] text-muted-foreground">
+                                            Calls a webhook before the assistant speaks, so the prompt can use caller data.
+                                            Leave it off and the number routes normally with no added delay.
+                                        </p>
                                     </div>
                                 </div>
 
@@ -469,6 +594,11 @@ export default function InboundPage() {
                                                 <span className="text-amber-500/80 italic flex items-center gap-1"><Unlink className="h-3 w-3" /> Unassigned</span>
                                             )}
                                         </p>
+                                        {item.inbound_context_strategy_name && (
+                                            <p className="text-[10px] text-muted-foreground/60 mt-0.5 truncate flex items-center gap-1">
+                                                <Webhook className="h-3 w-3" /> {item.inbound_context_strategy_name}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             ))
@@ -517,31 +647,74 @@ export default function InboundPage() {
                             </div>
                             <div className="flex flex-col md:items-end gap-3 w-full md:w-auto">
                                 <div className="flex gap-2">
-                                    {selectedInbound.assistant_id && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={handleDetachInbound}
-                                            disabled={isDetaching}
-                                            className="h-8 px-3 status-btn-warning"
-                                        >
-                                            {isDetaching ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Unlink className="h-4 w-4 mr-2" />}
-                                            Detach Assistant
-                                        </Button>
+                                    {(selectedInbound.assistant_id || selectedInbound.inbound_context_strategy_id) && (
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    disabled={isDetaching}
+                                                    className="h-8 px-3 status-btn-warning"
+                                                >
+                                                    {isDetaching ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Unlink className="h-4 w-4 mr-2" />}
+                                                    Detach
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Detach {selectedInbound.phone_number}?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        This clears both the assistant and the context strategy. The number stays
+                                                        listed and keeps its configuration, but incoming calls stop routing until
+                                                        you attach an assistant again.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={handleDetachInbound}>Detach</AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
                                     )}
-                                    <Button
-                                        variant="destructive"
-                                        size="sm"
-                                        onClick={handleDeleteInbound}
-                                        disabled={isDeleting}
-                                        className="h-8 px-3 shadow-lg shadow-destructive/20"
-                                    >
-                                        {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
-                                        Delete Route
-                                    </Button>
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button
+                                                variant="destructive"
+                                                size="sm"
+                                                disabled={isDeleting}
+                                                className="h-8 px-3 shadow-lg shadow-destructive/20"
+                                            >
+                                                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                                                Delete Route
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>Delete the route for {selectedInbound.phone_number}?</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    The mapping is removed and the number is released for reuse. Calls to it stop
+                                                    routing immediately. This cannot be undone — you would have to assign the
+                                                    number again from scratch.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                <AlertDialogAction onClick={handleDeleteInbound}>Delete route</AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
                                 </div>
-                                <div className="status-chip status-chip-info">
-                                    {selectedInbound.service}
+                                <div className="flex flex-wrap gap-2 md:justify-end">
+                                    <div className="status-chip status-chip-info">
+                                        {selectedInbound.service}
+                                    </div>
+                                    {selectedInbound.inbound_context_strategy_name ? (
+                                        <div className="status-chip status-chip-info flex items-center gap-1">
+                                            <Webhook className="h-3 w-3" /> {selectedInbound.inbound_context_strategy_name}
+                                        </div>
+                                    ) : (
+                                        <div className="status-chip text-muted-foreground">No context lookup</div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -559,74 +732,142 @@ export default function InboundPage() {
                                                 <Bot className="h-3 w-3" /> Search & Assign Assistant
                                             </Label>
 
-                                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-
-                                                {/* Main Panel Searchable Assistant Dropdown */}
-                                                <Popover open={openMainAssistantDropdown} onOpenChange={setOpenMainAssistantDropdown}>
-                                                    <PopoverTrigger asChild>
-                                                        <Button
-                                                            variant="outline"
-                                                            role="combobox"
-                                                            aria-expanded={openMainAssistantDropdown}
-                                                            className="w-full sm:max-w-[400px] justify-between h-12 bg-background border-border"
-                                                        >
-                                                            {updateAssistantId === "none"
-                                                                ? <span className="status-text-warning font-medium">Unassigned (Do not route)</span>
-                                                                : assistants.find((a) => a.assistant_id === updateAssistantId)?.name || "Search assistants..."}
-                                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                                        </Button>
-                                                    </PopoverTrigger>
-                                                    <PopoverContent className="w-[min(400px,calc(100vw-2rem))] p-0" align="start">
-                                                        <Command>
-                                                            <CommandInput placeholder="Search assistants by name or ID..." />
-                                                            <CommandList>
-                                                                <CommandEmpty>No assistants found.</CommandEmpty>
-                                                                <CommandGroup>
+                                            {/* Main Panel Searchable Assistant Dropdown */}
+                                            <Popover open={openMainAssistantDropdown} onOpenChange={setOpenMainAssistantDropdown}>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        role="combobox"
+                                                        aria-expanded={openMainAssistantDropdown}
+                                                        className="w-full sm:max-w-[400px] justify-between h-12 bg-background border-border"
+                                                    >
+                                                        {updateAssistantId === NONE
+                                                            ? <span className="status-text-warning font-medium">Unassigned (Do not route)</span>
+                                                            : assistants.find((a) => a.assistant_id === updateAssistantId)?.name || "Search assistants..."}
+                                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-[min(400px,calc(100vw-2rem))] p-0" align="start">
+                                                    <Command>
+                                                        <CommandInput placeholder="Search assistants by name or ID..." />
+                                                        <CommandList>
+                                                            <CommandEmpty>No assistants found.</CommandEmpty>
+                                                            <CommandGroup>
+                                                                <CommandItem
+                                                                    value={NONE}
+                                                                    onSelect={() => {
+                                                                        setUpdateAssistantId(NONE);
+                                                                        setOpenMainAssistantDropdown(false);
+                                                                    }}
+                                                                >
+                                                                    <Check className={cn("mr-2 h-4 w-4", updateAssistantId === NONE ? "opacity-100" : "opacity-0")} />
+                                                                    <Unlink className="h-4 w-4 mr-2 status-text-warning" />
+                                                                    <span className="status-text-warning font-medium">Unassigned</span>
+                                                                </CommandItem>
+                                                                {assistants.map((ast) => (
                                                                     <CommandItem
-                                                                        value="none"
+                                                                        key={ast.assistant_id}
+                                                                        value={`${ast.name} ${ast.assistant_id}`} // Allows searching by name OR ID
                                                                         onSelect={() => {
-                                                                            setUpdateAssistantId("none");
+                                                                            setUpdateAssistantId(ast.assistant_id);
                                                                             setOpenMainAssistantDropdown(false);
                                                                         }}
                                                                     >
-                                                                        <Check className={cn("mr-2 h-4 w-4", updateAssistantId === "none" ? "opacity-100" : "opacity-0")} />
-                                                                        <Unlink className="h-4 w-4 mr-2 status-text-warning" />
-                                                                        <span className="status-text-warning font-medium">Unassigned</span>
+                                                                        <Check className={cn("mr-2 h-4 w-4", updateAssistantId === ast.assistant_id ? "opacity-100" : "opacity-0")} />
+                                                                        <Bot className="h-4 w-4 mr-2 text-muted-foreground" />
+                                                                        {ast.name}
                                                                     </CommandItem>
-                                                                    {assistants.map((ast) => (
-                                                                        <CommandItem
-                                                                            key={ast.assistant_id}
-                                                                            value={`${ast.name} ${ast.assistant_id}`} // Allows searching by name OR ID
-                                                                            onSelect={() => {
-                                                                                setUpdateAssistantId(ast.assistant_id);
-                                                                                setOpenMainAssistantDropdown(false);
-                                                                            }}
-                                                                        >
-                                                                            <Check className={cn("mr-2 h-4 w-4", updateAssistantId === ast.assistant_id ? "opacity-100" : "opacity-0")} />
-                                                                            <Bot className="h-4 w-4 mr-2 text-muted-foreground" />
-                                                                            {ast.name}
-                                                                        </CommandItem>
-                                                                    ))}
-                                                                </CommandGroup>
-                                                            </CommandList>
-                                                        </Command>
-                                                    </PopoverContent>
-                                                </Popover>
+                                                                ))}
+                                                            </CommandGroup>
+                                                        </CommandList>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
 
-                                                <Button
-                                                    onClick={handleUpdateMapping}
-                                                    disabled={isUpdating || (updateAssistantId === (selectedInbound.assistant_id || "none"))}
-                                                    className="w-full sm:w-auto h-12 px-8 shadow-lg shadow-primary/20"
-                                                >
-                                                    {isUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : "Save Route"}
-                                                </Button>
-                                            </div>
-
-                                            {updateAssistantId === "none" && (
-                                                <div className="status-alert-warning text-sm p-4 rounded-xl mt-4 inline-flex items-center gap-2">
+                                            {updateAssistantId === NONE && (
+                                                <div className="status-alert-warning text-sm p-4 rounded-xl inline-flex items-center gap-2">
                                                     ⚠️ Incoming calls to this number will not be routed until you assign and save an AI assistant.
                                                 </div>
                                             )}
+                                        </div>
+
+                                        <div className="h-px w-full bg-border/50" />
+
+                                        <div className="space-y-4">
+                                            <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-2">
+                                                <Webhook className="h-3 w-3" /> Caller Context Strategy
+                                            </Label>
+
+                                            <Popover open={openMainStrategyDropdown} onOpenChange={setOpenMainStrategyDropdown}>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        role="combobox"
+                                                        aria-expanded={openMainStrategyDropdown}
+                                                        className="w-full sm:max-w-[400px] justify-between h-12 bg-background border-border"
+                                                    >
+                                                        {updateStrategyId === NONE
+                                                            ? <span className="text-muted-foreground">None — no context lookup</span>
+                                                            : strategyNameFor(updateStrategyId)
+                                                                || selectedInbound.inbound_context_strategy_name
+                                                                || "Search strategies..."}
+                                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-[min(400px,calc(100vw-2rem))] p-0" align="start">
+                                                    <Command>
+                                                        <CommandInput placeholder="Search strategies by name or ID..." />
+                                                        <CommandList>
+                                                            {strategyEmptyState}
+                                                            <CommandGroup>
+                                                                <CommandItem
+                                                                    value={NONE}
+                                                                    onSelect={() => {
+                                                                        setUpdateStrategyId(NONE);
+                                                                        setOpenMainStrategyDropdown(false);
+                                                                    }}
+                                                                >
+                                                                    <Check className={cn("mr-2 h-4 w-4", updateStrategyId === NONE ? "opacity-100" : "opacity-0")} />
+                                                                    <span className="text-muted-foreground">None — no context lookup</span>
+                                                                </CommandItem>
+                                                                {strategies.map((st) => (
+                                                                    <CommandItem
+                                                                        key={st.strategy_id}
+                                                                        value={`${st.name} ${st.strategy_id}`}
+                                                                        onSelect={() => {
+                                                                            setUpdateStrategyId(st.strategy_id);
+                                                                            setOpenMainStrategyDropdown(false);
+                                                                        }}
+                                                                    >
+                                                                        <Check className={cn("mr-2 h-4 w-4", updateStrategyId === st.strategy_id ? "opacity-100" : "opacity-0")} />
+                                                                        <Webhook className="h-4 w-4 mr-2 text-muted-foreground" />
+                                                                        {st.name}
+                                                                    </CommandItem>
+                                                                ))}
+                                                            </CommandGroup>
+                                                        </CommandList>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
+
+                                            <p className="text-xs text-muted-foreground max-w-xl">
+                                                The strategy attaches to this number, not to the assistant — the same assistant can
+                                                answer different numbers with different strategies. A failing lookup never drops the
+                                                call; the prompt just renders <span className="font-mono">{"{{context.*}}"}</span> empty.{" "}
+                                                <Link to="/dashboard/inbound-context" className="text-primary underline underline-offset-2">
+                                                    Manage strategies
+                                                </Link>
+                                            </p>
+                                        </div>
+
+                                        <div className="flex justify-end">
+                                            <Button
+                                                onClick={handleUpdateMapping}
+                                                disabled={isUpdating || (!assistantChanged && !strategyChanged)}
+                                                className="w-full sm:w-auto h-12 px-8 shadow-lg shadow-primary/20"
+                                            >
+                                                {isUpdating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : "Save Route"}
+                                            </Button>
                                         </div>
                                     </div>
                                 </section>

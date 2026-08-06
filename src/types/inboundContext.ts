@@ -1,6 +1,8 @@
 export interface StrategyConfig {
   url: string;
+  // Secret-looking values come back from the API masked as "****".
   headers?: Record<string, string>;
+  timeout_seconds?: number;
 }
 
 export interface StrategyItem {
@@ -10,7 +12,11 @@ export interface StrategyItem {
   name: string;
   type: string;
   strategy_config: StrategyConfig;
-  is_active: boolean;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface InboundStrategyOption {
+  strategy_id: string;
+  name: string;
 }
