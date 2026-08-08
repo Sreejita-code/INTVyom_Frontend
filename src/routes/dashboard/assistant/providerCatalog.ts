@@ -74,7 +74,19 @@ export const OPENAI_STT_LANGUAGES = [
   "tr", "vi", "zh",
 ] as const;
 
-/** Deepgram and ElevenLabs both take BCP-47; these are the ones worth listing. */
+/**
+ * ElevenLabs Scribe: ISO 639-3, and nothing else. A BCP-47 code does not degrade — Scribe closes
+ * the socket with `1008 invalid_request` on the first utterance and the agent retries that same
+ * failure until the call ends. Labelled, because "ben" on its own is not a language anyone
+ * recognises at a glance.
+ */
+export const ELEVENLABS_LANGUAGES = [
+  "eng", "hin", "ben", "tam", "tel", "mar", "guj", "kan", "mal", "pan", "ori", "urd",
+  "ara", "deu", "spa", "fra", "ind", "ita", "jpn", "kor", "nld", "por", "rus", "tha",
+  "tur", "vie", "zho",
+] as const;
+
+/** Deepgram takes BCP-47; these are the ones worth listing. ElevenLabs does NOT — see above. */
 export const BCP47_LANGUAGES = [
   "en-US", "en-GB", "en-IN", "hi-IN", "bn-IN", "ta-IN", "te-IN", "mr-IN",
   "gu-IN", "kn-IN", "ml-IN", "pa-IN", "ur-IN", "ar-SA", "de-DE", "es-ES",
@@ -83,16 +95,26 @@ export const BCP47_LANGUAGES = [
 ] as const;
 
 /**
- * `preferred_languages` and the Sarvam TTS target. Kept to the Indic set the product serves —
- * this is a hint list, not a hard constraint, and a long list makes the picker unusable.
+ * `preferred_languages` and the Sarvam TTS target. These are the 11 codes Sarvam Bulbul speaks —
+ * `en-US` is deliberately absent: it reads like a reasonable value and Sarvam rejects it, which
+ * used to fail every synthesis on an assistant that picked it.
  */
 export const LANGUAGE_CODES = [
-  "en-IN", "en-US", "hi-IN", "bn-IN", "ta-IN", "te-IN",
+  "en-IN", "hi-IN", "bn-IN", "ta-IN", "te-IN",
   "mr-IN", "gu-IN", "kn-IN", "ml-IN", "pa-IN", "od-IN",
 ] as const;
 
 const asOptions = (codes: readonly string[]): FieldOption[] =>
   codes.map((value) => ({ value, label: value }));
+
+/**
+ * Same, but with the language spelled out. Only ElevenLabs needs it: "ben" on its own is not a
+ * language anyone recognises at a glance, where "hi-IN" is. `Intl.DisplayNames` canonicalizes
+ * ISO 639-3 on the way in, so it names these codes without a lookup table of our own.
+ */
+const languageNames = new Intl.DisplayNames(["en"], { type: "language" });
+const asNamedOptions = (codes: readonly string[]): FieldOption[] =>
+  codes.map((value) => ({ value, label: `${value} — ${languageNames.of(value) ?? value}` }));
 
 // --- LLM ----------------------------------------------------------------------------------
 
@@ -254,6 +276,7 @@ export const STT_PROVIDERS: ProviderSpec[] = [
           ...asOptions(SARVAM_LANGUAGES),
         ],
         help: "Auto-detect handles a caller who switches language mid-sentence. Pinning a code locks every utterance to it.",
+        warn: "The full list below is saaras:v3's. The v2.5 models speak only the first 11 (as-IN, bn-IN, gu-IN, hi-IN, kn-IN, ml-IN, mr-IN, od-IN, pa-IN, ta-IN, te-IN, en-IN); anything else is dropped back to auto-detect on those models.",
       },
       {
         key: "mode",
@@ -268,7 +291,7 @@ export const STT_PROVIDERS: ProviderSpec[] = [
           { value: "translit", label: "translit", hint: "Romanized: \"mera phone number hai 9840950950\"." },
         ],
         help: "The shape of the transcript your webhooks and call logs receive. It does not change what the assistant understands, only how the text is written down.",
-        warn: "Read on saaras:v3 only. The older Saras models ignore it.",
+        warn: "Read on saaras:v3 only. The v2.5 models reject it outright, so it is dropped before the call rather than sent — they transcribe on their own default style.",
       },
     ],
   },
@@ -294,8 +317,8 @@ export const STT_PROVIDERS: ProviderSpec[] = [
         control: "select",
         fallback: "en",
         options: asOptions(CARTESIA_LANGUAGES),
-        help: "The one language this assistant transcribes.",
-        warn: "Cartesia cannot auto-detect. A caller who switches language is mis-transcribed for the rest of the call — use Sarvam or Deepgram multi if that is likely.",
+        help: "The one language this assistant transcribes. Unset means English.",
+        warn: "Cartesia cannot auto-detect. A caller who switches language is mis-transcribed for the rest of the call — use Sarvam or Deepgram multi if that is likely. ISO 639-1 codes only (en, hi); en-US is rejected.",
       },
     ],
   },
@@ -326,8 +349,8 @@ export const STT_PROVIDERS: ProviderSpec[] = [
           { value: "multi", label: "multi (auto-detect)", hint: "Detects the language per segment." },
           ...asOptions(BCP47_LANGUAGES),
         ],
-        help: "Pin one language, or use multi to detect per segment.",
-        warn: "Leaving this unset does NOT auto-detect — Deepgram falls back to your first preferred language, then to English. Multi is also billed at a higher per-minute rate.",
+        help: "Pin one language, or use multi to detect per segment. Leaving it unset auto-detects on nova-3 and flux-general-multi; nova-2 and flux-general-en cannot detect and stay on en-US.",
+        warn: "Multi is billed at a higher per-minute rate than a pinned language. On the flux models this is only a hint, and only flux-general-multi reads it.",
       },
       {
         key: "enable_diarization",
@@ -370,11 +393,11 @@ export const STT_PROVIDERS: ProviderSpec[] = [
         control: "select",
         fallback: "",
         options: [
-          { value: "", label: "Auto-detect", hint: "Only works when Preferred languages is also empty." },
-          ...asOptions(BCP47_LANGUAGES),
+          { value: "", label: "Auto-detect", hint: "Recommended. Detects among ~190 languages." },
+          ...asNamedOptions(ELEVENLABS_LANGUAGES),
         ],
-        help: "Pin one language, or leave on auto-detect.",
-        warn: "Auto-detect needs this AND Preferred languages empty — a non-empty preferred list pins its first entry and turns detection off, which is the opposite of what that field's name suggests.",
+        help: "Leave on auto-detect, or pin one language. Auto-detect is what this provider is for — ~190 languages, no configuration.",
+        warn: "ElevenLabs uses ISO 639-3 codes (eng, hin), unlike every other provider here. A BCP-47 code such as en-US is rejected by Scribe outright and the call transcribes nothing.",
       },
       {
         key: "no_verbatim",
@@ -415,8 +438,8 @@ export const STT_PROVIDERS: ProviderSpec[] = [
         control: "select",
         fallback: "en",
         options: asOptions(OPENAI_STT_LANGUAGES),
-        help: "The one language this assistant transcribes.",
-        warn: "Leaving this unset does NOT auto-detect — it falls back to your first preferred language, then to English. Turn on auto-detect above instead.",
+        help: "The one language this assistant transcribes. Leaving it unset turns auto-detect on.",
+        warn: "ISO 639-1 codes only (en, hi) — a BCP-47 code such as hi-IN is rejected and the call auto-detects instead.",
       },
       {
         key: "use_realtime",

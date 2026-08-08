@@ -417,7 +417,7 @@ export function AssistantForm({
 
           <FieldRow
             label="Preferred languages"
-            help="Fills in the language for transcribers that cannot detect one themselves. Deepgram and OpenAI read the first entry here; ElevenLabs reads it too, and a non-empty list turns its auto-detect off. Leave it empty to let each provider decide."
+            help="Hints the transcription prompt when the language model transcribes the call itself. It is never sent to a speech provider as a language code and never turns auto-detect off — to fix a language, set it on the transcriber above."
             control={
               <div className="grid gap-2">
                 <Popover>

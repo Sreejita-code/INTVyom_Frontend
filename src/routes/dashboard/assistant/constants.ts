@@ -36,7 +36,11 @@ export const emptyForm: AssistantDetail = {
     allow_interruptions: false,
     input_guard_window_sec: 3.0,
     max_call_duration_minutes: null,
-    preferred_languages: ["en-US", "hi-IN"],
+    // Empty, matching the backend schema default. This used to seed ["en-US", "hi-IN"], which
+    // was not a backend default at all — every untouched assistant then carried a preferred
+    // list, and the engine used to read its first entry as the STT language. That is fixed
+    // upstream too, but a default nobody chose still does not belong here.
+    preferred_languages: [],
   },
   assistant_end_call_enabled: false,
   assistant_end_call_trigger_phrase: "",
