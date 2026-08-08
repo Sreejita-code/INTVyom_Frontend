@@ -4,6 +4,8 @@ export async function callGetWebCallTokenEndpoint(args: {
   userId: string;
   assistantId: string;
   textOnly?: boolean;
+  /** Fills the `{{placeholders}}` in the assistant's prompt, exactly as on an outbound call. */
+  metadata?: Record<string, unknown>;
 }): Promise<unknown> {
   const res = await fetch(`${WEB_CALL_BASE}/get-token`, {
     method: "POST",
@@ -12,6 +14,7 @@ export async function callGetWebCallTokenEndpoint(args: {
       user_id: args.userId,
       assistant_id: args.assistantId,
       ...(args.textOnly ? { text_only: true } : {}),
+      ...(args.metadata ? { metadata: args.metadata } : {}),
     }),
   });
 

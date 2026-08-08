@@ -59,6 +59,40 @@ const formatDuration = (minutes?: number) => {
     return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
 };
 
+/**
+ * The variables a call was placed with, behind a popover so one long value cannot widen the table.
+ * Renders nothing when the record carries no metadata, which is the common case today.
+ */
+function CallMetadataCell({ metadata }: { metadata: unknown }) {
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+        return <span className="text-xs italic text-muted-foreground">—</span>;
+    }
+    const entries = Object.entries(metadata as Record<string, unknown>);
+    if (entries.length === 0) return <span className="text-xs italic text-muted-foreground">—</span>;
+
+    return (
+        <Popover>
+            <PopoverTrigger asChild>
+                <Button variant="ghost" size="sm" className="font-mono text-xs text-muted-foreground">
+                    {entries.length} {entries.length === 1 ? "key" : "keys"}
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-[min(24rem,calc(100vw-2rem))]">
+                <dl className="grid gap-1.5 text-xs">
+                    {entries.map(([key, value]) => (
+                        <dd key={key} className="flex min-w-0 flex-wrap gap-x-2 font-mono">
+                            <span className="shrink-0 text-muted-foreground">{key}</span>
+                            <span className="min-w-0 break-all">
+                                {typeof value === "string" ? value : JSON.stringify(value)}
+                            </span>
+                        </dd>
+                    ))}
+                </dl>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
 export default function PassthroughCallRecordsPage() {
     const [selectedRecording, setSelectedRecording] = useState<string | null>(null);
     const user = getStoredUser();
@@ -227,12 +261,13 @@ export default function PassthroughCallRecordsPage() {
                                 <TableHead>Status</TableHead>
                                 <TableHead>Duration</TableHead>
                                 <TableHead>Recording</TableHead>
+                                <TableHead>Variables</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {loading ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="py-16 text-center">
+                                    <TableCell colSpan={6} className="py-16 text-center">
                                         <div className="flex flex-col items-center gap-3 text-muted-foreground">
                                             <Loader2 className="h-7 w-7 animate-spin text-primary/50" />
                                             <span className="text-sm animate-pulse">Loading records…</span>
@@ -241,7 +276,7 @@ export default function PassthroughCallRecordsPage() {
                                 </TableRow>
                             ) : records.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="py-20 text-center">
+                                    <TableCell colSpan={6} className="py-20 text-center">
                                         <div className="flex flex-col items-center gap-3 text-muted-foreground opacity-40">
                                             <PhoneOff className="h-12 w-12" />
                                             <p className="text-sm">No call records found</p>
@@ -290,6 +325,11 @@ export default function PassthroughCallRecordsPage() {
                                             ) : (
                                                 <span className="text-xs text-muted-foreground italic">No recording</span>
                                             )}
+                                        </TableCell>
+                                        <TableCell>
+                                            {/* `metadata` is not part of the documented record schema, so this
+                                                renders only when the API actually returns it. */}
+                                            <CallMetadataCell metadata={(rec as { metadata?: unknown }).metadata} />
                                         </TableCell>
                                     </TableRow>
                                 ))

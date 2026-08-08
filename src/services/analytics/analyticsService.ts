@@ -4,6 +4,7 @@ import {
   DashboardMetrics,
   PhoneBreakdownItem,
   PlatformBillableItem,
+  PlatformBillableReport,
   ServiceBreakdownItem,
   TimeSeriesPoint,
 } from "@/types/analytics";
@@ -253,17 +254,30 @@ export const condenseServiceBreakdownResponse = (payload: unknown): ServiceBreak
   });
 };
 
-export const condensePlatformBillableResponse = (payload: unknown): PlatformBillableItem[] => {
+/**
+ * Billable minutes per platform number, plus how complete the answer is.
+ *
+ * The backend computes this by reading every call log for every assistant, and skips an assistant
+ * it cannot read rather than failing the request — so `skipped` has to travel with the numbers.
+ * A total that is quietly missing an assistant is worse than no total.
+ */
+export const condensePlatformBillableResponse = (payload: unknown): PlatformBillableReport => {
   const data = extractDataNode(payload);
   const rows = extractArray(data.platform_wise_minutes || data);
 
-  return rows.map((row, index) => {
-    const item = (row || {}) as Record<string, unknown>;
-    return {
-      platformNumber: parseString(item.platform_number ?? `Platform ${index + 1}`),
-      totalBillableMinutes: parseNumber(item.total_billable_minutes ?? 0),
-    };
-  });
+  return {
+    items: rows.map((row, index) => {
+      const item = (row || {}) as Record<string, unknown>;
+      return {
+        // Aliases for the same reason every other condenser here has them: a response-shape change
+        // should degrade a label, not empty the chart.
+        platformNumber: parseString(item.platform_number ?? item.platformNumber ?? `Platform ${index + 1}`),
+        totalBillableMinutes: parseNumber(item.total_billable_minutes ?? item.totalBillableMinutes ?? 0),
+      };
+    }),
+    evaluated: parseNumber(data.assistants_evaluated ?? data.assistantsEvaluated ?? 0),
+    skipped: parseNumber(data.assistants_skipped ?? data.assistantsSkipped ?? 0),
+  };
 };
 
 export async function callDashboardMetricsEndpoint(filters: AnalyticsFilters): Promise<unknown> {
@@ -334,7 +348,7 @@ export async function getCallsByService(filters: AnalyticsFilters): Promise<Serv
   return condenseServiceBreakdownResponse(payload);
 }
 
-export async function getPlatformBillableMinutes(filters: AnalyticsFilters): Promise<PlatformBillableItem[]> {
+export async function getPlatformBillableMinutes(filters: AnalyticsFilters): Promise<PlatformBillableReport> {
   const payload = await callPlatformBillableMinutesEndpoint(filters);
   return condensePlatformBillableResponse(payload);
 }

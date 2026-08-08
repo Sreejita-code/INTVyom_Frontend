@@ -87,6 +87,9 @@ INTVyom_Frontend/
 │   │       ├── DashboardLayout.tsx  # Sidebar shell + mobile nav
 │   │       ├── assistant/        # Assistant editor — split into:
 │   │       │                     #   Assistant.tsx (page), AssistantForm.tsx (editor body),
+│   │       │                     #   Llm/Stt/TtsSection.tsx + StageSection.tsx (the rail),
+│   │       │                     #   ConfigField.tsx, ProviderFields.tsx (spec renderers),
+│   │       │                     #   providerCatalog.ts (all providers), assistantConfig.ts,
 │   │       │                     #   AssistantChat.tsx (LiveKit chat modal),
 │   │       │                     #   useAssistantList.ts, useChatTranscriptions.ts, constants.ts
 │   │       ├── tools/            # Tools & utilities
@@ -180,7 +183,7 @@ itself is driven by `@livekit/components-react` inside the `assistant` and
 | Page | Route | Description |
 |---|---|---|
 | **Make a Call** | `/dashboard/make-call` | Initiate an outbound AI voice call |
-| **Assistant** | `/dashboard/assistant` | Configure AI assistant (realtime or pipeline mode) |
+| **Assistant** | `/dashboard/assistant` | Configure AI assistant (realtime, pipeline or cascade mode) |
 | **Tools** | `/dashboard/tools` | Utility tools and actions |
 | **Audio Library** | `/dashboard/audio-library` | Upload and manage audio files |
 | **Call Logs** | `/dashboard/call-logs` | Browse call history and recordings |
@@ -273,28 +276,163 @@ npm run test         # Run once
 npm run test:watch   # Watch mode
 ```
 
-## Assistant Editor Modes
+## Assistant Editor
 
-`/dashboard/assistant` supports three assistant runtime modes, stored in
-`assistant_mode` (`AssistantMode` in `src/types/assistant.ts`):
+`/dashboard/assistant` draws the audio path as a chain that **redraws when the mode changes**, then
+renders only the stages that mode actually runs. The three modes have different *shapes*, not just
+different settings, so nothing is drawn greyed-out to stand in for a stage that does not exist:
 
-- `realtime` (default for new assistants)
-  - Uses `assistant_llm_config`: `provider`, `model`, `voice`
-  - For `provider=gemini`, the API key comes from `/dashboard/integration`
-  - `filler_words` is enforced as `false` by the backend in realtime mode
-- `pipeline`
-  - Separate STT → LLM → TTS stages
-  - Uses `assistant_stt_model` / `assistant_stt_config` and
-    `assistant_tts_model` / `assistant_tts_config`
-- `cascade`
-  - Like `pipeline`, but the LLM stage is an OpenAI chat model chosen from
-    `CASCADE_LLM_MODELS` (`src/routes/dashboard/assistant/constants.ts`);
-    Gemini is not offered in this mode
+| Mode | Chain | Stages rendered |
+|---|---|---|
+| `realtime` | Caller → model (hears, thinks, speaks) → Caller | Realtime model only |
+| `pipeline` | Caller → realtime model → voice → Caller, with a transcript tap hanging off the model | Realtime model (with the tap nested inside it), then Voice |
+| `cascade` | Caller → transcriber → text model → voice → Caller | All three, numbered 1–3 |
+
+The pipeline distinction is the one worth keeping straight: its transcriber is a **parallel tap**.
+The realtime model hears the caller's audio directly; the tap only decides what the saved transcript
+says. Drawing it as a fourth box in the row would read as a cascade, so it is drawn as a branch.
+
+### Where the knobs live
+
+| File | Holds |
+|---|---|
+| `providerCatalog.ts` | Every provider, model ID, language list and field spec, plus the `help` / `warn` copy shown under each control. Adding a provider is one entry here. |
+| `assistantConfig.ts` | Pure form ⇄ API translation: `hydrateForm`, `buildAssistantPayload`, and the `applyModeChange` / `applySttProvider` / `applyTtsProvider` repairs. |
+| `ConfigField.tsx` / `ProviderFields.tsx` | Render a spec against a stored config. One level of nesting is supported, for ElevenLabs `voice_settings`. |
+| `StageSection.tsx` | One stage on the rail (or, with `nested`, a side channel hanging off the stage above), with its live summary chips and Advanced accordion. Also exports `TRIGGER_ONE_LINE`. |
+| `AudioChain.tsx` | The chain diagram. Presentational only — it reads the same values the stages do. |
+| `PromptEditor.tsx` | System prompt, opening line, and the `{{placeholders}}` they ask for. |
+| `src/lib/assistantModes.ts` | Mode copy and the per-mode accent classes. Every mode chip in the app reads from here. |
+| `src/lib/placeholders.ts` | `extractPlaceholders` / `expandDottedKeys`, shared by the editor and the call pages. |
+
+**Fields whose values are long by nature get `wide` on `FieldRow`** — label and help on top, control
+on its own full-width line instead of the 17rem column. Used by the end-call webhook (a `Textarea`,
+so a signed URL wraps and can be read end to end), the trigger phrase and the sign-off. The assistant
+description and opening line are resizable textareas for the same reason. Everything else keeps the
+two-column layout, which is right for switches, sliders and short selects.
+
+**Long values are the layout's stress case.** Voice IDs are 36-character UUIDs and model IDs are
+unbreakable tokens, so: `FieldRow`'s control column is `minmax(0,17rem)` and never a bare `17rem`;
+stage summary chips `truncate` with the full value on `title`; and `SelectItem` taglines are wrapped
+in `<span data-tagline>` so `TRIGGER_ONE_LINE` can hide them in the 40px-tall trigger while the
+dropdown keeps its two-line items. Adding a new two-line select means adding both.
+
+The catalog mirrors the backend's `src/assistant/assistant.rules.js`. When upstream adds a
+model, both lists need it.
+
+### Modes
+
+Stored in `assistant_mode` (`AssistantMode` in `src/types/assistant.ts`):
+
+- `realtime` — one model hears, thinks and speaks. `assistant_llm_config` carries `provider`
+  (`gemini` or `openai`), `model` and `voice`. The speech stages are stored but never run, and
+  `filler_words` is forced off.
+- `pipeline` — a realtime model in text-only mode, spoken by a TTS provider. OpenAI only;
+  **Gemini is rejected here**, because Google's Live models cannot produce the text-only
+  response a half-cascade needs.
+- `cascade` — three separately chosen stages, and the only mode that reads the seven LLM
+  generation knobs (`temperature`, `max_output_tokens`, `reasoning_effort`, `service_tier`,
+  `verbosity`, `tool_choice`, `parallel_tool_calls`).
+
+### Things the editor has to get right
+
+- **The two OpenAI model families are disjoint.** Pipeline and realtime take realtime model IDs
+  (`gpt-realtime-1.5`); cascade takes chat model IDs (`gpt-4.1`). Sending one where the other
+  belongs is a 400, so a mode change re-picks the model.
+- **STT providers are mode-scoped, and pipeline degrades rather than rejects.** Every provider is
+  *accepted* in pipeline; what differs is whether it actually runs. Per the upstream compatibility
+  matrix:
+
+  | Provider | `pipeline` | `cascade` |
+  |---|---|---|
+  | `sarvam` (default) | runs — parallel Saras v3 tap alongside the realtime model | runs — the session's own STT stage |
+  | `native` | runs — the conversational LLM transcribes itself | rejected (`400`): no realtime model to self-transcribe |
+  | `cartesia`, `deepgram`, `elevenlabs` | **degrades to native, logs a warning** — no parallel-tap implementation exists | runs |
+  | `openai` | **collapses to native, silently** — the realtime model already transcribes with the same vendor and the same `gpt-4o-mini-transcribe`, so nothing is lost and nothing extra is billed | runs |
+
+  **The pipeline picker therefore offers only `sarvam` and `native`** (`PIPELINE_STT_MODELS`). The
+  other four are accepted by the API and then not used, and a choice that does not take effect is
+  worse than one that was never offered. Switching *into* pipeline repairs an unrunnable transcriber
+  to `sarvam`, the same way switching into cascade already repaired `native`.
+
+  An assistant that was *already saved* with one of the four keeps it. `sttOptionsFor(mode, stored)`
+  adds the stored value back into the list whatever the mode allows, for two reasons: a Radix
+  `Select` whose value is missing from its items renders an empty trigger, which reads as data loss;
+  and a user cannot repair a combination the form refuses to show them. Those rows get an
+  explanation, and the two explanations stay separate — the three in `PIPELINE_DEGRADES_STT` get an
+  amber warning naming cascade, `openai` gets a neutral note, because advising a mode switch for the
+  `openai` case is advice to change modes for no gain.
+- **A `SelectItem` may never carry `value=""`.** Radix reserves the empty string for "nothing
+  selected" and *throws* on an item that uses it. The throw happens during render, so React unmounts
+  the editor and the page goes blank the moment that provider is picked. Several upstream fields do
+  mean the empty string — ElevenLabs `language_code` uses it for auto-detect — so `ConfigField`
+  swaps it for an `EMPTY_OPTION` sentinel on the way in and back on the way out. Nothing outside
+  that file sees the sentinel, and `clean()` still drops the empty string from the payload, which is
+  what auto-detect means upstream. `tests/routes/dashboard/assistant/providerRendering.test.tsx`
+  renders every provider in every mode at its own defaults to keep this class of bug from returning
+  — no targeted field assertion catches it.
+- **`api_key` is never sent from here.** The API returns every key masked and rejects a masked
+  value on the way back, so both `hydrateForm` and `buildAssistantPayload` strip it. Keys are
+  managed on `/dashboard/integration`, and the backend injects the real one.
+- **Auto-detect is not uniform.** Omitting the language auto-detects on Sarvam and ElevenLabs,
+  but falls back to English on Deepgram and OpenAI, and Cartesia cannot detect at all. A
+  non-empty `preferred_languages` turns ElevenLabs auto-detect *off*.
+- **Speaking rate has three different spellings** — Cartesia `speed`, Sarvam `pace`, ElevenLabs
+  `voice_settings.speed`. Mistral has none.
 
 Save validation:
 
 - `assistant_name`, `assistant_description`, and `assistant_prompt` are required.
 - If `assistant_end_call_enabled` is true, `assistant_end_call_trigger_phrase` and `assistant_end_call_agent_message` are required.
+
+## Call Variables (`metadata`)
+
+`assistant_prompt` and `assistant_start_instruction` support `{{...}}` placeholders that the platform
+fills at call time from the call's `metadata` object. The trap: **a key the call does not supply
+renders as an empty string.** No error, no fallback, no `if/else` — the call just goes out saying
+"Hello , welcome back." Wrap optional text in `{{#key}}…{{/key}}` to avoid that.
+
+The payload's shape *is* the path. Send `{"name": …}` and write `{{name}}`; send
+`{"customer": {"name": …}}` and write `{{customer.name}}`. The rows in `MetadataEditor` accept dotted
+keys and `expandDottedKeys` nests them on the way out; anything rows cannot express (arrays, deep
+objects) goes through the **raw JSON** toggle.
+
+`{{call.*}}` fields — `call.to_number`, `call.call_service`, and the inbound set — are supplied by the
+platform, are never overwritten by your keys, and are deliberately excluded from
+`extractPlaceholders`, since a user cannot fill them.
+
+Where it is sent:
+
+| Surface | Endpoint | Prefilled from |
+|---|---|---|
+| Make a Call → Agent Call | `POST /api/call/outbound` | The selected assistant's prompt, fetched on select |
+| Make a Call → Passthrough | `POST /api/passthrough-call/passthrough-outbound` | Nothing — no assistant runs, so nothing fills a prompt |
+| Assistant → Web Call / Chat | `POST /api/web-call/get-token` | The prompt currently in the editor, unsaved included |
+
+Call logs render a record's `metadata` when it is present. It is **not** part of the documented
+call-log response schema, so that display is defensive by design — if the API starts returning it,
+it appears; until then, it does not.
+
+## Call Logs and Analytics: what the API can and cannot do
+
+Two limits shape these pages. Both are upstream, not local, so do not "fix" them in the UI.
+
+**Call logs cannot be filtered by number or status.** `GET /assistant/call-logs/{id}` accepts only
+`page`, `limit`, `start_date`, `end_date`, `sort_by`, `sort_order`. `GET /call/records` does have
+`to_number` and `call_status` — but no `assistant_id`, so it cannot be scoped to one assistant. The
+search box on `/dashboard/call-logs` therefore filters **only the rows already loaded**, and says so
+in its own help text; the page size is 50 so that is worth something. If a real server-side search is
+ever needed, it has to be a separate cross-assistant view built on `/call/records`, not a filter here.
+
+**Billable minutes is slow by construction.** There is no upstream aggregate — the backend reads every
+call log for every assistant to build it (see the backend README). So on `/dashboard/analytics` it is
+dispatched **first**, its loading state says what it is doing rather than showing a bare skeleton, and
+it renders `assistants_skipped` as a warning when the backend could not read some of them. The
+assistant filter does not apply to that card: the endpoint takes no `assistant_id`.
+
+No other analytics cards were added because no upstream endpoint exposes call outcomes, answer rate or
+cost. Computing those client-side means paging every call record — the same mistake that makes the
+billable endpoint slow.
 
 ## Production Deployment (Docker)
 

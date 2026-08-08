@@ -1,9 +1,10 @@
-import { Dispatch, SetStateAction } from "react";
+import { Dispatch, ReactNode, SetStateAction } from "react";
 import { Plus, Trash2, Wrench, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -16,11 +17,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
-import { AssistantDetail } from "@/types/assistant";
+import { AssistantDetail, AssistantMode, SttProvider, TtsProvider } from "@/types/assistant";
 import { ToolSummary } from "@/types/tool";
 import { cn } from "@/lib/utils";
-import { CASCADE_LLM_MODELS, LANGUAGE_CODES, STT_MODE_DESCRIPTIONS, emptyForm } from "./constants";
+import { MODES, modeAccent } from "@/lib/assistantModes";
+import { emptyForm } from "./constants";
+import { LANGUAGE_CODES, STT_PROVIDERS, TTS_PROVIDERS, findProvider } from "./providerCatalog";
+import { applyModeChange, applySttProvider, applyTtsProvider } from "./assistantConfig";
+import { AudioChain } from "./AudioChain";
+import { FieldRow } from "./FieldRow";
+import { LlmSection } from "./LlmSection";
+import { PromptEditor } from "./PromptEditor";
+import { SttSection } from "./SttSection";
+import { TtsSection } from "./TtsSection";
 
 interface AssistantFormProps {
   mode: "create" | "edit" | "empty";
@@ -35,10 +44,28 @@ interface AssistantFormProps {
   onToggleTool: (toolId: string, attach: boolean) => void;
 }
 
+/** A titled group of settings, matching the rhythm of the provider stages above it. */
+function SettingsPanel({ title, blurb, children }: { title: string; blurb: string; children: ReactNode }) {
+  return (
+    <section className="grid gap-4 pt-2">
+      <div className="grid gap-1">
+        <h3 className="text-[1.0625rem] font-semibold tracking-tight">{title}</h3>
+        <p className="text-[0.8125rem] leading-6 text-muted-foreground">{blurb}</p>
+      </div>
+      <div className="rounded-2xl border border-border/60 bg-card/60 px-5 py-1 sm:px-6">
+        <div className="divide-y divide-border/40">{children}</div>
+      </div>
+    </section>
+  );
+}
+
 /**
- * The assistant editor body — every field of an assistant except its name, which
- * the page header owns. Purely controlled: all writes go through `setFormData`,
- * except tool attachment, which is a server call the page performs.
+ * The assistant editor body — every field of an assistant except its name, which the page
+ * header owns. Purely controlled: all writes go through `setFormData`, except tool attachment,
+ * which is a server call the page performs.
+ *
+ * The three provider stages render in the order audio moves through them, on a shared rail, so
+ * the mode's effect on the chain is visible rather than implied.
  */
 export function AssistantForm({
   mode,
@@ -53,24 +80,6 @@ export function AssistantForm({
 }: AssistantFormProps) {
   const updateField = (field: keyof AssistantDetail, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const updateTTS = (field: "voice_id" | "target_language_code", value: string) => {
-    setFormData((prev) => ({ ...prev, assistant_tts_config: { ...prev.assistant_tts_config, [field]: value } }));
-  };
-
-  const updateSTT = (field: "model" | "language" | "mode", value: string) => {
-    setFormData((prev) => ({ ...prev, assistant_stt_config: { ...prev.assistant_stt_config, [field]: value } }));
-  };
-
-  const updateLLMConfig = (field: keyof NonNullable<AssistantDetail["assistant_llm_config"]>, value: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      assistant_llm_config: {
-        ...(prev.assistant_llm_config || emptyForm.assistant_llm_config!),
-        [field]: value,
-      },
-    }));
   };
 
   const updateInteractionConfig = (field: keyof NonNullable<AssistantDetail["assistant_interaction_config"]>, value: any) => {
@@ -107,752 +116,605 @@ export function AssistantForm({
   const isRealtimeMode = formData.assistant_mode === "realtime";
   const isCascadeMode = formData.assistant_mode === "cascade";
 
+  // Short labels for the chain diagram. The stage sections build their own, richer summaries; the
+  // diagram only has room for "who is doing this job", so it stops at provider plus model.
+  const sttConfig = (formData.assistant_stt_config ?? {}) as Record<string, unknown>;
+  const llmProvider = formData.assistant_llm_config?.provider === "gemini" ? "Gemini" : "OpenAI";
+  const chainLabels = {
+    stt: [
+      findProvider(STT_PROVIDERS, formData.assistant_stt_model)?.label ?? formData.assistant_stt_model,
+      typeof sttConfig.model === "string" ? sttConfig.model : undefined,
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    llm: [llmProvider, formData.assistant_llm_config?.model?.trim()].filter(Boolean).join(" · "),
+    tts: findProvider(TTS_PROVIDERS, formData.assistant_tts_model)?.label ?? formData.assistant_tts_model,
+  };
+
   return (
-              <ScrollArea className="flex-1 overflow-y-auto">
-                <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-8 md:space-y-10 pb-20">
+    <ScrollArea className="flex-1 overflow-y-auto">
+      <div className="mx-auto max-w-4xl space-y-8 p-4 pb-20 md:space-y-10 md:p-8">
 
-                  {/* General Configuration */}
-                  <div className="grid gap-6">
-                    {mode === "create" && (
-                      <>
-                        <div className="grid gap-2">
-                          <Label>Assistant Name *</Label>
-                          <Input
-                            placeholder="e.g. Support Bot"
-                            value={formData.assistant_name}
-                            onChange={(e) => updateField("assistant_name", e.target.value)}
-                          />
-                        </div>
-                      </>
+        {/* General Configuration */}
+        <div className="grid gap-6">
+          {mode === "create" && (
+            <div className="grid gap-2">
+              <Label>Assistant Name *</Label>
+              <Input
+                placeholder="e.g. Support Bot"
+                value={formData.assistant_name}
+                onChange={(e) => updateField("assistant_name", e.target.value)}
+              />
+            </div>
+          )}
+
+          <div className="grid gap-2">
+            <Label htmlFor="assistant-description">Assistant description *</Label>
+            <p className="max-w-prose text-[0.8125rem] leading-6 text-muted-foreground">
+              What this assistant is for, in your own words. Internal only — callers never hear it.
+            </p>
+            <Textarea
+              id="assistant-description"
+              placeholder="Calls lapsed Enterprise accounts about renewal, books a callback with the account manager if the customer is interested."
+              className="min-h-[5rem] resize-y"
+              value={formData.assistant_description}
+              onChange={(e) => updateField("assistant_description", e.target.value)}
+            />
+          </div>
+
+          <section className="grid gap-4">
+            <div className="grid gap-1">
+              <h3 className="text-[1.0625rem] font-semibold tracking-tight">Mode</h3>
+              <p className="max-w-prose text-[0.8125rem] leading-6 text-muted-foreground">
+                How many models run the call, and how they are wired together. Changing this rewires
+                the chain below and clears anything the new mode cannot run.
+              </p>
+            </div>
+
+            <RadioGroup
+              value={formData.assistant_mode}
+              onValueChange={(value) => setFormData((prev) => applyModeChange(prev, value as AssistantMode))}
+              className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+            >
+              {MODES.map((option) => {
+                const selected = formData.assistant_mode === option.value;
+                return (
+                  <Label
+                    key={option.value}
+                    htmlFor={`mode-${option.value}`}
+                    className={cn(
+                      "grid cursor-pointer gap-2 rounded-xl border p-4 transition-colors",
+                      selected ? modeAccent(option.value).card : "border-border/60 bg-background/40 hover:bg-card/60",
                     )}
-
-                    <div className="grid gap-2">
-                      <Label>Assistant Description *</Label>
-                      <Input
-                        placeholder="Briefly describe the assistant purpose"
-                        value={formData.assistant_description}
-                        onChange={(e) => updateField("assistant_description", e.target.value)}
-                      />
-                    </div>
-
-                    <div className="grid gap-2 rounded-xl border border-border/60 bg-card/60 p-4">
-                      <Label className="text-base font-semibold">Mode</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Choose how speech and model processing are orchestrated.
-                      </p>
-                      <RadioGroup
-                        value={formData.assistant_mode}
-                        onValueChange={(value) => {
-                          const nextMode = value as "pipeline" | "realtime" | "cascade";
-                          if (nextMode === "pipeline" && formData.assistant_stt_model === "cartesia") {
-                            // cartesia STT is cascade-only — fall back to sarvam.
-                            setFormData(prev => ({
-                              ...prev,
-                              assistant_mode: nextMode,
-                              assistant_stt_model: "sarvam",
-                              assistant_stt_config: { model: "saaras:v3", language: "unknown" },
-                            }));
-                            return;
-                          }
-                          if (nextMode === "cascade") {
-                            setFormData(prev => ({
-                              ...prev,
-                              assistant_mode: nextMode,
-                              // native STT is rejected in cascade — fall back to sarvam.
-                              ...(prev.assistant_stt_model === "native"
-                                ? { assistant_stt_model: "sarvam", assistant_stt_config: { model: "saaras:v3", language: "unknown", mode: "codemix" } }
-                                : {}),
-                              // cascade runs an OpenAI chat model — force provider and default the model.
-                              assistant_llm_config: {
-                                ...(prev.assistant_llm_config || {}),
-                                provider: "openai",
-                                model: prev.assistant_llm_config?.model?.trim() || "gpt-4.1",
-                              },
-                            }));
-                            return;
-                          }
-                          updateField("assistant_mode", nextMode);
-                        }}
-                        className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2 lg:grid-cols-3"
+                  >
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <RadioGroupItem id={`mode-${option.value}`} value={option.value} className="shrink-0" />
+                      <span
+                        className={cn(
+                          "min-w-0 break-words text-sm font-semibold",
+                          selected && modeAccent(option.value).text,
+                        )}
                       >
-                        <Label
-                          htmlFor="mode-pipeline"
-                          className={cn(
-                            "flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors",
-                            formData.assistant_mode === "pipeline" ? "border-sky-500/40 bg-sky-500/10 text-sky-300" : "border-border/60 bg-background/40",
-                          )}
-                        >
-                          <RadioGroupItem id="mode-pipeline" value="pipeline" />
-                          <div className="space-y-0.5">
-                            <p className="text-sm font-semibold">Pipeline</p>
-                            <p className="text-xs text-muted-foreground">STT and LLM run in the core flow; TTS is handled as a separate stage.</p>
-                          </div>
-                        </Label>
-                        <Label
-                          htmlFor="mode-realtime"
-                          className={cn(
-                            "flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors",
-                            isRealtimeMode ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-border/60 bg-background/40",
-                          )}
-                        >
-                          <RadioGroupItem id="mode-realtime" value="realtime" />
-                          <div className="space-y-0.5">
-                            <p className="text-sm font-semibold">Realtime</p>
-                            <p className="text-xs text-muted-foreground">STT, LLM, and TTS run together in one realtime interaction loop.</p>
-                          </div>
-                        </Label>
-                        <Label
-                          htmlFor="mode-cascade"
-                          className={cn(
-                            "flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors",
-                            isCascadeMode ? "border-amber-500/40 bg-amber-500/10 text-amber-300" : "border-border/60 bg-background/40",
-                          )}
-                        >
-                          <RadioGroupItem id="mode-cascade" value="cascade" />
-                          <div className="space-y-0.5">
-                            <p className="text-sm font-semibold">Cascade</p>
-                            <p className="text-xs text-muted-foreground">True STT → LLM → TTS pipeline — external STT feeds a chat model that drives the TTS stage.</p>
-                          </div>
-                        </Label>
-                      </RadioGroup>
-                    </div>
-                  </div>
+                        {option.title}
+                      </span>
+                    </span>
+                    <span className="text-[0.8125rem] leading-6 text-muted-foreground">{option.what}</span>
+                    <span className="text-[0.8125rem] leading-6 text-muted-foreground">
+                      <span className="text-foreground/70">Pick it when:</span> {option.pickWhen}
+                    </span>
+                    <span className="text-[11px] uppercase tracking-wider text-muted-foreground/70">
+                      {option.vendors}
+                    </span>
+                  </Label>
+                );
+              })}
+            </RadioGroup>
 
-                  <div className="space-y-4">
-                    {mode === "edit" ? <h3 className="text-lg font-semibold border-b border-border/50 pb-2">System Prompt *</h3> : <Label className="text-base font-semibold">System Prompt *</Label>}
-                    <Textarea
-                      placeholder="You are a helpful support agent..."
-                      className="min-h-[150px] font-mono text-sm leading-relaxed"
-                      value={formData.assistant_prompt}
-                      onChange={(e) => updateField("assistant_prompt", e.target.value)}
-                    />
-                  </div>
+            <AudioChain
+              mode={formData.assistant_mode}
+              stt={chainLabels.stt}
+              llm={chainLabels.llm}
+              tts={chainLabels.tts}
+            />
+          </section>
+        </div>
 
-                  <div className="space-y-4">
-                    <div className="grid gap-2">
-                      <Label className="text-base font-semibold">Start Instruction</Label>
-                      <Input placeholder="Hello, how can I help you today?" value={formData.assistant_start_instruction} onChange={(e) => updateField("assistant_start_instruction", e.target.value)} />
-                    </div>
-                  </div>
+        <PromptEditor
+          prompt={formData.assistant_prompt}
+          startInstruction={formData.assistant_start_instruction}
+          onPromptChange={(value) => updateField("assistant_prompt", value)}
+          onStartInstructionChange={(value) => updateField("assistant_start_instruction", value)}
+        />
 
-                  {/* Language Model — identical config in both modes; key comes from Integrations */}
-                  <div className="space-y-4 pt-4">
-                    <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Language Model</h3>
-                    <div className="grid gap-4 rounded-xl border border-border/60 bg-card/60 p-4">
-                      <div className="grid gap-2">
-                        <Label>Provider</Label>
-                        <Select value={formData.assistant_llm_config?.provider || "openai"} onValueChange={(v) => updateLLMConfig("provider", v)}>
-                          <SelectTrigger><SelectValue placeholder="Select provider" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="openai">OpenAI</SelectItem>
-                            {!isCascadeMode && <SelectItem value="gemini">Gemini</SelectItem>}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                          {isCascadeMode
-                            ? "Cascade runs an OpenAI chat model; the TTS provider owns the voice."
-                            : `Using your Integrations key for ${(formData.assistant_llm_config?.provider || "openai") === "gemini" ? "Gemini" : "OpenAI"}.`}
-                        </p>
-                      </div>
+        {/*
+          The stages, composed to match the mode rather than always drawing three. Realtime has one
+          model doing all three jobs; pipeline has two stages plus a transcript tap hanging off the
+          model; only cascade is a genuine three-stage chain.
+        */}
+        <section className="grid gap-4">
+          <div className="grid gap-1">
+            <h3 className="text-[1.0625rem] font-semibold tracking-tight">Models</h3>
+            <p className="max-w-prose text-[0.8125rem] leading-6 text-muted-foreground">
+              {isRealtimeMode
+                ? "One model, in the order the call runs it."
+                : "Each stage of the chain above, in the order the call runs them."}{" "}
+              API keys come from your Integrations page.
+            </p>
+          </div>
 
-                      {isCascadeMode && (
-                        <div className="grid gap-2">
-                          <Label>Model</Label>
-                          <Select value={formData.assistant_llm_config?.model || "gpt-4.1"} onValueChange={(v) => updateLLMConfig("model", v)}>
-                            <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
-                            <SelectContent>
-                              {CASCADE_LLM_MODELS.map((m) => (
-                                <SelectItem key={m} value={m}>{m}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <p className="text-xs text-muted-foreground">
-                            OpenAI chat model for the cascade LLM stage. Default: gpt-4.1.
-                          </p>
-                        </div>
-                      )}
+          <div className="pt-2">
+            {isCascadeMode && (
+              <SttSection
+                step={1}
+                mode={formData.assistant_mode}
+                sttModel={formData.assistant_stt_model}
+                sttConfig={formData.assistant_stt_config}
+                onProviderChange={(provider: SttProvider) => setFormData((prev) => applySttProvider(prev, provider))}
+                onConfigChange={(config) => updateField("assistant_stt_config", config)}
+              />
+            )}
 
-                      {isRealtimeMode && (
-                        <div className="grid gap-2">
-                          <Label>Voice</Label>
-                          <Input
-                            value={formData.assistant_llm_config?.voice || ""}
-                            placeholder="Voice name (e.g. alloy)"
-                            onChange={(e) => updateLLMConfig("voice", e.target.value)}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
+            <LlmSection
+              step={isCascadeMode ? 2 : 1}
+              last={isRealtimeMode}
+              mode={formData.assistant_mode}
+              llmConfig={formData.assistant_llm_config}
+              onChange={(patch) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  assistant_llm_config: { ...(prev.assistant_llm_config ?? {}), ...patch },
+                }))
+              }
+            />
 
-                  {/* Speech-to-Text — pipeline & cascade; realtime transcribes inside the model */}
-                  {!isRealtimeMode && (
-                    <div className="space-y-4 pt-4">
-                      <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Speech-to-Text</h3>
-                      <div className="grid gap-4 rounded-xl border border-border/60 bg-card/60 p-4">
-                        <div className="grid gap-2">
-                          <Label>Model</Label>
-                          <Select
-                            value={formData.assistant_stt_model}
-                            onValueChange={(v) => {
-                              updateField("assistant_stt_model", v);
-                              if (v === "sarvam") {
-                                updateField("assistant_stt_config", { model: "saaras:v3", language: "unknown", mode: "codemix" });
-                              } else if (v === "cartesia") {
-                                updateField("assistant_stt_config", { model: "ink-whisper", language: "en-IN" });
-                              } else {
-                                updateField("assistant_stt_config", {});
-                              }
-                            }}
+            {/* Pipeline only: a side channel off the model above, so it is drawn hanging off it. */}
+            {formData.assistant_mode === "pipeline" && (
+              <SttSection
+                nested
+                step={1}
+                mode={formData.assistant_mode}
+                sttModel={formData.assistant_stt_model}
+                sttConfig={formData.assistant_stt_config}
+                onProviderChange={(provider: SttProvider) => setFormData((prev) => applySttProvider(prev, provider))}
+                onConfigChange={(config) => updateField("assistant_stt_config", config)}
+              />
+            )}
+
+            {!isRealtimeMode && (
+              <TtsSection
+                step={isCascadeMode ? 3 : 2}
+                ttsModel={formData.assistant_tts_model}
+                ttsConfig={formData.assistant_tts_config}
+                onProviderChange={(provider: TtsProvider) => setFormData((prev) => applyTtsProvider(prev, provider))}
+                onConfigChange={(config) => updateField("assistant_tts_config", config)}
+              />
+            )}
+          </div>
+        </section>
+
+        {/* Interaction Config */}
+        <SettingsPanel title="Interaction" blurb="How the assistant behaves during a live call.">
+          <FieldRow
+            label="Speaks first"
+            inline
+            help="The assistant opens the conversation instead of waiting for the caller to talk."
+            control={
+              <Switch
+                checked={formData.assistant_interaction_config?.speaks_first}
+                onCheckedChange={(v) => updateInteractionConfig("speaks_first", v)}
+              />
+            }
+          />
+
+          <FieldRow
+            label="Filler words"
+            inline
+            help="Small acknowledgements while the caller is still speaking, so the line does not go silent."
+            note={isRealtimeMode ? "Realtime models speak their own audio, so there is no stage that can add filler words." : undefined}
+            control={
+              <Switch
+                checked={isRealtimeMode ? false : formData.assistant_interaction_config?.filler_words}
+                onCheckedChange={(v) => updateInteractionConfig("filler_words", v)}
+                disabled={isRealtimeMode}
+              />
+            }
+          />
+
+          <FieldRow
+            label="Allow interruptions"
+            inline
+            help="Lets the caller talk over the opening greeting instead of having to wait it out."
+            control={
+              <Switch
+                checked={formData.assistant_interaction_config?.allow_interruptions ?? false}
+                onCheckedChange={(v) => updateInteractionConfig("allow_interruptions", v)}
+              />
+            }
+          />
+
+          <FieldRow
+            label="Input guard window"
+            help={'Seconds of caller audio ignored at the start of every reply, so "hello?" and "um" stop cutting the assistant off. It releases early when the reply ends. Raise it to catch more fillers; set 0 to always let the caller in.'}
+            control={
+              <Input
+                type="number"
+                step="0.5"
+                min="0"
+                max="10"
+                value={formData.assistant_interaction_config?.input_guard_window_sec ?? 3.0}
+                onChange={(e) => updateInteractionConfig("input_guard_window_sec", parseFloat(e.target.value) || 0)}
+              />
+            }
+          />
+
+          <FieldRow
+            label="Silence reprompts"
+            inline
+            help="The assistant speaks up when the caller goes quiet, rather than waiting indefinitely."
+            control={
+              <Switch
+                checked={formData.assistant_interaction_config?.silence_reprompts}
+                onCheckedChange={(v) => updateInteractionConfig("silence_reprompts", v)}
+              />
+            }
+          />
+
+          {formData.assistant_interaction_config?.silence_reprompts && (
+            <>
+              <FieldRow
+                label="Reprompt interval"
+                help="Seconds of silence before the assistant speaks again."
+                control={
+                  <Input
+                    type="number"
+                    step="0.5"
+                    min="1"
+                    max="60"
+                    value={formData.assistant_interaction_config.silence_reprompt_interval}
+                    onChange={(e) => updateInteractionConfig("silence_reprompt_interval", parseFloat(e.target.value) || 10.0)}
+                  />
+                }
+              />
+              <FieldRow
+                label="Max reprompts"
+                help="How many times it tries before ending the call."
+                control={
+                  <Input
+                    type="number"
+                    min="0"
+                    max="5"
+                    value={formData.assistant_interaction_config.silence_max_reprompts}
+                    onChange={(e) => updateInteractionConfig("silence_max_reprompts", parseInt(e.target.value, 10) || 2)}
+                  />
+                }
+              />
+            </>
+          )}
+
+          <FieldRow
+            label="Background sound"
+            inline
+            help="Plays room ambience under the call, so the line does not sound artificially dead."
+            control={
+              <Switch
+                checked={formData.assistant_interaction_config?.background_sound_enabled}
+                onCheckedChange={(v) => updateInteractionConfig("background_sound_enabled", v)}
+              />
+            }
+          />
+
+          <FieldRow
+            label="Thinking sound"
+            inline
+            help="A soft typing sound while the model works, so a slow reply does not read as a dropped call."
+            control={
+              <Switch
+                checked={formData.assistant_interaction_config?.thinking_sound_enabled}
+                onCheckedChange={(v) => updateInteractionConfig("thinking_sound_enabled", v)}
+              />
+            }
+          />
+
+          <FieldRow
+            label="Preferred languages"
+            help="Fills in the language for transcribers that cannot detect one themselves. Deepgram and OpenAI read the first entry here; ElevenLabs reads it too, and a non-empty list turns its auto-detect off. Leave it empty to let each provider decide."
+            control={
+              <div className="grid gap-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-between font-normal">
+                      {selectedLanguages.length > 0
+                        ? `${selectedLanguages.length} selected`
+                        : "Detect automatically"}
+                      <Plus className="h-4 w-4 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56 p-1" align="start">
+                    <ScrollArea className="h-56">
+                      <div className="grid gap-0.5 pr-2">
+                        {LANGUAGE_CODES.map((code) => (
+                          <label
+                            key={code}
+                            className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
                           >
-                            <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="sarvam">Sarvam{isCascadeMode ? "" : " (Parallel)"}</SelectItem>
-                              {!isCascadeMode && <SelectItem value="native">Native (LLM Transcribes)</SelectItem>}
-                              {isCascadeMode && <SelectItem value="cartesia">Cartesia</SelectItem>}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        {formData.assistant_stt_model === "sarvam" && (
-                          <>
-                            <div className="grid gap-2">
-                              <Label>Model Version</Label>
-                              <Select value={formData.assistant_stt_config.model || "saaras:v3"} onValueChange={(v) => updateSTT("model", v)}>
-                                <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="saaras:v3">saaras:v3</SelectItem>
-                                  <SelectItem value="saaras:v2.5">saaras:v2.5</SelectItem>
-                                  <SelectItem value="saarika:v2.5">saarika:v2.5</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="grid gap-2">
-                              <Label>Language</Label>
-                              <Select value={formData.assistant_stt_config.language || "unknown"} onValueChange={(v) => updateSTT("language", v)}>
-                                <SelectTrigger><SelectValue placeholder="Select language" /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="unknown">Auto-detect</SelectItem>
-                                  {LANGUAGE_CODES.map((code) => (
-                                    <SelectItem key={code} value={code}>{code}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            {isCascadeMode && (
-                              <div className="grid gap-2">
-                                <Label>Transcription Mode</Label>
-                                <Select value={formData.assistant_stt_config.mode || "codemix"} onValueChange={(v) => updateSTT("mode", v)}>
-                                  <SelectTrigger><SelectValue placeholder="Select mode" /></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="codemix">
-                                      <span className="flex flex-col">
-                                        <span>codemix <span className="font-normal text-primary">(recommended)</span></span>
-                                        <span className="text-xs text-muted-foreground">Keeps code-switched speech (Hinglish/Tanglish) natural.</span>
-                                      </span>
-                                    </SelectItem>
-                                    <SelectItem value="transcribe">
-                                      <span className="flex flex-col">
-                                        <span>transcribe</span>
-                                        <span className="text-xs text-muted-foreground">Standard transcription in the spoken language, with proper formatting and numbers.</span>
-                                      </span>
-                                    </SelectItem>
-                                    <SelectItem value="translate">
-                                      <span className="flex flex-col">
-                                        <span>translate</span>
-                                        <span className="text-xs text-muted-foreground">Transcribes the speech and translates it to English.</span>
-                                      </span>
-                                    </SelectItem>
-                                    <SelectItem value="verbatim">
-                                      <span className="flex flex-col">
-                                        <span>verbatim</span>
-                                        <span className="text-xs text-muted-foreground">Word-for-word — keeps filler words and spoken numbers as-is.</span>
-                                      </span>
-                                    </SelectItem>
-                                    <SelectItem value="translit">
-                                      <span className="flex flex-col">
-                                        <span>translit</span>
-                                        <span className="text-xs text-muted-foreground">Romanized output in Latin script (e.g. "mera phone number hai 9840950950").</span>
-                                      </span>
-                                    </SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <p className="text-xs text-muted-foreground">
-                                  {STT_MODE_DESCRIPTIONS[formData.assistant_stt_config.mode || "codemix"]} Only applies in cascade mode with saaras:v3.
-                                </p>
-                              </div>
-                            )}
-                          </>
-                        )}
-
-                        {formData.assistant_stt_model === "cartesia" && (
-                          <>
-                            <div className="grid gap-2">
-                              <Label>Model</Label>
-                              <Select value={formData.assistant_stt_config.model || "ink-whisper"} onValueChange={(v) => updateSTT("model", v)}>
-                                <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="ink-whisper">ink-whisper (multilingual)</SelectItem>
-                                  <SelectItem value="ink-2">ink-2 (English only)</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div className="grid gap-2">
-                              <Label>Language</Label>
-                              <Select value={formData.assistant_stt_config.language || "en-IN"} onValueChange={(v) => updateSTT("language", v)}>
-                                <SelectTrigger><SelectValue placeholder="Select language" /></SelectTrigger>
-                                <SelectContent>
-                                  {LANGUAGE_CODES.map((code) => (
-                                    <SelectItem key={code} value={code}>{code}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <p className="text-xs text-muted-foreground">
-                                Fixed language — no auto-detect. Use Sarvam if the caller may switch languages.
-                              </p>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Voice (Text-to-Speech) — pipeline & cascade; realtime voice lives in the model above */}
-                  {!isRealtimeMode && (
-                    <div className="space-y-4 pt-4">
-                      <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Voice (Text-to-Speech)</h3>
-                      <div className="grid gap-4 rounded-xl border border-border/60 bg-card/60 p-4">
-                        <div className="grid gap-2">
-                          <Label>Model</Label>
-                          <Select value={formData.assistant_tts_model} onValueChange={(v) => updateField("assistant_tts_model", v)}>
-                            <SelectTrigger><SelectValue placeholder="Select model" /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="cartesia">Cartesia</SelectItem>
-                              <SelectItem value="sarvam">Sarvam</SelectItem>
-                              <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
-                              <SelectItem value="mistral">Mistral</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label>Voice ID</Label>
-                          <Input
-                            placeholder="e.g. a167e0f3-df7e-4277-976b-be2f952fa275"
-                            value={formData.assistant_tts_config.voice_id}
-                            onChange={(e) => updateTTS("voice_id", e.target.value)}
-                            className="font-mono"
-                          />
-                        </div>
-
-                        {formData.assistant_tts_model === "sarvam" && (
-                          <div className="grid gap-2">
-                            <Label>Target Language Code</Label>
-                            <Select value={formData.assistant_tts_config.target_language_code || "hi-IN"} onValueChange={(v) => updateTTS("target_language_code", v)}>
-                              <SelectTrigger><SelectValue placeholder="Select language" /></SelectTrigger>
-                              <SelectContent>
-                                {LANGUAGE_CODES.map((code) => (
-                                  <SelectItem key={code} value={code}>{code}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Interaction Config */}
-                  <div className="space-y-4 pt-4">
-                    <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Interaction Settings</h3>
-                    <div className="grid gap-4">
-                      <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
-                        <div>
-                          <Label>Speaks First</Label>
-                          <p className="text-sm text-muted-foreground mt-1">If enabled, the assistant initiates the conversation immediately.</p>
-                        </div>
-                        <Switch checked={formData.assistant_interaction_config?.speaks_first} onCheckedChange={(v) => updateInteractionConfig("speaks_first", v)} />
-                      </div>
-
-                      <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
-                        <div>
-                          <Label>Filler Words</Label>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Realtime mode always forces this off in backend.
-                          </p>
-                        </div>
-                        <Switch
-                          checked={isRealtimeMode ? false : formData.assistant_interaction_config?.filler_words}
-                          onCheckedChange={(v) => updateInteractionConfig("filler_words", v)}
-                          disabled={isRealtimeMode}
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
-                        <div>
-                          <Label>Allow Interruptions</Label>
-                          <p className="text-sm text-muted-foreground mt-1">Let the caller talk over the opening greeting.</p>
-                        </div>
-                        <Switch
-                          checked={formData.assistant_interaction_config?.allow_interruptions ?? false}
-                          onCheckedChange={(v) => updateInteractionConfig("allow_interruptions", v)}
-                        />
-                      </div>
-
-                      <div className="grid gap-2 p-4 border rounded-xl bg-card">
-                        <Label>Input Guard Window (seconds)</Label>
-                        <Input
-                          type="number"
-                          step="0.5"
-                          min="0"
-                          max="10"
-                          value={formData.assistant_interaction_config?.input_guard_window_sec ?? 3.0}
-                          onChange={(e) => updateInteractionConfig("input_guard_window_sec", parseFloat(e.target.value) || 0)}
-                        />
-                        <p className="text-[10px] text-muted-foreground">
-                          Ignores caller audio for this long at the start of every reply, so &ldquo;hello?&rdquo; and
-                          &ldquo;um&rdquo; stop cutting the assistant off. Releases early when the reply ends.
-                          Raise it to catch more fillers; set 0 to always let the caller in.
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
-                        <div>
-                          <Label>Silence Reprompts</Label>
-                          <p className="text-sm text-muted-foreground mt-1">Assistant will proactively speak if the user remains silent.</p>
-                        </div>
-                        <Switch checked={formData.assistant_interaction_config?.silence_reprompts} onCheckedChange={(v) => updateInteractionConfig("silence_reprompts", v)} />
-                      </div>
-
-                      {formData.assistant_interaction_config?.silence_reprompts && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 p-4 border rounded-xl bg-card/50">
-                          <div className="grid gap-2">
-                            <Label>Reprompt Interval (seconds)</Label>
-                            <Input
-                              type="number"
-                              step="0.5"
-                              min="1"
-                              max="60"
-                              value={formData.assistant_interaction_config.silence_reprompt_interval}
-                              onChange={(e) => updateInteractionConfig("silence_reprompt_interval", parseFloat(e.target.value) || 10.0)}
+                            <Checkbox
+                              checked={selectedLanguages.includes(code)}
+                              onCheckedChange={() => toggleLanguage(code)}
                             />
-                          </div>
-                          <div className="grid gap-2">
-                            <Label>Max Reprompts</Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              max="5"
-                              value={formData.assistant_interaction_config.silence_max_reprompts}
-                              onChange={(e) => updateInteractionConfig("silence_max_reprompts", parseInt(e.target.value, 10) || 2)}
-                            />
-                          </div>
-                        </div>
-                      )}
-                      
-                      <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
-                        <div>
-                          <Label>Background Sound</Label>
-                          <p className="text-sm text-muted-foreground mt-1">Simulate realistic background noise.</p>
-                        </div>
-                        <Switch checked={formData.assistant_interaction_config?.background_sound_enabled} onCheckedChange={(v) => updateInteractionConfig("background_sound_enabled", v)} />
+                            <span className="font-mono">{code}</span>
+                          </label>
+                        ))}
                       </div>
+                    </ScrollArea>
+                  </PopoverContent>
+                </Popover>
 
-                      <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
-                        <div>
-                          <Label>Thinking Sound</Label>
-                          <p className="text-sm text-muted-foreground mt-1">Play an audible thinking sound while the LLM is generating.</p>
-                        </div>
-                        <Switch checked={formData.assistant_interaction_config?.thinking_sound_enabled} onCheckedChange={(v) => updateInteractionConfig("thinking_sound_enabled", v)} />
-                      </div>
-
-                      <div className="grid gap-2 p-4 border rounded-xl bg-card">
-                        <Label>Preferred Languages</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" className="justify-between font-normal">
-                              {selectedLanguages.length > 0
-                                ? `${selectedLanguages.length} selected`
-                                : "Detect automatically"}
-                              <Plus className="h-4 w-4 opacity-50" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-56 p-1" align="start">
-                            <ScrollArea className="h-56">
-                              <div className="grid gap-0.5 pr-2">
-                                {LANGUAGE_CODES.map((code) => (
-                                  <label
-                                    key={code}
-                                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
-                                  >
-                                    <Checkbox
-                                      checked={selectedLanguages.includes(code)}
-                                      onCheckedChange={() => toggleLanguage(code)}
-                                    />
-                                    <span className="font-mono">{code}</span>
-                                  </label>
-                                ))}
-                              </div>
-                            </ScrollArea>
-                          </PopoverContent>
-                        </Popover>
-
-                        {selectedLanguages.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 pt-1">
-                            {selectedLanguages.map((code) => (
-                              <Badge key={code} variant="secondary" className="gap-1 font-mono font-normal">
-                                {code}
-                                <button
-                                  type="button"
-                                  onClick={() => toggleLanguage(code)}
-                                  aria-label={`Remove ${code}`}
-                                  className="rounded-sm opacity-60 hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                >
-                                  <X className="h-3 w-3" />
-                                </button>
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-
-                        <p className="text-[10px] text-muted-foreground">
-                          Hints the transcriber when the caller switches languages mid-call. Leave empty
-                          to let it detect them on its own.
-                        </p>
-                      </div>
-
-                      <div className="grid gap-2 p-4 border rounded-xl bg-card">
-                        <Label>Max Call Duration (minutes)</Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          placeholder="30"
-                          value={formData.assistant_interaction_config?.max_call_duration_minutes ?? ""}
-                          onChange={(e) =>
-                            updateInteractionConfig(
-                              "max_call_duration_minutes",
-                              // Blank means "no ceiling set" — send null, not 0, which the API rejects.
-                              e.target.value === "" ? null : parseInt(e.target.value, 10) || null
-                            )
-                          }
-                        />
-                        <p className="text-[10px] text-muted-foreground">
-                          The assistant says a short goodbye and hangs up at this limit. Leave empty for
-                          the 30-minute default.
-                        </p>
-                      </div>
-
-                    </div>
+                {selectedLanguages.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedLanguages.map((code) => (
+                      <Badge key={code} variant="secondary" className="gap-1 font-mono font-normal">
+                        {code}
+                        <button
+                          type="button"
+                          onClick={() => toggleLanguage(code)}
+                          aria-label={`Remove ${code}`}
+                          className="rounded-sm opacity-60 hover:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
                   </div>
+                )}
+              </div>
+            }
+          />
 
-                  {/* Greeting Audio Section */}
-                  {mode === "edit" && (
-                    <div className="space-y-4 pt-4">
-                      <h3 className="text-lg font-semibold border-b border-border/50 pb-2">Greeting Audio</h3>
-                      <div className="grid gap-4">
-                        <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
-                          <div>
-                            <Label>Enable Greeting Audio</Label>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              Play a pre-recorded greeting instead of the AI-generated greeting.
-                            </p>
-                          </div>
-                          <Switch
-                            checked={formData.assistant_greeting_audio?.enabled ?? false}
-                            onCheckedChange={(v) => updateGreetingAudio("enabled", v)}
-                          />
-                        </div>
-                        {formData.assistant_greeting_audio?.enabled && (
-                          <div className="grid gap-2 p-4 border rounded-xl bg-card/50">
-                            <Label>Select Audio File</Label>
-                            <Select
-                              value={formData.assistant_greeting_audio?.audio_id || ""}
-                              onValueChange={(v) => updateGreetingAudio("audio_id", v)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Choose an audio file..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {audioList.length === 0 ? (
-                                  <div className="p-3 text-sm text-muted-foreground text-center">No audio files found</div>
-                                ) : (
-                                  audioList.map((a) => (
-                                    <SelectItem key={a.audio_id} value={a.audio_id}>
-                                      {a.audio_name}
-                                    </SelectItem>
-                                  ))
-                                )}
-                              </SelectContent>
-                            </Select>
-                            {(() => {
-                              const selectedAudio = audioList.find(a => a.audio_id === formData.assistant_greeting_audio?.audio_id);
-                              return selectedAudio?.s3_url ? (
-                                <audio controls className="mt-2 w-full" src={selectedAudio.s3_url} />
-                              ) : null;
-                            })()}
-                          </div>
+          <FieldRow
+            label="Max call duration"
+            help="Minutes before the assistant says a short goodbye and hangs up. Leave empty for the 30-minute default."
+            control={
+              <Input
+                type="number"
+                min="1"
+                placeholder="30"
+                value={formData.assistant_interaction_config?.max_call_duration_minutes ?? ""}
+                onChange={(e) =>
+                  updateInteractionConfig(
+                    "max_call_duration_minutes",
+                    // Blank means "no ceiling set" — send null, not 0, which the API rejects.
+                    e.target.value === "" ? null : parseInt(e.target.value, 10) || null
+                  )
+                }
+              />
+            }
+          />
+        </SettingsPanel>
+
+        {/* Greeting Audio Section */}
+        {mode === "edit" && (
+          <SettingsPanel title="Greeting" blurb="What the caller hears first.">
+            <FieldRow
+              label="Pre-recorded greeting"
+              inline
+              help="Plays an audio file instead of a model-generated opening line. Only used when the assistant speaks first."
+              control={
+                <Switch
+                  checked={formData.assistant_greeting_audio?.enabled ?? false}
+                  onCheckedChange={(v) => updateGreetingAudio("enabled", v)}
+                />
+              }
+            />
+            {formData.assistant_greeting_audio?.enabled && (
+              <FieldRow
+                label="Audio file"
+                help="Upload files in the Audio Library, then pick one here."
+                control={
+                  <div className="grid gap-2">
+                    <Select
+                      value={formData.assistant_greeting_audio?.audio_id || ""}
+                      onValueChange={(v) => updateGreetingAudio("audio_id", v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose an audio file..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {audioList.length === 0 ? (
+                          <div className="p-3 text-center text-sm text-muted-foreground">No audio files found</div>
+                        ) : (
+                          audioList.map((a) => (
+                            <SelectItem key={a.audio_id} value={a.audio_id}>
+                              {a.audio_name}
+                            </SelectItem>
+                          ))
                         )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* End Call Config */}
-                  <div className="space-y-4 pt-4">
-                    <h3 className="text-lg font-semibold border-b border-border/50 pb-2">End Call Settings</h3>
-                    <div className="grid gap-4">
-                      
-                      {/* End Call URL - ALWAYS VISIBLE */}
-                      <div className="grid gap-2 p-4 border rounded-xl bg-card">
-                        <Label>End Call Webhook URL (Optional)</Label>
-                        <p className="text-sm text-muted-foreground mb-2">URL to POST call details when the call ends.</p>
-                        <Input 
-                          placeholder="https://api.example.com/call-ended" 
-                          value={formData.assistant_end_call_url} 
-                          onChange={(e) => updateField("assistant_end_call_url", e.target.value)} 
-                          className="font-mono text-sm" 
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between p-4 border rounded-xl bg-card">
-                        <div>
-                          <Label>Enable End Call Tool</Label>
-                          <p className="text-sm text-muted-foreground mt-1">Allows the assistant to programmatically hang up the call.</p>
-                        </div>
-                        <Switch checked={formData.assistant_end_call_enabled} onCheckedChange={(v) => updateField("assistant_end_call_enabled", v)} />
-                      </div>
-
-                      {/* Trigger Phrase & Message - ONLY VISIBLE IF TOOL IS ENABLED */}
-                      {formData.assistant_end_call_enabled && (
-                        <div className="grid gap-4 p-4 border rounded-xl bg-card/50">
-                          <div className="grid gap-2">
-                            <Label>Trigger Phrase *</Label>
-                            <Input 
-                              placeholder="e.g. Thanks, you can end the call now" 
-                              value={formData.assistant_end_call_trigger_phrase} 
-                              onChange={(e) => updateField("assistant_end_call_trigger_phrase", e.target.value)} 
-                            />
-                          </div>
-                          <div className="grid gap-2">
-                            <Label>Agent Message *</Label>
-                            <Input 
-                              placeholder="Thank you for your time. Have a great day!" 
-                              value={formData.assistant_end_call_agent_message} 
-                              onChange={(e) => updateField("assistant_end_call_agent_message", e.target.value)} 
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                      </SelectContent>
+                    </Select>
+                    {(() => {
+                      const selectedAudio = audioList.find(a => a.audio_id === formData.assistant_greeting_audio?.audio_id);
+                      return selectedAudio?.s3_url ? (
+                        <audio controls className="w-full" src={selectedAudio.s3_url} />
+                      ) : null;
+                    })()}
                   </div>
+                }
+              />
+            )}
+          </SettingsPanel>
+        )}
 
-                  {/* Tools Section (Edit Mode Only) */}
-                  {mode === "edit" && (
-                    <div className="space-y-10">
-                      <div className="space-y-4 pt-4">
-                        <div>
-                          <h3 className="text-lg font-semibold border-b border-border/50 pb-2 flex items-center gap-2">
-                            <Wrench className="h-5 w-5 text-primary" />
-                            Tools & Capabilities
-                          </h3>
-                          <p className="text-sm text-muted-foreground mt-2">
-                            Attach external tools and functions to allow this assistant to perform tasks during calls.
-                          </p>
-                        </div>
+        {/* End Call Config */}
+        <SettingsPanel title="Ending the call" blurb="How the call wraps up, and where the record goes.">
+          <FieldRow
+            wide
+            label="End-call webhook"
+            help="The full call record is POSTed here when the call ends — transcript, duration, outcome. Leave empty to skip it."
+            control={
+              // A Textarea rather than an Input so a signed URL with query parameters wraps and can
+              // be read end to end. Enter is swallowed — a URL has no second line.
+              <Textarea
+                placeholder="https://api.example.com/call-ended"
+                value={formData.assistant_end_call_url}
+                onChange={(e) => updateField("assistant_end_call_url", e.target.value.replace(/\n/g, ""))}
+                onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
+                spellCheck={false}
+                className="min-h-[3.5rem] resize-y break-all font-mono text-sm"
+              />
+            }
+          />
 
-                        {/* Dropdown to ADD a tool */}
-                        {allTools.length > 0 && (
-                          <div className="flex items-center gap-3 pt-2">
-                            <Select
-                              value={selectedToolToAdd}
-                              onValueChange={async (val) => {
-                                if (val) {
-                                  setSelectedToolToAdd(""); 
-                                  await onToggleTool(val, true);
-                                }
-                              }}
-                            >
-                              <SelectTrigger className="w-full h-12">
-                                <SelectValue placeholder="Select a tool to attach..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {allTools.filter(t => !attachedToolIds.includes(t.tool_id || t._id)).length === 0 ? (
-                                  <div className="p-3 text-sm text-muted-foreground text-center">No more tools available</div>
-                                ) : (
-                                  allTools
-                                    .filter(t => !attachedToolIds.includes(t.tool_id || t._id))
-                                    .map(tool => (
-                                      <SelectItem key={tool.tool_id || tool._id} value={tool.tool_id || tool._id}>
-                                        <div className="flex items-center gap-3 py-1">
-                                          <Wrench className="h-4 w-4 text-muted-foreground" />
-                                          <span className="font-medium">{tool.tool_name}</span>
-                                          <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase bg-muted px-1.5 py-0.5 rounded ml-2">
-                                            {tool.tool_execution_type}
-                                          </span>
-                                        </div>
-                                      </SelectItem>
-                                    ))
-                                )}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
+          <FieldRow
+            label="Let the assistant hang up"
+            inline
+            help="Gives the assistant a tool to end the call itself once the conversation is done."
+            control={
+              <Switch
+                checked={formData.assistant_end_call_enabled}
+                onCheckedChange={(v) => updateField("assistant_end_call_enabled", v)}
+              />
+            }
+          />
 
-                        {/* List of ATTACHED tools */}
-                        <div className="grid gap-3 pt-2">
-                          {attachedToolIds.length === 0 ? (
-                            <div className="text-sm text-muted-foreground p-6 border border-dashed border-border/60 rounded-xl text-center flex flex-col items-center">
-                              <Wrench className="h-8 w-8 mb-3 opacity-20" />
-                              <p>No tools attached yet.</p>
-                              {allTools.length === 0 && (
-                                <p className="text-xs opacity-70 mt-1">Create tools in the Tools section to attach them here.</p>
-                              )}
-                            </div>
-                          ) : (
-                            allTools
-                              .filter(tool => attachedToolIds.includes(tool.tool_id || tool._id))
-                              .map(tool => {
-                                const toolId = tool.tool_id || tool._id;
-                                
-                                return (
-                                  <div 
-                                    key={toolId} 
-                                    className="flex items-center justify-between p-4 border rounded-xl bg-primary/5 border-primary/30 shadow-sm transition-all"
-                                  >
-                                    <div className="flex items-center gap-4">
-                                      <div className="w-10 h-10 rounded-full flex items-center justify-center bg-primary/20 text-primary">
-                                        <Wrench className="h-4 w-4" />
-                                      </div>
-                                      <div>
-                                        <p className="font-semibold text-sm">{tool.tool_name}</p>
-                                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                                          {tool.tool_description || "No description provided"}
-                                        </p>
-                                        <div className="flex items-center gap-2 mt-1.5">
-                                          <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground">
-                                            {tool.tool_execution_type}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="text-destructive hover:bg-destructive/10 hover:text-destructive shrink-0"
-                                      onClick={() => onToggleTool(toolId, false)}
-                                    >
-                                      <Trash2 className="h-4 w-4 mr-1.5" />
-                                      Remove
-                                    </Button>
-                                  </div>
-                                )
-                              })
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
+          {formData.assistant_end_call_enabled && (
+            <>
+              <FieldRow
+                wide
+                label="Trigger phrase"
+                required
+                help="What the caller says that means they are finished."
+                control={
+                  <Textarea
+                    placeholder="e.g. Thanks, you can end the call now"
+                    className="min-h-[4rem] resize-y"
+                    value={formData.assistant_end_call_trigger_phrase}
+                    onChange={(e) => updateField("assistant_end_call_trigger_phrase", e.target.value)}
+                  />
+                }
+              />
+              <FieldRow
+                wide
+                label="Sign-off"
+                required
+                help="The last thing the assistant says before hanging up."
+                control={
+                  <Textarea
+                    placeholder="Thank you for your time. Have a great day!"
+                    className="min-h-[4rem] resize-y"
+                    value={formData.assistant_end_call_agent_message}
+                    onChange={(e) => updateField("assistant_end_call_agent_message", e.target.value)}
+                  />
+                }
+              />
+            </>
+          )}
+        </SettingsPanel>
 
+        {/* Tools Section (Edit Mode Only) */}
+        {mode === "edit" && (
+          <div className="space-y-10">
+            <div className="space-y-4 pt-4">
+              <div>
+                <h3 className="flex items-center gap-2 border-b border-border/50 pb-2 text-lg font-semibold">
+                  <Wrench className="h-5 w-5 text-primary" />
+                  Tools &amp; Capabilities
+                </h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Attach external tools and functions to allow this assistant to perform tasks during calls.
+                </p>
+              </div>
+
+              {allTools.length > 0 && (
+                <div className="flex items-center gap-3 pt-2">
+                  <Select
+                    value={selectedToolToAdd}
+                    onValueChange={async (val) => {
+                      if (val) {
+                        setSelectedToolToAdd("");
+                        await onToggleTool(val, true);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-12 w-full">
+                      <SelectValue placeholder="Select a tool to attach..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allTools.filter(t => !attachedToolIds.includes(t.tool_id || t._id)).length === 0 ? (
+                        <div className="p-3 text-center text-sm text-muted-foreground">No more tools available</div>
+                      ) : (
+                        allTools
+                          .filter(t => !attachedToolIds.includes(t.tool_id || t._id))
+                          .map(tool => (
+                            <SelectItem key={tool.tool_id || tool._id} value={tool.tool_id || tool._id}>
+                              <div className="flex items-center gap-3 py-1">
+                                <Wrench className="h-4 w-4 text-muted-foreground" />
+                                <span className="font-medium">{tool.tool_name}</span>
+                                <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                  {tool.tool_execution_type}
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))
+                      )}
+                    </SelectContent>
+                  </Select>
                 </div>
-              </ScrollArea>
+              )}
+
+              <div className="grid gap-3 pt-2">
+                {attachedToolIds.length === 0 ? (
+                  <div className="flex flex-col items-center rounded-xl border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
+                    <Wrench className="mb-3 h-8 w-8 opacity-20" />
+                    <p>No tools attached yet.</p>
+                    {allTools.length === 0 && (
+                      <p className="mt-1 text-xs opacity-70">Create tools in the Tools section to attach them here.</p>
+                    )}
+                  </div>
+                ) : (
+                  allTools
+                    .filter(tool => attachedToolIds.includes(tool.tool_id || tool._id))
+                    .map(tool => {
+                      const toolId = tool.tool_id || tool._id;
+
+                      return (
+                        <div
+                          key={toolId}
+                          className="flex items-center justify-between rounded-xl border border-primary/30 bg-primary/5 p-4 shadow-sm transition-all"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/20 text-primary">
+                              <Wrench className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold">{tool.tool_name}</p>
+                              <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+                                {tool.tool_description || "No description provided"}
+                              </p>
+                              <div className="mt-1.5 flex items-center gap-2">
+                                <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                  {tool.tool_execution_type}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => onToggleTool(toolId, false)}
+                          >
+                            <Trash2 className="mr-1.5 h-4 w-4" />
+                            Remove
+                          </Button>
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </ScrollArea>
   );
 }

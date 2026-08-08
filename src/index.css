@@ -37,6 +37,11 @@
     --neon-glow: 172 66% 50%;
     --neon-purple: 270 60% 60%;
 
+    /* Assistant runtime modes. Realtime reuses the product teal — it is the default happy path. */
+    --mode-realtime: 172 66% 50%;
+    --mode-pipeline: 205 90% 60%;
+    --mode-cascade: 38 92% 55%;
+
     --sidebar-background: 222 47% 5%;
     --sidebar-foreground: 210 20% 75%;
     --sidebar-primary: 172 66% 50%;

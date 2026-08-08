@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   AnalyticsFilters,
   DashboardMetrics,
-  PlatformBillableItem,
+  PlatformBillableReport,
   ServiceBreakdownItem,
   TimeSeriesPoint,
 } from "@/types/analytics";
@@ -53,6 +53,15 @@ const EMPTY_METRICS: DashboardMetrics = {
   callsThisWeek: 0,
   callsThisMonth: 0,
 };
+
+const EMPTY_BILLABLE: PlatformBillableReport = { items: [], evaluated: 0, skipped: 0 };
+
+/** Every chart here is date-scoped, and setting two dates by hand for "last week" is a chore. */
+const DATE_PRESETS: { label: string; days: number }[] = [
+  { label: "7 days", days: 7 },
+  { label: "30 days", days: 30 },
+  { label: "90 days", days: 90 },
+];
 
 const emptyStateMessage = "No analytics data found for the selected filters.";
 const lowSignalServiceMessage = "Service split is not meaningful for this range.";
@@ -96,7 +105,7 @@ export default function AnalyticsPage() {
   >([]);
   const [timeSeriesData, setTimeSeriesData] = useState<TimeSeriesPoint[]>([]);
   const [serviceData, setServiceData] = useState<ServiceBreakdownItem[]>([]);
-  const [billableData, setBillableData] = useState<PlatformBillableItem[]>([]);
+  const [billable, setBillable] = useState<PlatformBillableReport>(EMPTY_BILLABLE);
 
   const [loading, setLoading] = useState({
     metrics: false,
@@ -136,6 +145,13 @@ export default function AnalyticsPage() {
   const phoneMaxCalls = useMemo(
     () => topPhoneData.reduce((max, item) => Math.max(max, item.callCount), 0),
     [topPhoneData]
+  );
+
+  // Capped like every other breakdown on this page — a user with 40 platform numbers got an
+  // unreadable strip of 2px bars here while the neighbouring charts showed a clean top five.
+  const topBillableData = useMemo(
+    () => [...billable.items].sort((a, b) => b.totalBillableMinutes - a.totalBillableMinutes).slice(0, TOP_N),
+    [billable.items]
   );
 
   const rankedServiceData = useMemo(
@@ -184,6 +200,18 @@ export default function AnalyticsPage() {
 
   const fetchAllAnalytics = useCallback(async () => {
     if (!baseFilters) return;
+
+    // Dispatched first, deliberately. There is no upstream aggregate behind this one — the backend
+    // reads every call log for every assistant to build it — so it is always the last to land.
+    // Starting it last as well made it queue behind five faster requests for a connection too.
+    setSectionLoading("billable", true);
+    getPlatformBillableMinutes(baseFilters)
+      .then((report) => setBillable(report))
+      .catch((error: Error) => {
+        setBillable(EMPTY_BILLABLE);
+        toast({ variant: "destructive", title: "Billable minutes failed", description: error.message });
+      })
+      .finally(() => setSectionLoading("billable", false));
 
     setSectionLoading("metrics", true);
     getDashboardMetrics(baseFilters)
@@ -239,16 +267,32 @@ export default function AnalyticsPage() {
       })
       .finally(() => setSectionLoading("service", false));
 
-    setSectionLoading("billable", true);
-    getPlatformBillableMinutes(baseFilters)
-      .then((data) => setBillableData(data))
-      .catch((error: Error) => {
-        setBillableData([]);
-        toast({ variant: "destructive", title: "Billable minutes failed", description: error.message });
-      })
-      .finally(() => setSectionLoading("billable", false));
-
   }, [baseFilters, setSectionLoading, toast]);
+
+  // Presets set both ends at once; the pickers stay for anything they do not cover.
+  const applyPreset = useCallback((days: number) => {
+    const end = new Date();
+    const start = new Date(end);
+    // UTC boundaries, matching getDefaultAnalyticsDateRange — mixing the two drifts by a day.
+    start.setUTCDate(start.getUTCDate() - days);
+    start.setUTCHours(0, 0, 0, 0);
+    setStartDate(start);
+    setEndDate(end);
+  }, []);
+
+  const applyThisMonth = useCallback(() => {
+    const end = new Date();
+    const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 1));
+    setStartDate(start);
+    setEndDate(end);
+  }, []);
+
+  /** Which preset button reads as selected — a whole-day match, so the clock time is ignored. */
+  const activePresetDays = useMemo(() => {
+    if (!startDate || !endDate) return null;
+    const days = Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000);
+    return DATE_PRESETS.some((p) => p.days === days) ? days : null;
+  }, [startDate, endDate]);
 
   const handleDownloadBillable = useCallback(() => {
     if (!user?.user_id || !startDate || !endDate) return;
@@ -287,7 +331,17 @@ export default function AnalyticsPage() {
           <p className="text-sm text-muted-foreground mt-1">Monitor call performance and trends for your account.</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 border border-border/60 rounded-xl p-4 bg-card/20">
+        {/*
+          One row of controls, then the shortcuts underneath.
+
+          The presets used to live inside the Date Range cell, which made that cell a row taller
+          than its three neighbours. Grid rows size to the tallest cell, so the two selects sat at
+          the top of the row and the Apply button at the bottom, and the bar read as two ragged
+          lines. Keeping every control on one baseline is what `items-start` and the separate
+          preset row below are for.
+        */}
+        <div className="border border-border/60 rounded-xl p-4 bg-card/20">
+        <div className="grid grid-cols-1 items-start md:grid-cols-2 xl:grid-cols-5 gap-3">
           <div className="grid gap-2 xl:col-span-2">
             <Label>Date Range</Label>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
@@ -357,7 +411,12 @@ export default function AnalyticsPage() {
             </Select>
           </div>
 
-          <div className="flex items-end">
+          <div className="grid gap-2">
+            {/* Stands in for the labels the other cells have, so the button lines up with the
+                controls beside it rather than with their labels. */}
+            <span aria-hidden="true" className="hidden text-sm font-medium leading-none opacity-0 md:block">
+              Apply
+            </span>
             <Button
               className="w-full gap-2"
               onClick={fetchAllAnalytics}
@@ -367,6 +426,26 @@ export default function AnalyticsPage() {
               Apply
             </Button>
           </div>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border/40 pt-3">
+          <span className="mr-1 text-xs text-muted-foreground">Jump to</span>
+          {DATE_PRESETS.map((preset) => (
+            <Button
+              key={preset.days}
+              type="button"
+              variant={activePresetDays === preset.days ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 px-2.5 text-xs"
+              onClick={() => applyPreset(preset.days)}
+            >
+              {preset.label}
+            </Button>
+          ))}
+          <Button type="button" variant="ghost" size="sm" className="h-7 px-2.5 text-xs" onClick={applyThisMonth}>
+            This month
+          </Button>
+        </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -518,24 +597,41 @@ export default function AnalyticsPage() {
                   <Clock className="h-4 w-4 text-primary" />
                   Billable Minutes
                 </CardTitle>
-                <CardDescription>Platform numbers and their total billable minutes</CardDescription>
+                <CardDescription>
+                  Platform numbers and their total billable minutes. Covers every assistant, so the
+                  assistant filter above does not apply to this card.
+                </CardDescription>
               </div>
               <Button variant="outline" size="sm" onClick={handleDownloadBillable} className="flex gap-2">
                 <Download className="h-4 w-4" />
                 Download Excel
               </Button>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
+              {/* A partial total presented as a complete one is the worst outcome on this page. */}
+              {!loading.billable && billable.skipped > 0 && (
+                <p className="rounded-lg border border-amber-500/20 bg-amber-500/[0.07] px-3 py-2.5 text-[0.8125rem] leading-6 text-amber-500/90">
+                  {billable.skipped} of {billable.evaluated} assistants could not be read, so these
+                  totals are lower than the real figure. Try a narrower date range.
+                </p>
+              )}
+
               {loading.billable ? (
-                <Skeleton className="h-72 w-full" />
-              ) : billableData.length === 0 ? (
+                <div className="grid gap-3">
+                  <Skeleton className="h-72 w-full" />
+                  <p className="text-[0.8125rem] leading-6 text-muted-foreground">
+                    Adding up billable minutes across every assistant — this card reads each call log
+                    in the range, so it lands after the others.
+                  </p>
+                </div>
+              ) : topBillableData.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{emptyStateMessage}</p>
               ) : (
                 <ChartContainer
                   className="h-72 w-full"
                   config={{ minutes: { label: "Billable Minutes", color: "hsl(var(--primary))" } }}
                 >
-                  <BarChart data={billableData}>
+                  <BarChart data={topBillableData}>
                     <CartesianGrid vertical={false} />
                     <XAxis
                       dataKey="platformNumber"
@@ -548,6 +644,13 @@ export default function AnalyticsPage() {
                     <Bar dataKey="totalBillableMinutes" name="minutes" fill="var(--color-minutes)" radius={[8, 8, 0, 0]} />
                   </BarChart>
                 </ChartContainer>
+              )}
+
+              {billable.items.length > TOP_N && !loading.billable && (
+                <p className="text-[0.8125rem] leading-6 text-muted-foreground">
+                  Showing the top {TOP_N} of {billable.items.length} platform numbers. Download the
+                  spreadsheet for the rest.
+                </p>
               )}
             </CardContent>
           </Card>

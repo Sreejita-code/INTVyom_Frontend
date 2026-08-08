@@ -46,3 +46,10 @@ export interface PlatformBillableItem {
   platformNumber: string;
   totalBillableMinutes: number;
 }
+
+/** Billable minutes, with how many assistants the backend could not read while computing them. */
+export interface PlatformBillableReport {
+  items: PlatformBillableItem[];
+  evaluated: number;
+  skipped: number;
+}

@@ -53,7 +53,9 @@ describe("Analytics page", () => {
     mockAnalytics.getCallsByPhoneNumber.mockResolvedValue([]);
     mockAnalytics.getCallsByTime.mockResolvedValue([]);
     mockAnalytics.getCallsByService.mockResolvedValue([]);
-    mockAnalytics.getPlatformBillableMinutes.mockResolvedValue([]);
+    // Contract change: this resolves to a report rather than a bare array, so the page can say
+    // when the backend skipped assistants and the totals it is showing are incomplete.
+    mockAnalytics.getPlatformBillableMinutes.mockResolvedValue({ items: [], evaluated: 3, skipped: 0 });
 
     vi.stubGlobal(
       "fetch",
@@ -127,6 +129,35 @@ describe("Analytics page", () => {
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalled();
     });
+  });
+
+  it("warns that billable totals are incomplete when the backend skipped assistants", async () => {
+    // The backend skips an assistant it cannot read rather than failing the whole request, so a
+    // total can be silently short. Presenting that as a complete figure is the failure mode here.
+    mockAnalytics.getPlatformBillableMinutes.mockResolvedValue({
+      items: [{ platformNumber: "+911000000001", totalBillableMinutes: 42 }],
+      evaluated: 9,
+      skipped: 2,
+    });
+
+    render(<AnalyticsPage />);
+
+    expect(await screen.findByText(/2 of 9 assistants could not be read/i)).toBeInTheDocument();
+  });
+
+  it("caps the billable chart and says how many platform numbers were left out", async () => {
+    mockAnalytics.getPlatformBillableMinutes.mockResolvedValue({
+      items: Array.from({ length: 8 }, (_, i) => ({
+        platformNumber: `+9110000000${i}`,
+        totalBillableMinutes: 100 - i,
+      })),
+      evaluated: 4,
+      skipped: 0,
+    });
+
+    render(<AnalyticsPage />);
+
+    expect(await screen.findByText(/top 5 of 8 platform numbers/i)).toBeInTheDocument();
   });
 
   it("refetches analytics when apply is clicked", async () => {

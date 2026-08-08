@@ -13,6 +13,10 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ["Inter", "system-ui", "-apple-system", "sans-serif"],
+        mono: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "monospace"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -60,6 +64,13 @@ export default {
         neon: {
           DEFAULT: "hsl(var(--neon-glow))",
           purple: "hsl(var(--neon-purple))",
+        },
+        // One accent per assistant runtime mode. Every surface that identifies a mode — the list
+        // chip, the picker card, the chain diagram, the stage rail — reads from here.
+        mode: {
+          pipeline: "hsl(var(--mode-pipeline))",
+          realtime: "hsl(var(--mode-realtime))",
+          cascade: "hsl(var(--mode-cascade))",
         },
       },
       borderRadius: {

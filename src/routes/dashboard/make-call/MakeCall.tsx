@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     PhoneCall, Loader2, Phone, Webhook, PhoneOff,
@@ -16,15 +17,29 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { getStoredUser } from "@/services/storage/storageService";
-import { callListAssistantsEndpoint, condenseListAssistantsResponse } from "@/services/assistant/assistantService";
+import {
+  callGetAssistantDetailsEndpoint,
+  callListAssistantsEndpoint,
+  condenseAssistantDetailsResponse,
+  condenseListAssistantsResponse,
+} from "@/services/assistant/assistantService";
 import { callListTrunksEndpoint, condenseListTrunksResponse } from "@/services/sip/sipService";
-import { callOutboundEndpoint } from "@/services/call/callService";
+import {
+  callOutboundEndpoint,
+  callQueueStatusEndpoint,
+  condenseOutboundQueueId,
+  condenseQueueStatus,
+} from "@/services/call/callService";
 import {
   callPassthroughOutboundEndpoint,
   condensePassthroughOutboundResponse,
 } from "@/services/passthroughCall/passthroughCallService";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { modeAccent } from "@/lib/assistantModes";
+import { extractPlaceholders } from "@/lib/placeholders";
+import { MetadataEditor } from "@/components/common/MetadataEditor";
+import { MetadataRow, metadataFrom, rowsForPlaceholders } from "@/lib/callMetadata";
 import { LiveKitRoom, RoomAudioRenderer, useLocalParticipant } from "@livekit/components-react";
 import "@livekit/components-styles";
 
@@ -119,10 +134,24 @@ export default function MakeCallPage() {
     });
     const [agentCallLoading, setAgentCallLoading] = useState(false);
 
+    // Variables sent as the call's `metadata`. The rows are seeded from the {{placeholders}} the
+    // selected assistant's prompt asks for, so the form states what this assistant expects rather
+    // than leaving the caller to remember it.
+    const [agentRows, setAgentRows] = useState<MetadataRow[]>([]);
+    const [agentRawJson, setAgentRawJson] = useState("");
+    const [agentUseRaw, setAgentUseRaw] = useState(false);
+    const [promptLoading, setPromptLoading] = useState(false);
+
+    // Dispatch progress for the last queued call. A toast disappears; this does not.
+    const [queue, setQueue] = useState<{ id: string; status: string } | null>(null);
+
     // Passthrough Call State
     const [passthroughTrunkId, setPassthroughTrunkId] = useState("");
     const [passthroughNumber, setPassthroughNumber] = useState("");
     const [passthroughCalling, setPassthroughCalling] = useState(false);
+    const [passthroughRows, setPassthroughRows] = useState<MetadataRow[]>([]);
+    const [passthroughRawJson, setPassthroughRawJson] = useState("");
+    const [passthroughUseRaw, setPassthroughUseRaw] = useState(false);
 
     // Active passthrough call state
     const [roomToken, setRoomToken] = useState<string>("");
@@ -176,10 +205,60 @@ export default function MakeCallPage() {
         return () => clearInterval(id);
     }, [isCallActive]);
 
+    // Read the selected assistant's prompt so the variables it asks for become rows to fill.
+    useEffect(() => {
+        const assistantId = agentCallData.assistant_id;
+        if (!user?.user_id || !assistantId) {
+            setAgentRows(rows => rows.filter(row => !row.fromPrompt));
+            return;
+        }
+
+        let cancelled = false;
+        setPromptLoading(true);
+        (async () => {
+            try {
+                const { ok, json } = await callGetAssistantDetailsEndpoint({ userId: user.user_id, assistantId });
+                if (cancelled || !ok) return;
+                const detail = condenseAssistantDetailsResponse(json) as Record<string, any> | null;
+                const placeholders = extractPlaceholders(detail?.assistant_prompt, detail?.assistant_start_instruction);
+                setAgentRows(rows => rowsForPlaceholders(placeholders, rows));
+            } catch {
+                // A prompt we cannot read just means no prefilled rows; the caller can still add keys.
+            } finally {
+                if (!cancelled) setPromptLoading(false);
+            }
+        })();
+
+        return () => { cancelled = true; };
+    }, [agentCallData.assistant_id, user?.user_id]);
+
+    // Poll dispatch progress until the queue item leaves the pending/dispatching states.
+    useEffect(() => {
+        if (!queue || !user?.user_id) return;
+        if (queue.status === "dispatched" || queue.status === "failed") return;
+
+        const id = setInterval(async () => {
+            try {
+                const { ok, json } = await callQueueStatusEndpoint(queue.id, user.user_id);
+                const status = ok ? condenseQueueStatus(json) : "";
+                if (status) setQueue(prev => (prev && prev.id === queue.id ? { ...prev, status } : prev));
+            } catch {
+                // Transient failures are fine — the next tick retries.
+            }
+        }, 3000);
+
+        return () => clearInterval(id);
+    }, [queue, user?.user_id]);
+
     const handleAgentCall = async () => {
         if (!user?.user_id) return;
         if (!agentCallData.customer_number || !agentCallData.assistant_id || !agentCallData.trunk_id) {
             toast({ variant: "destructive", title: "Missing Fields", description: "Please fill all fields" });
+            return;
+        }
+        const metadata = metadataFrom(agentRows, agentRawJson, agentUseRaw);
+        if (agentUseRaw && agentRawJson.trim() && !metadata) {
+            toast({ variant: "destructive", title: "Metadata is not valid JSON", description: "Fix it, or switch back to rows." });
             return;
         }
         setAgentCallLoading(true);
@@ -189,9 +268,12 @@ export default function MakeCallPage() {
                 assistant_id: agentCallData.assistant_id,
                 trunk_id: agentCallData.trunk_id,
                 to_number: agentCallData.customer_number,
+                ...(metadata ? { metadata } : {}),
             });
             if (ok) {
-                toast({ title: "Call Triggered", description: (json as { message?: string })?.message || "Outbound call triggered successfully" });
+                toast({ title: "Call queued", description: (json as { message?: string })?.message || `Calling ${agentCallData.customer_number}` });
+                const queueId = condenseOutboundQueueId(json);
+                setQueue(queueId ? { id: queueId, status: condenseQueueStatus(json) || "pending" } : null);
                 setAgentCallData(prev => ({ ...prev, customer_number: "" }));
             } else {
                 toast({ variant: "destructive", title: "Error", description: (json as { error?: string })?.error || "Failed to trigger call" });
@@ -217,12 +299,18 @@ export default function MakeCallPage() {
             return;
         }
         const dialedNumber = passthroughNumber.trim();
+        const metadata = metadataFrom(passthroughRows, passthroughRawJson, passthroughUseRaw);
+        if (passthroughUseRaw && passthroughRawJson.trim() && !metadata) {
+            toast({ variant: "destructive", title: "Metadata is not valid JSON", description: "Fix it, or switch back to rows." });
+            return;
+        }
         setPassthroughCalling(true);
         try {
             const json = await callPassthroughOutboundEndpoint({
                 user_id: user?.user_id,
                 trunk_id: passthroughTrunkId,
                 to_number: dialedNumber,
+                ...(metadata ? { metadata } : {}),
             });
             const token = condensePassthroughOutboundResponse(json).roomToken;
             toast({ title: "Call initiated", description: `Calling ${dialedNumber}…` });
@@ -281,7 +369,17 @@ export default function MakeCallPage() {
                                                 <SelectContent>
                                                     {assistants.map((a) => (
                                                         <SelectItem key={a.assistant_id || a._id} value={a.assistant_id || a._id}>
-                                                            {a.assistant_name || a.name || "Unnamed Agent"}
+                                                            <span className="flex items-center gap-2">
+                                                                <span className="truncate">{a.assistant_name || a.name || "Unnamed Agent"}</span>
+                                                                <span
+                                                                    className={cn(
+                                                                        "shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider",
+                                                                        modeAccent(a.assistant_mode).chip,
+                                                                    )}
+                                                                >
+                                                                    {a.assistant_mode || "pipeline"}
+                                                                </span>
+                                                            </span>
                                                         </SelectItem>
                                                     ))}
                                                 </SelectContent>
@@ -327,10 +425,56 @@ export default function MakeCallPage() {
                                                 disabled={agentCallLoading || !agentCallData.customer_number.trim() || !agentCallData.trunk_id || !agentCallData.assistant_id}
                                                 className="h-11 px-8 gap-2 shrink-0 shadow-lg shadow-primary/20 min-w-[140px]"
                                             >
-                                                {agentCallLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><PhoneCall className="h-4 w-4" /> Trigger Call</>}
+                                                {agentCallLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><PhoneCall className="h-4 w-4" /> Start call</>}
                                             </Button>
                                         </div>
                                     </div>
+
+                                    <div className="border-t border-border/50 pt-5">
+                                        <MetadataEditor
+                                            rows={agentRows}
+                                            onRowsChange={setAgentRows}
+                                            rawJson={agentRawJson}
+                                            onRawJsonChange={setAgentRawJson}
+                                            useRaw={agentUseRaw}
+                                            onUseRawChange={setAgentUseRaw}
+                                            blurb={
+                                                promptLoading
+                                                    ? "Reading this assistant's prompt…"
+                                                    : agentRows.some(r => r.fromPrompt)
+                                                        ? "This assistant's prompt asks for these. Anything you leave empty renders as an empty string on the call."
+                                                        : "Sent with the call as metadata. Write {{name}} in the assistant's prompt and it shows up here as a row."
+                                            }
+                                        />
+                                    </div>
+
+                                    {queue && (
+                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm">
+                                            <span className="text-muted-foreground">Dispatch</span>
+                                            <span
+                                                className={cn(
+                                                    "rounded-full border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider",
+                                                    queue.status === "failed"
+                                                        ? "border-destructive/30 bg-destructive/10 text-destructive"
+                                                        : queue.status === "dispatched"
+                                                            ? "border-primary/30 bg-primary/10 text-primary"
+                                                            : "border-border/60 bg-muted/40 text-muted-foreground",
+                                                )}
+                                            >
+                                                {queue.status}
+                                            </span>
+                                            <span className="truncate font-mono text-xs text-muted-foreground" title={queue.id}>
+                                                {queue.id}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground">
+                                                {queue.status === "dispatched"
+                                                    ? "Handed off to the provider. The outcome lands in Call Logs."
+                                                    : queue.status === "failed"
+                                                        ? "The queue gave up after retrying."
+                                                        : "Waiting for dispatcher capacity."}
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
                             </section>
                         </TabsContent>
@@ -353,6 +497,7 @@ export default function MakeCallPage() {
                                         </div>
                                     </div>
                                 ) : (
+                                  <div className="space-y-5">
                                     <div className="flex flex-col sm:flex-row gap-4 items-end">
                                         <div className="flex-1 space-y-2 min-w-0">
                                             <Label className="text-sm font-medium flex items-center gap-2">
@@ -401,11 +546,31 @@ export default function MakeCallPage() {
                                             ) : (
                                                 <>
                                                     <PhoneCall className="h-4 w-4" />
-                                                    Call Now
+                                                    Call now
                                                 </>
                                             )}
                                         </Button>
                                     </div>
+
+                                    {/* Collapsed by default: a passthrough call has no assistant, so these tag
+                                        the record rather than filling anything. Trunk and number are the job. */}
+                                    <Accordion type="single" collapsible className="border-t border-border/50">
+                                        <AccordionItem value="tags" className="border-b-0">
+                                            <AccordionTrigger>Advanced · call tags</AccordionTrigger>
+                                            <AccordionContent className="pt-1">
+                                                <MetadataEditor
+                                                    rows={passthroughRows}
+                                                    onRowsChange={setPassthroughRows}
+                                                    rawJson={passthroughRawJson}
+                                                    onRawJsonChange={setPassthroughRawJson}
+                                                    useRaw={passthroughUseRaw}
+                                                    onUseRawChange={setPassthroughUseRaw}
+                                                    blurb="Key-value tags stored on this call's record and sent to the trunk's webhook — a ticket ID, the agent handling it. No assistant runs on a passthrough call, so nothing here fills a prompt."
+                                                />
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    </Accordion>
+                                  </div>
                                 )}
                             </section>
                         </TabsContent>

@@ -1,11 +1,14 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useLocation } from "react-router-dom";
-import { Bot, Plus, Loader2, Save, Trash2, Phone, Check, Mic, X, Copy, MessageSquare, PhoneCall, ArrowLeft, Search } from "lucide-react";
+import { Bot, Braces, Plus, Loader2, Save, Trash2, Phone, Check, Mic, X, Copy, MessageSquare, PhoneCall, ArrowLeft, Search } from "lucide-react";
 
 import { EmptyState } from "@/components/common/EmptyState";
 import { MasterDetailShell } from "@/components/common/MasterDetailShell";
+import { MetadataEditor } from "@/components/common/MetadataEditor";
+import { MetadataRow, metadataFrom, rowsForPlaceholders } from "@/lib/callMetadata";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getStoredUser } from "@/services/storage/storageService";
 import {
@@ -23,10 +26,13 @@ import { AssistantDetail, AssistantItem } from "@/types/assistant";
 import { ToolSummary } from "@/types/tool";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { modeAccent } from "@/lib/assistantModes";
+import { extractPlaceholders } from "@/lib/placeholders";
 import { ChatInner } from "./AssistantChat";
 import { AssistantForm } from "./AssistantForm";
 import { useAssistantList } from "./useAssistantList";
 import { buildFormSnapshot, emptyForm } from "./constants";
+import { buildAssistantPayload, hydrateForm } from "./assistantConfig";
 
 // --- LiveKit Imports ---
 import { LiveKitRoom, RoomAudioRenderer, VoiceAssistantControlBar } from "@livekit/components-react";
@@ -130,11 +136,34 @@ export default function AssistantPage() {
     fetchAudios();
   }, [fetchTrunks, fetchTools, fetchAudios]);
 
+  // Test values for the prompt's {{placeholders}}, sent as `metadata` on Web Call and Chat. Held
+  // here rather than in the form because they are not part of the assistant — they are what you
+  // would send on one call, so a live call can be tried without saving anything.
+  const [testRows, setTestRows] = useState<MetadataRow[]>([]);
+  const [testRawJson, setTestRawJson] = useState("");
+  const [testUseRaw, setTestUseRaw] = useState(false);
+
+  const promptPlaceholders = useMemo(
+    () => extractPlaceholders(formData.assistant_prompt, formData.assistant_start_instruction),
+    [formData.assistant_prompt, formData.assistant_start_instruction],
+  );
+
+  useEffect(() => {
+    setTestRows((rows) => rowsForPlaceholders(promptPlaceholders, rows));
+  }, [promptPlaceholders]);
+
+  const testMetadata = metadataFrom(testRows, testRawJson, testUseRaw);
+
   const handleStartChat = async () => {
     if (!user?.user_id || !selectedId) return;
     setChatLoading(true);
     try {
-      const json = await callGetWebCallTokenEndpoint({ userId: user.user_id, assistantId: selectedId, textOnly: true });
+      const json = await callGetWebCallTokenEndpoint({
+        userId: user.user_id,
+        assistantId: selectedId,
+        textOnly: true,
+        metadata: testMetadata,
+      });
       const token = condenseWebCallTokenResponse(json);
       if (token) {
         setChatToken(token);
@@ -160,7 +189,11 @@ export default function AssistantPage() {
     setWebCallLoading(true);
     
     try {
-      const json = await callGetWebCallTokenEndpoint({ userId: user.user_id, assistantId: selectedId });
+      const json = await callGetWebCallTokenEndpoint({
+        userId: user.user_id,
+        assistantId: selectedId,
+        metadata: testMetadata,
+      });
       const token = condenseWebCallTokenResponse(json);
       if (token) {
         setWebCallToken(token);
@@ -219,60 +252,14 @@ export default function AssistantPage() {
       }
       // Read the mode, never guess it. assistant_llm_config is legal in pipeline mode
       // (it carries the provider and api_key there), so its presence means nothing.
-      const inferredMode: "pipeline" | "realtime" | "cascade" =
-        d.assistant_mode === "realtime" ? "realtime" : d.assistant_mode === "cascade" ? "cascade" : "pipeline";
+      // hydrateForm keeps each provider config whole and drops the masked api_key values,
+      // which the API rejects if they are sent back.
+      const nextForm = hydrateForm(d);
+      setFormData(nextForm);
+      setInitialFormSnapshot(buildFormSnapshot(nextForm));
 
-
-        const nextForm: AssistantDetail = {
-          assistant_id: d.assistant_id,
-          assistant_name: d.assistant_name || "",
-          assistant_description: d.assistant_description || "",
-          assistant_prompt: d.assistant_prompt || "",
-          assistant_mode: inferredMode,
-          // api_key is deliberately not mapped: the API returns it masked, and sending a
-          // masked value back is rejected. Keys are managed in Integrations.
-          assistant_llm_config: {
-            provider: d.assistant_llm_config?.provider || "openai",
-            model: d.assistant_llm_config?.model || "",
-            voice: d.assistant_llm_config?.voice || "",
-          },
-          assistant_tts_model: d.assistant_tts_model || "cartesia",
-          assistant_tts_config: {
-            voice_id: d.assistant_tts_config?.voice_id || d.assistant_tts_config?.speaker || "",
-            target_language_code: d.assistant_tts_config?.target_language_code || "hi-IN",
-          },
-          assistant_stt_model: d.assistant_stt_model || "sarvam",
-          assistant_stt_config: {
-            model: d.assistant_stt_config?.model || "saaras:v3",
-            language: d.assistant_stt_config?.language || "unknown",
-            mode: d.assistant_stt_config?.mode || "codemix",
-          },
-          assistant_start_instruction: d.assistant_start_instruction || "",
-          
-          assistant_interaction_config: {
-            speaks_first: d.assistant_interaction_config?.speaks_first ?? true,
-            filler_words: d.assistant_interaction_config?.filler_words ?? false,
-            silence_reprompts: d.assistant_interaction_config?.silence_reprompts ?? false,
-            silence_reprompt_interval: d.assistant_interaction_config?.silence_reprompt_interval ?? 10.0,
-            silence_max_reprompts: d.assistant_interaction_config?.silence_max_reprompts ?? 2,
-            background_sound_enabled: d.assistant_interaction_config?.background_sound_enabled ?? true,
-            thinking_sound_enabled: d.assistant_interaction_config?.thinking_sound_enabled ?? true,
-            allow_interruptions: d.assistant_interaction_config?.allow_interruptions ?? false,
-            input_guard_window_sec: d.assistant_interaction_config?.input_guard_window_sec ?? 3.0,
-            max_call_duration_minutes: d.assistant_interaction_config?.max_call_duration_minutes ?? null,
-            preferred_languages: d.assistant_interaction_config?.preferred_languages ?? [],
-          },
-          assistant_end_call_enabled: d.assistant_end_call_enabled ?? false,
-          assistant_end_call_trigger_phrase: d.assistant_end_call_trigger_phrase || "",
-          assistant_end_call_agent_message: d.assistant_end_call_agent_message || "",
-          assistant_end_call_url: d.assistant_end_call_url || "",
-          assistant_greeting_audio: d.assistant_greeting_audio || { enabled: false, audio_id: "" },
-        };
-        setFormData(nextForm);
-        setInitialFormSnapshot(buildFormSnapshot(nextForm));
-
-        const attached = d.tools?.map((t: any) => t.tool_id || t.id || t) || d.tool_ids || [];
-        setAttachedToolIds(attached);
+      const attached = d.tools?.map((t: any) => t.tool_id || t.id || t) || d.tool_ids || [];
+      setAttachedToolIds(attached);
     } catch (error) {
       toast({ variant: "destructive", title: "Error loading assistant details" });
     } finally {
@@ -338,72 +325,7 @@ export default function AssistantPage() {
     setSaving(true);
 
     try {
-      const interactionConfig = {
-        ...formData.assistant_interaction_config,
-        // Realtime has no external TTS, so the backend forces this off anyway.
-        ...(formData.assistant_mode === "realtime" ? { filler_words: false } : {}),
-      };
-
-      const llmProvider = formData.assistant_llm_config?.provider?.trim() || "openai";
-      const payload: any = {
-        user_id: user.user_id,
-        assistant_name: name,
-        assistant_description: description,
-        assistant_prompt: prompt,
-        assistant_mode: formData.assistant_mode,
-        assistant_start_instruction: formData.assistant_start_instruction,
-        
-        assistant_interaction_config: interactionConfig,
-        assistant_end_call_enabled: formData.assistant_end_call_enabled,
-        assistant_end_call_trigger_phrase: formData.assistant_end_call_trigger_phrase?.trim(),
-        assistant_end_call_agent_message: formData.assistant_end_call_agent_message?.trim(),
-        assistant_end_call_url: formData.assistant_end_call_url?.trim(),
-        assistant_greeting_audio: formData.assistant_greeting_audio,
-      };
-
-      // provider config is symmetric across modes and persists across a mode switch
-      // model + api_key come from Integrations (baked in by the backend); not editable per-assistant
-      const llmConfig: Record<string, string> = { provider: llmProvider };
-      // voice is emitted by the realtime model; in pipeline the voice lives in the TTS config
-      if (formData.assistant_mode === "realtime" && formData.assistant_llm_config?.voice?.trim()) {
-        llmConfig.voice = formData.assistant_llm_config.voice.trim();
-      }
-      // cascade runs a plain OpenAI chat model — the user's pick, default gpt-4.1
-      if (formData.assistant_mode === "cascade") {
-        llmConfig.model = formData.assistant_llm_config?.model?.trim() || "gpt-4.1";
-      }
-      payload.assistant_llm_config = llmConfig;
-
-      if (formData.assistant_mode !== "realtime") {
-        payload.assistant_tts_model = formData.assistant_tts_model;
-        if (formData.assistant_tts_model === "sarvam") {
-          payload.assistant_tts_config = {
-            speaker: formData.assistant_tts_config.voice_id,
-            target_language_code: formData.assistant_tts_config.target_language_code || "hi-IN",
-          };
-        } else {
-          payload.assistant_tts_config = { voice_id: formData.assistant_tts_config.voice_id };
-        }
-
-        payload.assistant_stt_model = formData.assistant_stt_model;
-        if (formData.assistant_stt_model === "sarvam") {
-          payload.assistant_stt_config = {
-            model: formData.assistant_stt_config.model || "saaras:v3",
-            language: formData.assistant_stt_config.language || "unknown",
-            // mode is honored only in cascade — the pipeline tap rejects it.
-            ...(formData.assistant_mode === "cascade"
-              ? { mode: formData.assistant_stt_config.mode || "codemix" }
-              : {}),
-          };
-        } else if (formData.assistant_stt_model === "cartesia") {
-          payload.assistant_stt_config = {
-            model: formData.assistant_stt_config.model || "ink-whisper",
-            language: formData.assistant_stt_config.language || "en-IN",
-          };
-        } else {
-          payload.assistant_stt_config = {};
-        }
-      }
+      const payload = { user_id: user.user_id, ...buildAssistantPayload(formData) };
 
       let json: unknown;
       if (mode === "create") {
@@ -528,12 +450,8 @@ export default function AssistantPage() {
                             </h4>
                             <span
                               className={cn(
-                                "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider border",
-                                assistantMode === "realtime"
-                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                                  : assistantMode === "cascade"
-                                    ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                                    : "bg-sky-500/10 text-sky-400 border-sky-500/30",
+                                "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider",
+                                modeAccent(assistantMode).chip,
                               )}
                             >
                               {assistantMode}
@@ -607,7 +525,7 @@ export default function AssistantPage() {
                   ) : (
                     <div className="flex flex-col space-y-1 w-full">
                       {/* Name Input & Delete Button Row */}
-                      <div className="flex items-center gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
                         <Input
                           value={formData.assistant_name}
                           onChange={(e) => setFormData((prev) => ({ ...prev, assistant_name: e.target.value }))}
@@ -630,8 +548,8 @@ export default function AssistantPage() {
                       </div>
                       
                       {/* ID & Copy Button Row */}
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm text-muted-foreground font-mono">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <p className="min-w-0 truncate font-mono text-sm text-muted-foreground" title={formData.assistant_id}>
                           {formData.assistant_id}
                         </p>
                         {formData.assistant_id && (
@@ -651,6 +569,33 @@ export default function AssistantPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 shrink-0 md:ml-4">
+                  {/* Test values for the prompt's {{placeholders}}. Only offered when the prompt has
+                      any — otherwise there is nothing to fill and the button is noise. */}
+                  {mode === "edit" && selectedId && testRows.length > 0 && (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="ghost" className="text-muted-foreground">
+                          <Braces className="mr-2 h-4 w-4" />
+                          Variables
+                          <span className="ml-2 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
+                            {testRows.length}
+                          </span>
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" className="w-[min(28rem,calc(100vw-2rem))]">
+                        <MetadataEditor
+                          rows={testRows}
+                          onRowsChange={setTestRows}
+                          rawJson={testRawJson}
+                          onRawJsonChange={setTestRawJson}
+                          useRaw={testUseRaw}
+                          onUseRawChange={setTestUseRaw}
+                          blurb="Used for Web Call and Chat below, so you can try a templated prompt without placing a real call. Not saved with the assistant."
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  )}
+
                   {/* WEB CALL BUTTON */}
                   {mode === "edit" && selectedId && (
                     <Button 

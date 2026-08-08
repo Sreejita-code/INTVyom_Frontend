@@ -17,6 +17,20 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const Integrations = () => {
     const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+
+    /**
+     * Which assistant stages each key covers. Most vendors issue one key that serves more than
+     * one stage, so storing it once is enough and rotating it re-syncs every stage it backs.
+     */
+    const PROVIDER_SLOTS: Record<string, string> = {
+        cartesia: "Voice · Transcription",
+        sarvam: "Voice · Transcription",
+        elevenlabs: "Voice · Transcription",
+        mistral: "Voice",
+        gemini: "Model",
+        openai: "Model · Transcription",
+        deepgram: "Transcription",
+    };
     const [apiKey, setApiKey] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [connectedServices, setConnectedServices] = useState<IntegrationData[]>([]);
@@ -65,8 +79,7 @@ const Integrations = () => {
     // clear pending pollers on unmount
     useEffect(() => () => Object.values(timers.current).forEach(clearTimeout), []);
 
-    // UPDATED: Added "openai" to the list of available providers
-    const providers = ["cartesia", "sarvam", "elevenlabs", "mistral", "gemini", "openai"];
+    const providers = ["cartesia", "sarvam", "elevenlabs", "mistral", "gemini", "openai", "deepgram"];
 
     const fetchIntegrations = async () => {
         if (!user?.user_id) return;
@@ -308,6 +321,9 @@ const Integrations = () => {
                                     <CardTitle className="text-sm font-bold capitalize tracking-tight group-hover:text-primary transition-colors">
                                         {provider}
                                     </CardTitle>
+                                    <p className="mt-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                                        {PROVIDER_SLOTS[provider]}
+                                    </p>
                                 </Card>
                                 <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                             </button>
