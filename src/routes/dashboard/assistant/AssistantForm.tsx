@@ -1,5 +1,5 @@
-import { Dispatch, ReactNode, SetStateAction } from "react";
-import { Plus, Trash2, Wrench, X } from "lucide-react";
+import { Dispatch, ReactNode, SetStateAction, useState, useEffect } from "react";
+import { Plus, Trash2, Wrench, X, AlertTriangle, Volume2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -22,8 +22,23 @@ import { ToolSummary } from "@/types/tool";
 import { cn } from "@/lib/utils";
 import { MODES, modeAccent } from "@/lib/assistantModes";
 import { emptyForm } from "./constants";
-import { LANGUAGE_CODES, STT_PROVIDERS, TTS_PROVIDERS, findProvider } from "./providerCatalog";
-import { applyModeChange, applySttProvider, applyTtsProvider } from "./assistantConfig";
+import { 
+  LANGUAGE_CODES, 
+  STT_PROVIDERS, 
+  TTS_PROVIDERS, 
+  findProvider,
+  getSttModelError,
+  getLlmKnobError,
+  getLanguageCodeError
+} from "./providerCatalog";
+import { 
+  applyModeChange, 
+  applySttProvider, 
+  applyTtsProvider,
+  getProviderModeError,
+  getModelModeError,
+  validateAndRepairLlmConfig
+} from "./assistantConfig";
 import { AudioChain } from "./AudioChain";
 import { FieldRow } from "./FieldRow";
 import { LlmSection } from "./LlmSection";
@@ -59,6 +74,20 @@ function SettingsPanel({ title, blurb, children }: { title: string; blurb: strin
   );
 }
 
+/** Validation error display component */
+function ValidationError({ error }: { error: string }) {
+  if (!error) return null;
+  
+  return (
+    <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>{error}</span>
+      </div>
+    </div>
+  );
+}
+
 /**
  * The assistant editor body — every field of an assistant except its name, which the page
  * header owns. Purely controlled: all writes go through `setFormData`, except tool attachment,
@@ -78,6 +107,8 @@ export function AssistantForm({
   setSelectedToolToAdd,
   onToggleTool,
 }: AssistantFormProps) {
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  
   const updateField = (field: keyof AssistantDetail, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
@@ -116,6 +147,89 @@ export function AssistantForm({
   const isRealtimeMode = formData.assistant_mode === "realtime";
   const isCascadeMode = formData.assistant_mode === "cascade";
 
+  // Validate configuration on changes
+  useEffect(() => {
+    const errors: Record<string, string> = {};
+    
+    // Validate LLM provider/mode compatibility
+    const llmProvider = formData.assistant_llm_config?.provider || "openai";
+    const llmProviderError = getProviderModeError(formData.assistant_mode, 'llm', llmProvider);
+    if (llmProviderError) {
+      errors.llmProvider = llmProviderError;
+    }
+    
+    // Validate LLM model/mode compatibility
+    const llmModel = formData.assistant_llm_config?.model;
+    if (llmModel) {
+      const llmModelError = getModelModeError(formData.assistant_mode, llmProvider, llmModel);
+      if (llmModelError) {
+        errors.llmModel = llmModelError;
+      }
+    }
+    
+    // Validate LLM generation knobs
+    if (formData.assistant_mode === "cascade" && formData.assistant_llm_config?.model) {
+      const llmConfig = formData.assistant_llm_config;
+      const model = llmConfig.model;
+      
+      if (llmConfig.temperature !== undefined) {
+        const tempError = getLlmKnobError("temperature", model);
+        if (tempError) errors.llmTemperature = tempError;
+      }
+      
+      if (llmConfig.reasoning_effort !== undefined) {
+        const effortError = getLlmKnobError("reasoning_effort", model);
+        if (effortError) errors.llmReasoningEffort = effortError;
+      }
+      
+      if (llmConfig.verbosity !== undefined) {
+        const verbosityError = getLlmKnobError("verbosity", model);
+        if (verbosityError) errors.llmVerbosity = verbosityError;
+      }
+    }
+    
+    // Validate STT provider/mode compatibility (except in realtime where it's ignored)
+    if (!isRealtimeMode) {
+      const sttProviderError = getProviderModeError(formData.assistant_mode, 'stt', formData.assistant_stt_model);
+      if (sttProviderError) {
+        errors.sttProvider = sttProviderError;
+      }
+      
+      // Validate STT model configuration
+      const sttConfig = (formData.assistant_stt_config as Record<string, unknown>) || {};
+      const sttModel = (sttConfig.model as string) || 
+        (findProvider(STT_PROVIDERS, formData.assistant_stt_model)?.fields.find(f => f.key === "model")?.fallback as string) || "";
+        
+      if (sttModel) {
+        const sttModelError = getSttModelError(formData.assistant_stt_model, sttModel, sttConfig);
+        if (sttModelError) {
+          errors.sttModel = sttModelError;
+        }
+      }
+      
+      // Validate STT language codes
+      if (sttConfig.language && formData.assistant_stt_model !== "elevenlabs") {
+        const langError = getLanguageCodeError(formData.assistant_stt_model, sttConfig.language as string);
+        if (langError) errors.sttLanguage = langError;
+      }
+      
+      if (sttConfig.language_code && formData.assistant_stt_model === "elevenlabs") {
+        const langError = getLanguageCodeError(formData.assistant_stt_model, sttConfig.language_code as string);
+        if (langError) errors.sttLanguage = langError;
+      }
+    }
+    
+    // Validate TTS provider/mode compatibility (except in realtime where it's ignored)
+    if (!isRealtimeMode) {
+      const ttsProviderError = getProviderModeError(formData.assistant_mode, 'tts', formData.assistant_tts_model);
+      if (ttsProviderError) {
+        errors.ttsProvider = ttsProviderError;
+      }
+    }
+    
+    setValidationErrors(errors);
+  }, [formData, isRealtimeMode]);
+
   // Short labels for the chain diagram. The stage sections build their own, richer summaries; the
   // diagram only has room for "who is doing this job", so it stops at provider plus model.
   const sttConfig = (formData.assistant_stt_config ?? {}) as Record<string, unknown>;
@@ -134,6 +248,28 @@ export function AssistantForm({
   return (
     <ScrollArea className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-4xl space-y-8 p-4 pb-20 md:space-y-10 md:p-8">
+        {/* Validation Errors */}
+        {Object.keys(validationErrors).length > 0 && (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 shadow-sm">
+            <h3 className="flex items-center gap-2 font-semibold text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Configuration Issues Detected
+            </h3>
+            <p className="mt-1 text-sm text-destructive/80">
+              Please review and correct the following issues before saving:
+            </p>
+            <ul className="mt-3 space-y-2">
+              {Object.entries(validationErrors).map(([key, error]) => (
+                <li key={key} className="text-sm flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-destructive/70" />
+                  <span>
+                    <span className="font-medium">{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</span> {error}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* General Configuration */}
         <div className="grid gap-6">
@@ -205,6 +341,21 @@ export function AssistantForm({
                     <span className="text-[11px] uppercase tracking-wider text-muted-foreground/70">
                       {option.vendors}
                     </span>
+                    {option.value === "realtime" && (
+                      <span className="text-[0.75rem] leading-5 text-muted-foreground">
+                        <strong>Note:</strong> Gemini LLM only available in this mode. TTS stage not used.
+                      </span>
+                    )}
+                    {option.value === "pipeline" && (
+                      <span className="text-[0.75rem] leading-5 text-muted-foreground">
+                        <strong>Note:</strong> STT limited to Sarvam/Native. OpenAI LLM only.
+                      </span>
+                    )}
+                    {option.value === "cascade" && (
+                      <span className="text-[0.75rem] leading-5 text-muted-foreground">
+                        <strong>Note:</strong> Full provider flexibility. OpenAI LLM only.
+                      </span>
+                    )}
                   </Label>
                 );
               })}
@@ -280,7 +431,14 @@ export function AssistantForm({
               />
             )}
 
-            {!isRealtimeMode && (
+            {isRealtimeMode ? (
+              <div className="rounded-2xl border border-border/60 bg-card/60 px-5 py-1 sm:px-6">
+                <div className="py-5 text-center text-muted-foreground">
+                  <Volume2 className="mx-auto mb-2 h-6 w-6 opacity-50" />
+                  <p className="text-sm">In Realtime mode, the assistant's model speaks its own audio, so this stage is not needed.</p>
+                </div>
+              </div>
+            ) : (
               <TtsSection
                 step={isCascadeMode ? 3 : 2}
                 ttsModel={formData.assistant_tts_model}

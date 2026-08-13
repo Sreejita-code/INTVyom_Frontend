@@ -29,11 +29,103 @@ import {
 const CASCADE_MODEL_IDS = OPENAI_CASCADE_MODELS.map((m) => m.value);
 const REALTIME_MODEL_IDS = OPENAI_REALTIME_MODELS.map((m) => m.value);
 
+// Validation constants for stricter checking
+const VALID_LLM_PROVIDERS: Record<AssistantMode, string[]> = {
+  pipeline: ["openai"],
+  realtime: ["openai", "gemini"],
+  cascade: ["openai"]
+};
+
+const VALID_STT_PROVIDERS: Record<AssistantMode, string[]> = {
+  pipeline: ["sarvam", "native"],
+  realtime: ["sarvam", "native", "cartesia", "deepgram", "elevenlabs", "openai"], // All accepted but only sarvam/native run
+  cascade: ["sarvam", "cartesia", "deepgram", "elevenlabs", "openai"]
+};
+
+const VALID_TTS_PROVIDERS: Record<AssistantMode, string[]> = {
+  pipeline: ["cartesia", "sarvam", "elevenlabs", "mistral"],
+  realtime: ["cartesia", "sarvam", "elevenlabs", "mistral"], // Stored but ignored
+  cascade: ["cartesia", "sarvam", "elevenlabs", "mistral"]
+};
+
 /** Config keys the API types as numbers. Selects hand back strings, so they are coerced here. */
 const NUMERIC_KEYS = new Set([
   "speed", "volume", "pace", "temperature", "speech_sample_rate",
   "stability", "similarity_boost", "style", "max_output_tokens",
 ]);
+
+/**
+ * Validates if a provider is compatible with the given mode
+ */
+export const isValidProviderForMode = (mode: AssistantMode, providerType: 'llm' | 'stt' | 'tts', provider: string): boolean => {
+  const validProviders = providerType === 'llm' 
+    ? VALID_LLM_PROVIDERS 
+    : providerType === 'stt' 
+    ? VALID_STT_PROVIDERS 
+    : VALID_TTS_PROVIDERS;
+  
+  return validProviders[mode].includes(provider);
+};
+
+/**
+ * Gets validation error message for incompatible provider/mode combinations
+ */
+export const getProviderModeError = (mode: AssistantMode, providerType: 'llm' | 'stt' | 'tts', provider: string): string | null => {
+  if (isValidProviderForMode(mode, providerType, provider)) {
+    return null;
+  }
+  
+  const validProviders = providerType === 'llm' 
+    ? VALID_LLM_PROVIDERS 
+    : providerType === 'stt' 
+    ? VALID_STT_PROVIDERS 
+    : VALID_TTS_PROVIDERS;
+    
+  const providerNames = providerType === 'llm' 
+    ? { openai: 'OpenAI', gemini: 'Gemini' }
+    : providerType === 'stt'
+    ? { sarvam: 'Sarvam', native: 'Native', cartesia: 'Cartesia', deepgram: 'Deepgram', elevenlabs: 'ElevenLabs', openai: 'OpenAI' }
+    : { cartesia: 'Cartesia', sarvam: 'Sarvam', elevenlabs: 'ElevenLabs', mistral: 'Mistral' };
+  
+  const validProviderNames = validProviders[mode].map(p => providerNames[p as keyof typeof providerNames] || p).join(', ');
+  
+  return `${providerNames[provider as keyof typeof providerNames] || provider} is not valid for ${mode} mode. Valid providers are: ${validProviderNames}.`;
+};
+
+/**
+ * Validates model ID compatibility with mode
+ */
+export const isValidModelForMode = (mode: AssistantMode, provider: string, model?: string): boolean => {
+  if (!model) return true; // Allow empty models to use defaults
+  
+  const allowed = mode === "cascade" 
+    ? CASCADE_MODEL_IDS 
+    : mode === "realtime" && provider === "openai"
+    ? REALTIME_MODEL_IDS
+    : mode === "pipeline" && provider === "openai"
+    ? REALTIME_MODEL_IDS
+    : null;
+    
+  // Gemini models are not validated
+  if (provider === "gemini") return true;
+  
+  return allowed ? allowed.includes(model) : true;
+};
+
+/**
+ * Gets validation error for model/mode incompatibility
+ */
+export const getModelModeError = (mode: AssistantMode, provider: string, model?: string): string | null => {
+  if (isValidModelForMode(mode, provider, model)) {
+    return null;
+  }
+  
+  const allowed = mode === "cascade" 
+    ? CASCADE_MODEL_IDS 
+    : REALTIME_MODEL_IDS;
+    
+  return `Model "${model}" is not valid for ${mode} mode with ${provider}. Allowed models: ${allowed.join(', ')}.`;
+};
 
 /**
  * Drops keys the API would reject or misread: empty strings (an omitted language means
@@ -95,8 +187,41 @@ const repairLlmForMode = (llm: AssistantLlmConfig | undefined, mode: AssistantMo
   return next;
 };
 
+/** Validates and repairs LLM configuration for mode compatibility */
+export const validateAndRepairLlmConfig = (llm: AssistantLlmConfig | undefined, mode: AssistantMode): AssistantLlmConfig => {
+  const repaired = repairLlmForMode(llm, mode);
+  
+  // Additional validation for cascade mode generation knobs
+  if (mode === "cascade" && repaired.model) {
+    // Check if it's a reasoning model
+    const isReasoningModel = /^gpt-5/.test(repaired.model.trim() || "");
+    const isGpt5Generation = /^(gpt-5|chat-latest)/.test(repaired.model.trim() || "");
+    
+    // Remove temperature for reasoning models
+    if (isReasoningModel && repaired.temperature !== undefined) {
+      delete (repaired as any).temperature;
+    }
+    
+    // Remove reasoning_effort for non-reasoning models
+    if (!isReasoningModel && repaired.reasoning_effort !== undefined) {
+      delete (repaired as any).reasoning_effort;
+    }
+    
+    // Remove verbosity for non-gpt-5 generation models
+    if (!isGpt5Generation && repaired.verbosity !== undefined) {
+      delete (repaired as any).verbosity;
+    }
+  }
+  
+  return repaired;
+};
+
 export const applyModeChange = (form: AssistantDetail, mode: AssistantMode): AssistantDetail => {
-  const next: AssistantDetail = { ...form, assistant_mode: mode, assistant_llm_config: repairLlmForMode(form.assistant_llm_config, mode) };
+  const next: AssistantDetail = { 
+    ...form, 
+    assistant_mode: mode, 
+    assistant_llm_config: validateAndRepairLlmConfig(form.assistant_llm_config, mode) 
+  };
 
   // `native` means "the realtime model transcribes itself" — cascade has no realtime model.
   if (mode === "cascade" && next.assistant_stt_model === "native") {
@@ -187,11 +312,23 @@ export const buildAssistantPayload = (form: AssistantDetail): Record<string, any
   const isRealtime = mode === "realtime";
   const isCascade = mode === "cascade";
 
-  const llm = repairLlmForMode(form.assistant_llm_config, mode);
+  // Validate provider compatibility before building payload
+  const llmError = getProviderModeError(mode, 'llm', form.assistant_llm_config?.provider || "openai");
+  if (llmError) {
+    console.warn(`LLM Configuration Warning: ${llmError}`);
+  }
+  
+  const llm = validateAndRepairLlmConfig(form.assistant_llm_config, mode);
   const llmConfig: Record<string, any> = {
     provider: llm.provider || "openai",
   };
-  if (llm.model?.trim()) llmConfig.model = llm.model.trim();
+  if (llm.model?.trim()) {
+    const modelError = getModelModeError(mode, llm.provider || "openai", llm.model);
+    if (modelError) {
+      console.warn(`Model Configuration Warning: ${modelError}`);
+    }
+    llmConfig.model = llm.model.trim();
+  }
   if (isRealtime && llm.voice?.trim()) llmConfig.voice = llm.voice.trim();
   if (isCascade) {
     for (const spec of CASCADE_LLM_FIELDS) {
@@ -229,6 +366,12 @@ export const buildAssistantPayload = (form: AssistantDetail): Record<string, any
   };
 
   if (!isRealtime) {
+    // Validate STT provider compatibility
+    const sttError = getProviderModeError(mode, 'stt', form.assistant_stt_model);
+    if (sttError) {
+      console.warn(`STT Configuration Warning: ${sttError}`);
+    }
+    
     payload.assistant_tts_model = form.assistant_tts_model;
     payload.assistant_tts_config = clean(form.assistant_tts_config);
     payload.assistant_stt_model = form.assistant_stt_model;
@@ -237,6 +380,20 @@ export const buildAssistantPayload = (form: AssistantDetail): Record<string, any
       form.assistant_stt_model === "native"
         ? {}
         : clean(pruneStt(form.assistant_stt_model, form.assistant_stt_config));
+  } else {
+    // Even in realtime mode, validate that stored configs won't cause issues
+    const sttError = getProviderModeError(mode, 'stt', form.assistant_stt_model);
+    if (sttError) {
+      console.warn(`STT Configuration Warning (Realtime Mode): ${sttError}`);
+    }
+  }
+
+  // Validate TTS provider compatibility (except in realtime where it's ignored)
+  if (!isRealtime) {
+    const ttsError = getProviderModeError(mode, 'tts', form.assistant_tts_model);
+    if (ttsError) {
+      console.warn(`TTS Configuration Warning: ${ttsError}`);
+    }
   }
 
   return payload;

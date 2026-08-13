@@ -1,4 +1,4 @@
-import { Brain } from "lucide-react";
+import { Brain, AlertTriangle } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,7 +12,9 @@ import {
   OPENAI_REALTIME_MODELS,
   isReasoningModel,
   llmInertReason,
+  getLlmKnobError,
 } from "./providerCatalog";
+import { getProviderModeError, getModelModeError } from "./assistantConfig";
 
 interface LlmSectionProps {
   mode: AssistantMode;
@@ -39,6 +41,29 @@ export function LlmSection({ mode, llmConfig, onChange, step, last }: LlmSection
   const defaultModel = isCascade ? "gpt-4.1" : "gpt-realtime-1.5";
   const model = llmConfig?.model?.trim() || (isGemini ? "" : defaultModel);
   const reasoning = isReasoningModel(model);
+
+  // Validation
+  const providerError = getProviderModeError(mode, 'llm', provider);
+  const modelError = model ? getModelModeError(mode, provider, model) : null;
+  
+  // Generation knob validation
+  const knobErrors: string[] = [];
+  if (isCascade && model) {
+    if (llmConfig?.temperature !== undefined) {
+      const tempError = getLlmKnobError("temperature", model);
+      if (tempError) knobErrors.push(tempError);
+    }
+    
+    if (llmConfig?.reasoning_effort !== undefined) {
+      const effortError = getLlmKnobError("reasoning_effort", model);
+      if (effortError) knobErrors.push(effortError);
+    }
+    
+    if (llmConfig?.verbosity !== undefined) {
+      const verbosityError = getLlmKnobError("verbosity", model);
+      if (verbosityError) knobErrors.push(verbosityError);
+    }
+  }
 
   const summary = [
     isGemini ? "Gemini" : "OpenAI",
@@ -74,6 +99,22 @@ export function LlmSection({ mode, llmConfig, onChange, step, last }: LlmSection
       advanced={
         isCascade ? (
           <>
+            {/* Validation Errors for Advanced Knobs */}
+            {knobErrors.length > 0 && (
+              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive mb-4">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div>
+                    <span className="font-medium">Configuration Issues:</span>
+                    <ul className="mt-1 ml-4 list-disc space-y-1">
+                      {knobErrors.map((error, i) => (
+                        <li key={i}>{error}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
             {advancedKnobs.map((spec) => (
               <ConfigField
                 key={spec.key}
@@ -87,6 +128,21 @@ export function LlmSection({ mode, llmConfig, onChange, step, last }: LlmSection
         ) : undefined
       }
     >
+      {/* Validation Errors */}
+      {(providerError || modelError) && (
+        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive mb-4 border border-destructive/20">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <span className="font-medium">Configuration Issues:</span>
+              <ul className="mt-1 ml-4 list-disc space-y-1">
+                {providerError && <li>{providerError}</li>}
+                {modelError && <li>{modelError}</li>}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
       <FieldRow
         label="Provider"
         help={
@@ -112,12 +168,21 @@ export function LlmSection({ mode, llmConfig, onChange, step, last }: LlmSection
                 </span>
               </SelectItem>
               {/* Gemini runs only in realtime — pipeline and cascade reject it. */}
-              {isRealtime && (
+              {isRealtime ? (
                 <SelectItem value="gemini">
                   <span className="flex flex-col gap-0.5 py-0.5">
                     <span className="text-sm">Gemini</span>
                     <span data-tagline className="text-xs leading-5 text-muted-foreground">
-                      Live API — hears, thinks and speaks in one stream.
+                      Live API — hears, thinks and speaks in one stream. Available only in Realtime mode.
+                    </span>
+                  </span>
+                </SelectItem>
+              ) : (
+                <SelectItem value="gemini" disabled>
+                  <span className="flex flex-col gap-0.5 py-0.5 opacity-50">
+                    <span className="text-sm">Gemini</span>
+                    <span data-tagline className="text-xs leading-5 text-muted-foreground">
+                      Live API — hears, thinks and speaks in one stream. Only available in Realtime mode.
                     </span>
                   </span>
                 </SelectItem>

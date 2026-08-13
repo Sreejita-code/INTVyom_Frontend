@@ -1,11 +1,12 @@
-import { Volume2 } from "lucide-react";
+import { Volume2, AlertTriangle } from "lucide-react";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AssistantDetail, TtsProvider } from "@/types/assistant";
 import { FieldRow } from "./FieldRow";
 import { ProviderFields } from "./ProviderFields";
 import { StageSection, TRIGGER_ONE_LINE } from "./StageSection";
-import { TTS_PROVIDERS, findProvider } from "./providerCatalog";
+import { TTS_PROVIDERS, findProvider, getLanguageCodeError } from "./providerCatalog";
+import { getProviderModeError } from "./assistantConfig";
 
 interface TtsSectionProps {
   ttsModel: TtsProvider;
@@ -27,6 +28,10 @@ export function TtsSection({ ttsModel, ttsConfig, onProviderChange, onConfigChan
   const spec = findProvider(TTS_PROVIDERS, ttsModel);
   const config = (ttsConfig ?? {}) as Record<string, any>;
 
+  // Validation
+  // Note: TTS validation is simpler as it doesn't have mode-specific restrictions like LLM/STT
+  // The main validation happens in assistantConfig.ts when building the payload
+  
   const voiceLabel = ttsModel === "sarvam" ? config.speaker : config.voice_id;
   const rate = ttsModel === "sarvam" ? config.pace : ttsModel === "elevenlabs" ? config.voice_settings?.speed : config.speed;
 

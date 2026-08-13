@@ -116,6 +116,47 @@ const languageNames = new Intl.DisplayNames(["en"], { type: "language" });
 const asNamedOptions = (codes: readonly string[]): FieldOption[] =>
   codes.map((value) => ({ value, label: `${value} — ${languageNames.of(value) ?? value}` }));
 
+// --- Validation Utilities -------------------------------------------------------------------
+
+/**
+ * Checks if a language code is valid for a specific provider
+ */
+export const isValidLanguageCode = (provider: string, code: string): boolean => {
+  switch (provider) {
+    case "sarvam":
+      return [...SARVAM_LANGUAGES, "unknown"].includes(code);
+    case "cartesia":
+      return CARTESIA_LANGUAGES.includes(code as any);
+    case "deepgram":
+      return [...BCP47_LANGUAGES, "multi"].includes(code);
+    case "elevenlabs":
+      return ELEVENLABS_LANGUAGES.includes(code as any);
+    case "openai":
+      return OPENAI_STT_LANGUAGES.includes(code as any);
+    default:
+      return true; // Allow unknown providers
+  }
+};
+
+/**
+ * Gets validation error for language code/provider mismatch
+ */
+export const getLanguageCodeError = (provider: string, code: string): string | null => {
+  if (isValidLanguageCode(provider, code)) {
+    return null;
+  }
+  
+  const providerStandards: Record<string, string> = {
+    sarvam: "BCP-47 Indic (e.g., hi-IN, en-IN) or 'unknown' for auto-detect",
+    cartesia: "ISO 639-1 (e.g., hi, en)",
+    deepgram: "BCP-47 (e.g., hi-IN, en-US) or 'multi' for auto-detect",
+    elevenlabs: "ISO 639-3 (e.g., hin, eng)",
+    openai: "ISO 639-1 (e.g., hi, en)"
+  };
+  
+  return `Invalid language code "${code}" for ${provider}. Expected: ${providerStandards[provider] || "valid code"}.`;
+};
+
 // --- LLM ----------------------------------------------------------------------------------
 
 /**
@@ -129,6 +170,30 @@ export const OPENAI_REALTIME_MODELS: FieldOption[] = [
   { value: "gpt-4o-realtime-preview", label: "gpt-4o-realtime-preview", hint: "Legacy preview model." },
   { value: "gpt-4o-mini-realtime-preview", label: "gpt-4o-mini-realtime-preview", hint: "Legacy preview, smaller." },
 ];
+
+/**
+ * Checks if a model is a reasoning model
+ */
+/**
+ * Gets validation error for LLM generation knob/model compatibility
+ */
+export const getLlmKnobError = (key: string, model?: string): string | null => {
+  const id = model?.trim() || "";
+  if (!id) return null;
+
+  if (key === "temperature" && isReasoningModel(id)) {
+    return `${id} is a reasoning model and ignores temperature — set reasoning effort instead.`;
+  }
+  if (key === "reasoning_effort" && !isReasoningModel(id)) {
+    return `${id} does not reason, so this is ignored — use temperature to control variation.`;
+  }
+  // ponytail: verbosity is `text.verbosity`, a gpt-5 parameter — same 400 as reasoning.effort on an
+  // older model. Gated on the generation rather than on reasoning so `chat-latest` keeps it.
+  if (key === "verbosity" && !/^(gpt-5|chat-latest)/.test(id)) {
+    return `${id} does not read verbosity — it is a gpt-5 parameter. Cap reply length with max output tokens instead.`;
+  }
+  return null;
+};
 
 /** Chat models for the cascade LLM stage. Sending one of these in pipeline mode is a 400. */
 export const OPENAI_CASCADE_MODELS: FieldOption[] = [
@@ -269,21 +334,7 @@ export const CASCADE_LLM_FIELDS: FieldSpec[] = [
  * So a greyed control has to mean the value is gone from the payload too, not just from the UI.
  */
 export const llmInertReason = (key: string, model?: string): string | undefined => {
-  const id = model?.trim() || "";
-  if (!id) return undefined;
-
-  if (key === "temperature" && isReasoningModel(id)) {
-    return `${id} is a reasoning model and ignores temperature — set reasoning effort instead.`;
-  }
-  if (key === "reasoning_effort" && !isReasoningModel(id)) {
-    return `${id} does not reason, so this is ignored — use temperature to control variation.`;
-  }
-  // ponytail: verbosity is `text.verbosity`, a gpt-5 parameter — same 400 as reasoning.effort on an
-  // older model. Gated on the generation rather than on reasoning so `chat-latest` keeps it.
-  if (key === "verbosity" && !GPT5_GENERATION.test(id)) {
-    return `${id} does not read verbosity — it is a gpt-5 parameter. Cap reply length with max output tokens instead.`;
-  }
-  return undefined;
+  return getLlmKnobError(key, model) || undefined;
 };
 
 // --- STT ----------------------------------------------------------------------------------
@@ -556,6 +607,99 @@ export const sttInertReason = (
     }
   }
   return undefined;
+};
+
+/**
+ * Gets validation error for STT provider/model compatibility
+ */
+export const getSttModelError = (
+  provider: string,
+  model: string,
+  config: Record<string, unknown> = {},
+): string | null => {
+  // Validate Sarvam model/language compatibility
+  if (provider === "sarvam") {
+    const validModels = ["saaras:v3", "saaras:v2.5", "saarika:v2.5"];
+    if (!validModels.includes(model)) {
+      return `Invalid Sarvam model "${model}". Valid models: ${validModels.join(", ")}.`;
+    }
+    
+    // Check language compatibility per model
+    const language = config.language as string || "unknown";
+    if (language !== "unknown" && !SARVAM_LANGUAGES.includes(language as any)) {
+      return `Invalid Sarvam language code "${language}". Use BCP-47 Indic codes or "unknown" for auto-detect.`;
+    }
+    
+    // Check mode compatibility
+    const mode = config.mode as string || "codemix";
+    const validModes = ["codemix", "transcribe", "translate", "verbatim", "translit"];
+    if (!validModes.includes(mode)) {
+      return `Invalid Sarvam transcription mode "${mode}". Valid modes: ${validModes.join(", ")}.`;
+    }
+    
+    // Mode restrictions per model
+    if (model !== "saaras:v3" && mode !== "codemix") {
+      return `Sarvam model "${model}" only supports "codemix" transcription mode.`;
+    }
+  }
+  
+  // Validate Cartesia model/language compatibility
+  if (provider === "cartesia") {
+    const validModels = ["ink-whisper", "ink-2"];
+    if (!validModels.includes(model)) {
+      return `Invalid Cartesia model "${model}". Valid models: ${validModels.join(", ")}.`;
+    }
+    
+    if (model === "ink-2" && !(config.language === "en" || !config.language)) {
+      return `Cartesia ink-2 model only supports English (en).`;
+    }
+    
+    const language = config.language as string || "en";
+    if (language && !CARTESIA_LANGUAGES.includes(language as any)) {
+      return `Invalid Cartesia language code "${language}". Use ISO 639-1 codes.`;
+    }
+  }
+  
+  // Validate Deepgram model compatibility
+  if (provider === "deepgram") {
+    const validModels = ["nova-3", "nova-2", "flux-general-en", "flux-general-multi"];
+    if (!validModels.includes(model)) {
+      return `Invalid Deepgram model "${model}". Valid models: ${validModels.join(", ")}.`;
+    }
+    
+    const language = config.language as string;
+    if (language && language !== "multi" && !BCP47_LANGUAGES.includes(language as any)) {
+      return `Invalid Deepgram language code "${language}". Use BCP-47 codes or "multi" for auto-detect.`;
+    }
+  }
+  
+  // Validate ElevenLabs model/language compatibility
+  if (provider === "elevenlabs") {
+    const validModels = ["scribe_v2_realtime", "scribe_v2", "scribe_v1"];
+    if (!validModels.includes(model)) {
+      return `Invalid ElevenLabs model "${model}". Valid models: ${validModels.join(", ")}.`;
+    }
+    
+    const languageCode = config.language_code as string;
+    if (languageCode && !ELEVENLABS_LANGUAGES.includes(languageCode as any)) {
+      return `Invalid ElevenLabs language code "${languageCode}". Use ISO 639-3 codes.`;
+    }
+  }
+  
+  // Validate OpenAI model compatibility
+  if (provider === "openai") {
+    const validModels = ["gpt-4o-mini-transcribe", "gpt-4o-transcribe", "whisper-1"];
+    if (!validModels.includes(model)) {
+      return `Invalid OpenAI model "${model}". Valid models: ${validModels.join(", ")}.`;
+    }
+    
+    const language = config.language as string;
+    if (language && !OPENAI_STT_LANGUAGES.includes(language as any)) {
+      return `Invalid OpenAI language code "${language}". Use ISO 639-1 codes.`;
+    }
+  }
+  
+  return null;
 };
 
 // --- TTS ----------------------------------------------------------------------------------

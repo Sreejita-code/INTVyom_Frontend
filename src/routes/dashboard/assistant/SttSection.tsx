@@ -1,4 +1,4 @@
-import { Mic } from "lucide-react";
+import { Mic, AlertTriangle } from "lucide-react";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AssistantDetail, AssistantMode, SttProvider } from "@/types/assistant";
@@ -12,7 +12,10 @@ import {
   findProvider,
   sttInertReason,
   sttOptionsFor,
+  getSttModelError,
+  getLanguageCodeError,
 } from "./providerCatalog";
+import { getProviderModeError } from "./assistantConfig";
 
 interface SttSectionProps {
   mode: AssistantMode;
@@ -52,6 +55,18 @@ export function SttSection({
 
   const config = (sttConfig ?? {}) as Record<string, any>;
   const sttModelId = config.model ?? spec?.fields.find((f) => f.key === "model")?.fallback;
+
+  // Validation
+  const providerError = getProviderModeError(mode, 'stt', sttModel);
+  const modelError = sttModelId ? getSttModelError(sttModel, sttModelId, config) : null;
+  
+  // Language code validation
+  let languageError: string | null = null;
+  if (config.language && sttModel !== "elevenlabs") {
+    languageError = getLanguageCodeError(sttModel, config.language);
+  } else if (config.language_code && sttModel === "elevenlabs") {
+    languageError = getLanguageCodeError(sttModel, config.language_code);
+  }
 
   /** Shared with `buildAssistantPayload`, which drops whatever this greys out. */
   const inertReasonFor = (field: FieldSpec): string | undefined =>
@@ -106,21 +121,54 @@ export function SttSection({
       advancedCount={advanced.length}
       advanced={
         advanced.length > 0 ? (
-          <ProviderFields
-            fields={advanced}
-            config={config}
-            onChange={onConfigChange}
-            inertReasonFor={inertReasonFor}
-          />
+          <>
+            {(modelError || languageError) && (
+              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive mb-4">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div>
+                    <span className="font-medium">Configuration Issues:</span>
+                    <ul className="mt-1 ml-4 list-disc space-y-1">
+                      {modelError && <li>{modelError}</li>}
+                      {languageError && <li>{languageError}</li>}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+            <ProviderFields
+              fields={advanced}
+              config={config}
+              onChange={onConfigChange}
+              inertReasonFor={inertReasonFor}
+            />
+          </>
         ) : undefined
       }
     >
+      {/* Validation Errors */}
+      {(providerError || modelError || languageError) && (
+        <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive mb-4">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <span className="font-medium">Configuration Issues:</span>
+              <ul className="mt-1 ml-4 list-disc space-y-1">
+                {providerError && <li>{providerError}</li>}
+                {modelError && <li>{modelError}</li>}
+                {languageError && <li>{languageError}</li>}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
       <FieldRow
         label="Provider"
         help={
           <>
             {spec?.tagline}
             {spec?.value !== "native" && " The API key comes from your Integrations page."}
+            {mode === "realtime" && " In Realtime mode, the assistant's model handles transcription internally, so this setting is ignored."}
           </>
         }
         control={

@@ -80,7 +80,16 @@ export async function callCreateAssistantEndpoint(payload: unknown): Promise<unk
   });
 
   const json = await res.json();
-  if (!res.ok) throw new Error(json.error || json.message || "Operation failed");
+  if (!res.ok) {
+    // Enhanced error handling with validation details
+    if (json.validation_errors) {
+      const errorMessages = Object.entries(json.validation_errors)
+        .map(([field, errors]) => `${field}: ${(errors as string[]).join(", ")}`)
+        .join("; ");
+      throw new Error(`Validation failed - ${errorMessages}`);
+    }
+    throw new Error(json.error || json.message || "Operation failed");
+  }
   return json;
 }
 
@@ -92,7 +101,16 @@ export async function callUpdateAssistantEndpoint(assistantId: string, payload: 
   });
 
   const json = await res.json();
-  if (!res.ok) throw new Error(json.error || json.message || "Operation failed");
+  if (!res.ok) {
+    // Enhanced error handling with validation details
+    if (json.validation_errors) {
+      const errorMessages = Object.entries(json.validation_errors)
+        .map(([field, errors]) => `${field}: ${(errors as string[]).join(", ")}`)
+        .join("; ");
+      throw new Error(`Validation failed - ${errorMessages}`);
+    }
+    throw new Error(json.error || json.message || "Operation failed");
+  }
   return json;
 }
 
