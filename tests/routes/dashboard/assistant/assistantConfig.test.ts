@@ -143,6 +143,30 @@ describe("buildAssistantPayload", () => {
     expect(withVerbosity("gpt-5.1")).toHaveProperty("verbosity", "low");
     expect(withVerbosity("chat-latest")).toHaveProperty("verbosity", "low");
     expect(withVerbosity("gpt-4.1")).not.toHaveProperty("verbosity");
+    // Open-weight and served off-platform, so not the gpt-5 generation — the gpt-4-only denylist
+    // this replaced let it through.
+    expect(withVerbosity("gpt-oss-120b")).not.toHaveProperty("verbosity");
+  });
+
+  /**
+   * `*-chat-latest` starts with "gpt-5" but tracks a gpt-5.x *chat* snapshot. The `/^gpt-5/` test
+   * this replaced read it as a reasoning model, so the temperature it does accept was stripped and
+   * the reasoning effort it rejects was left in — the exact 400 the pruning exists to prevent.
+   */
+  it("treats the chat-latest aliases as chat models, not reasoning models", () => {
+    for (const model of ["gpt-5.1-chat-latest", "gpt-5.2-chat-latest", "gpt-5.3-chat-latest"]) {
+      const config = buildAssistantPayload(
+        form({
+          assistant_mode: "cascade",
+          assistant_llm_config: { provider: "openai", model, temperature: 0.4, reasoning_effort: "low", verbosity: "low" },
+        }),
+      ).assistant_llm_config;
+
+      expect(config, model).toHaveProperty("temperature", 0.4);
+      expect(config, model).not.toHaveProperty("reasoning_effort");
+      // Still the gpt-5 generation for verbosity.
+      expect(config, model).toHaveProperty("verbosity", "low");
+    }
   });
 
   /**

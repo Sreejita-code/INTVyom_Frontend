@@ -143,7 +143,17 @@ describe("AssistantForm stage composition", () => {
 
     const panel = stage("Text model");
     expect(panel.getByRole("combobox", { name: "Reasoning effort" })).toBeEnabled();
-    expect(panel.getByText(/is a reasoning model and ignores temperature/i)).toBeInTheDocument();
+    expect(panel.getByText(/is a reasoning model and rejects temperature/i)).toBeInTheDocument();
+  });
+
+  it("treats a *-chat-latest alias as the chat model it is", () => {
+    // Starts with "gpt-5" but tracks a chat snapshot: temperature is the live knob here, and the
+    // `/^gpt-5/` test this replaced greyed out the only one it reads.
+    renderForm({ assistant_mode: "cascade", assistant_llm_config: { provider: "openai", model: "gpt-5.2-chat-latest" } });
+
+    const panel = stage("Text model");
+    expect(panel.getByRole("combobox", { name: "Reasoning effort" })).toBeDisabled();
+    expect(panel.getByText(/is a chat model and rejects reasoning effort/i)).toBeInTheDocument();
   });
 });
 

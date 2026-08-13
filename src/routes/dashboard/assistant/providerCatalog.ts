@@ -181,16 +181,19 @@ export const getLlmKnobError = (key: string, model?: string): string | null => {
   const id = model?.trim() || "";
   if (!id) return null;
 
+  // These are rejections, not silences: OpenAI answers a knob the model does not read with a 400
+  // on every LLM turn, so the call would connect and the assistant would never speak. The knob is
+  // stripped from the payload before it is sent — this string explains why it is greyed out.
   if (key === "temperature" && isReasoningModel(id)) {
-    return `${id} is a reasoning model and ignores temperature — set reasoning effort instead.`;
+    return `${id} is a reasoning model and rejects temperature — set reasoning effort instead.`;
   }
   if (key === "reasoning_effort" && !isReasoningModel(id)) {
-    return `${id} does not reason, so this is ignored — use temperature to control variation.`;
+    return `${id} is a chat model and rejects reasoning effort — use temperature to control variation.`;
   }
-  // ponytail: verbosity is `text.verbosity`, a gpt-5 parameter — same 400 as reasoning.effort on an
-  // older model. Gated on the generation rather than on reasoning so `chat-latest` keeps it.
-  if (key === "verbosity" && !/^(gpt-5|chat-latest)/.test(id)) {
-    return `${id} does not read verbosity — it is a gpt-5 parameter. Cap reply length with max output tokens instead.`;
+  // ponytail: verbosity is `text.verbosity`, a gpt-5 parameter. Gated on the generation rather than
+  // on reasoning so the chat aliases keep it.
+  if (key === "verbosity" && !isGpt5Generation(id)) {
+    return `${id} does not read verbosity — it is a gpt-5 generation parameter. Cap reply length with max output tokens instead.`;
   }
   return null;
 };
@@ -206,10 +209,10 @@ export const OPENAI_CASCADE_MODELS: FieldOption[] = [
   { value: "gpt-5-mini", label: "gpt-5-mini", hint: "Reasoning, smaller and cheaper." },
   { value: "gpt-5-nano", label: "gpt-5-nano", hint: "Reasoning, cheapest." },
   { value: "gpt-5.1", label: "gpt-5.1", hint: "Reasoning model." },
-  { value: "gpt-5.1-chat-latest", label: "gpt-5.1-chat-latest", hint: "Reasoning model." },
+  { value: "gpt-5.1-chat-latest", label: "gpt-5.1-chat-latest", hint: "Chat snapshot of 5.1 — takes temperature, not reasoning effort." },
   { value: "gpt-5.2", label: "gpt-5.2", hint: "Reasoning model." },
-  { value: "gpt-5.2-chat-latest", label: "gpt-5.2-chat-latest", hint: "Reasoning model." },
-  { value: "gpt-5.3-chat-latest", label: "gpt-5.3-chat-latest", hint: "Reasoning model." },
+  { value: "gpt-5.2-chat-latest", label: "gpt-5.2-chat-latest", hint: "Chat snapshot of 5.2 — takes temperature, not reasoning effort." },
+  { value: "gpt-5.3-chat-latest", label: "gpt-5.3-chat-latest", hint: "Chat snapshot of 5.3 — takes temperature, not reasoning effort." },
   { value: "gpt-5.4", label: "gpt-5.4", hint: "Reasoning model." },
   { value: "gpt-5.4-mini", label: "gpt-5.4-mini", hint: "Reasoning, smaller." },
   { value: "gpt-5.4-nano", label: "gpt-5.4-nano", hint: "Reasoning, cheapest of the 5.4 line." },
@@ -222,19 +225,35 @@ export const OPENAI_CASCADE_MODELS: FieldOption[] = [
 ];
 
 /**
- * The gpt-5 line reasons and ignores `temperature`; everything else is the reverse. The form
- * shows both knobs either way and greys out whichever one this model throws away.
+ * Reasoning models: they take `reasoning_effort` and are answered with a 400 if sent
+ * `temperature`. The form shows both knobs either way and greys out the one this model rejects.
+ *
+ * Spelled out per model, never matched by prefix. `gpt-5.2-chat-latest` starts with "gpt-5" but is
+ * a *chat* model, and a `/^gpt-5/` test classified all three `*-chat-latest` aliases as reasoning
+ * models — greying out the one knob they actually read. Mirrors the backend's REASONING_MODELS and
+ * api_livekit's llm_capabilities.py; a new model goes into all three.
  */
-export const isReasoningModel = (model?: string) => /^gpt-5/.test(model?.trim() ?? "");
+const REASONING_MODELS = new Set([
+  "gpt-5", "gpt-5-mini", "gpt-5-nano",
+  "gpt-5.1", "gpt-5.2", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano",
+  "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
+]);
+
+/** The gpt-5.x chat snapshots, plus the alias that follows the newest one. */
+const GPT5_CHAT_ALIASES = ["gpt-5.1-chat-latest", "gpt-5.2-chat-latest", "gpt-5.3-chat-latest", "chat-latest"];
+
+export const isReasoningModel = (model?: string) => REASONING_MODELS.has(model?.trim() ?? "");
 
 /**
- * The gpt-5 generation, including the alias that follows its newest snapshot.
+ * The gpt-5 generation — what `verbosity` (`text.verbosity`) is gated on.
  *
- * Wider than `isReasoningModel` on purpose: `chat-latest` tracks a gpt-5.x chat model, so it reads
- * the generation's own parameters (`verbosity`) while not being a reasoning model in the sense that
- * matters for `reasoning_effort` and `temperature`.
+ * Wider than `isReasoningModel` on purpose: the chat aliases track a gpt-5.x chat model, so they
+ * read the generation's own parameters while not being reasoning models in the sense that matters
+ * for `reasoning_effort` and `temperature`. Narrower than "starts with gpt-5" too — `gpt-oss-120b`
+ * is served off-platform and does not read verbosity.
  */
-const GPT5_GENERATION = /^(gpt-5|chat-latest)/;
+export const isGpt5Generation = (model?: string) =>
+  isReasoningModel(model) || GPT5_CHAT_ALIASES.includes(model?.trim() ?? "");
 
 /** Cascade-only generation knobs. Stored in every mode, read only in cascade. */
 export const CASCADE_LLM_FIELDS: FieldSpec[] = [

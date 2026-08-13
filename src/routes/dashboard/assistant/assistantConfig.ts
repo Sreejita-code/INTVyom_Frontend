@@ -187,34 +187,19 @@ const repairLlmForMode = (llm: AssistantLlmConfig | undefined, mode: AssistantMo
   return next;
 };
 
-/** Validates and repairs LLM configuration for mode compatibility */
-export const validateAndRepairLlmConfig = (llm: AssistantLlmConfig | undefined, mode: AssistantMode): AssistantLlmConfig => {
-  const repaired = repairLlmForMode(llm, mode);
-  
-  // Additional validation for cascade mode generation knobs
-  if (mode === "cascade" && repaired.model) {
-    // Check if it's a reasoning model
-    const isReasoningModel = /^gpt-5/.test(repaired.model.trim() || "");
-    const isGpt5Generation = /^(gpt-5|chat-latest)/.test(repaired.model.trim() || "");
-    
-    // Remove temperature for reasoning models
-    if (isReasoningModel && repaired.temperature !== undefined) {
-      delete (repaired as any).temperature;
-    }
-    
-    // Remove reasoning_effort for non-reasoning models
-    if (!isReasoningModel && repaired.reasoning_effort !== undefined) {
-      delete (repaired as any).reasoning_effort;
-    }
-    
-    // Remove verbosity for non-gpt-5 generation models
-    if (!isGpt5Generation && repaired.verbosity !== undefined) {
-      delete (repaired as any).verbosity;
-    }
-  }
-  
-  return repaired;
-};
+/**
+ * Repairs the LLM config for the mode: provider, and a model that mode can actually run.
+ *
+ * It deliberately does *not* prune the model-gated generation knobs. `buildAssistantPayload`
+ * already drops each one the model rejects, via the same `llmInertReason` the form greys the
+ * control with, so pruning here was a second copy of one rule — and the two copies drifted, each
+ * carrying its own `/^gpt-5/` regex that misread the `*-chat-latest` aliases. Editing form state
+ * also lost the operator's setting: a cascade → pipeline → cascade round trip re-picks gpt-4.1 and
+ * would delete a reasoning effort that switching back to a gpt-5 model should restore. Nothing
+ * invalid reaches the wire either way — the payload builder is the gate.
+ */
+export const validateAndRepairLlmConfig = (llm: AssistantLlmConfig | undefined, mode: AssistantMode): AssistantLlmConfig =>
+  repairLlmForMode(llm, mode);
 
 export const applyModeChange = (form: AssistantDetail, mode: AssistantMode): AssistantDetail => {
   const next: AssistantDetail = { 
