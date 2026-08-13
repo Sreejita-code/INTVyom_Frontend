@@ -94,13 +94,113 @@ describe("buildAssistantPayload", () => {
   });
 
   it("sends the generation knobs only in cascade, where they are read", () => {
-    const llm = { provider: "openai", model: "gpt-4.1", temperature: 0.4, verbosity: "low", parallel_tool_calls: false };
+    const llm = { provider: "openai", model: "gpt-4.1", temperature: 0.4, service_tier: "auto", parallel_tool_calls: false };
 
     const cascade = buildAssistantPayload(form({ assistant_mode: "cascade", assistant_llm_config: llm })).assistant_llm_config;
-    expect(cascade).toMatchObject({ temperature: 0.4, verbosity: "low", parallel_tool_calls: false });
+    expect(cascade).toMatchObject({ temperature: 0.4, service_tier: "auto", parallel_tool_calls: false });
 
     const pipeline = buildAssistantPayload(form({ assistant_mode: "pipeline", assistant_llm_config: llm })).assistant_llm_config;
     expect(pipeline).not.toHaveProperty("temperature");
+  });
+
+  /**
+   * The failure this pruning exists for. A reasoning effort stored against a model that does not
+   * reason is not ignored by OpenAI — it answers 400, the LiveKit plugin raises a non-retryable
+   * APIStatusError inside `_llm_inference_task`, and it does so on every turn: the assistant
+   * answers the call, logs "Start instruction sent successfully" and never says a word.
+   */
+  it("drops a reasoning effort left behind on a non-reasoning model", () => {
+    const payload = buildAssistantPayload(
+      form({
+        assistant_mode: "cascade",
+        assistant_llm_config: { provider: "openai", model: "gpt-4.1", temperature: 0.4, reasoning_effort: "low" },
+      }),
+    );
+
+    expect(payload.assistant_llm_config).not.toHaveProperty("reasoning_effort");
+    expect(payload.assistant_llm_config).toMatchObject({ model: "gpt-4.1", temperature: 0.4 });
+  });
+
+  it("drops a temperature left behind on a reasoning model", () => {
+    const payload = buildAssistantPayload(
+      form({
+        assistant_mode: "cascade",
+        assistant_llm_config: { provider: "openai", model: "gpt-5-mini", temperature: 0.4, reasoning_effort: "low" },
+      }),
+    );
+
+    expect(payload.assistant_llm_config).not.toHaveProperty("temperature");
+    expect(payload.assistant_llm_config).toMatchObject({ model: "gpt-5-mini", reasoning_effort: "low" });
+  });
+
+  /** `text.verbosity` is a gpt-5 parameter. `chat-latest` follows a gpt-5.x snapshot, so it keeps it. */
+  it("sends verbosity only to the generation that reads it", () => {
+    const withVerbosity = (model: string) =>
+      buildAssistantPayload(
+        form({ assistant_mode: "cascade", assistant_llm_config: { provider: "openai", model, verbosity: "low" } }),
+      ).assistant_llm_config;
+
+    expect(withVerbosity("gpt-5.1")).toHaveProperty("verbosity", "low");
+    expect(withVerbosity("chat-latest")).toHaveProperty("verbosity", "low");
+    expect(withVerbosity("gpt-4.1")).not.toHaveProperty("verbosity");
+  });
+
+  /**
+   * The path that breaks an assistant with no user error at all: leaving cascade and coming back
+   * re-picks gpt-4.1, a non-reasoning model, while the effort the user set on gpt-5 survives in the
+   * form. Before pruning, saving after that round trip was enough to silence the agent.
+   */
+  it("survives a cascade → pipeline → cascade round trip with a reasoning effort set", () => {
+    const start = form({
+      assistant_mode: "cascade",
+      assistant_llm_config: { provider: "openai", model: "gpt-5", reasoning_effort: "low" },
+    });
+
+    const returned = applyModeChange(applyModeChange(start, "pipeline"), "cascade");
+    expect(returned.assistant_llm_config?.model).toBe("gpt-4.1");
+    // Still in form state, so switching back to a gpt-5 model restores it rather than losing it.
+    expect(returned.assistant_llm_config?.reasoning_effort).toBe("low");
+
+    expect(buildAssistantPayload(returned).assistant_llm_config).not.toHaveProperty("reasoning_effort");
+  });
+
+  it("drops transcriber knobs the chosen model ignores", () => {
+    const deepgram = buildAssistantPayload(
+      form({
+        assistant_mode: "cascade",
+        assistant_stt_model: "deepgram",
+        assistant_stt_config: { model: "nova-2", language: "en-IN", keyterm: "invoice", enable_diarization: true },
+      }),
+    ).assistant_stt_config;
+    expect(deepgram).toEqual({ model: "nova-2", language: "en-IN", enable_diarization: true });
+
+    const flux = buildAssistantPayload(
+      form({
+        assistant_mode: "cascade",
+        assistant_stt_model: "deepgram",
+        assistant_stt_config: { model: "flux-general-en", enable_diarization: true, keyterm: "invoice" },
+      }),
+    ).assistant_stt_config;
+    expect(flux).toEqual({ model: "flux-general-en", keyterm: "invoice" });
+
+    const openai = buildAssistantPayload(
+      form({
+        assistant_mode: "cascade",
+        assistant_stt_model: "openai",
+        assistant_stt_config: { model: "gpt-4o-transcribe", detect_language: true, language: "en", prompt: "SKU-1" },
+      }),
+    ).assistant_stt_config;
+    expect(openai).toEqual({ model: "gpt-4o-transcribe", detect_language: true });
+
+    // Sarvam's own warning says transcription style is dropped before the call on v2.5. Now it is.
+    const sarvam = buildAssistantPayload(
+      form({
+        assistant_mode: "cascade",
+        assistant_stt_model: "sarvam",
+        assistant_stt_config: { model: "saaras:v2.5", language: "hi-IN", mode: "codemix" },
+      }),
+    ).assistant_stt_config;
+    expect(sarvam).toEqual({ model: "saaras:v2.5", language: "hi-IN" });
   });
 
   it("repairs an unrunnable combination rather than sending it", () => {

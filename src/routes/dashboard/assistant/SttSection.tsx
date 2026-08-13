@@ -5,7 +5,14 @@ import { AssistantDetail, AssistantMode, SttProvider } from "@/types/assistant";
 import { FieldRow } from "./FieldRow";
 import { ProviderFields } from "./ProviderFields";
 import { StageSection, TRIGGER_ONE_LINE } from "./StageSection";
-import { PIPELINE_DEGRADES_STT, FieldSpec, STT_PROVIDERS, findProvider, sttOptionsFor } from "./providerCatalog";
+import {
+  PIPELINE_DEGRADES_STT,
+  FieldSpec,
+  STT_PROVIDERS,
+  findProvider,
+  sttInertReason,
+  sttOptionsFor,
+} from "./providerCatalog";
 
 interface SttSectionProps {
   mode: AssistantMode;
@@ -46,25 +53,9 @@ export function SttSection({
   const config = (sttConfig ?? {}) as Record<string, any>;
   const sttModelId = config.model ?? spec?.fields.find((f) => f.key === "model")?.fallback;
 
-  const inertReasonFor = (field: FieldSpec): string | undefined => {
-    if (sttModel === "deepgram") {
-      if (field.key === "keyterm" && sttModelId === "nova-2") {
-        return "nova-2 uses a different keyword mechanism and ignores this.";
-      }
-      if (field.key === "enable_diarization" && String(sttModelId).startsWith("flux")) {
-        return "Flux models drop speaker labels — switch to a nova model to use them.";
-      }
-    }
-    if (sttModel === "openai") {
-      if (field.key === "language" && config.detect_language) {
-        return "Auto-detect is on, so this language is ignored.";
-      }
-      if (field.key === "prompt" && sttModelId !== "whisper-1") {
-        return "Only whisper-1 reads the prompt. This model accepts it and does nothing with it.";
-      }
-    }
-    return undefined;
-  };
+  /** Shared with `buildAssistantPayload`, which drops whatever this greys out. */
+  const inertReasonFor = (field: FieldSpec): string | undefined =>
+    sttInertReason(sttModel, field.key, config);
 
   const summary = [
     spec?.label ?? sttModel,

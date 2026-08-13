@@ -162,6 +162,15 @@ export const OPENAI_CASCADE_MODELS: FieldOption[] = [
  */
 export const isReasoningModel = (model?: string) => /^gpt-5/.test(model?.trim() ?? "");
 
+/**
+ * The gpt-5 generation, including the alias that follows its newest snapshot.
+ *
+ * Wider than `isReasoningModel` on purpose: `chat-latest` tracks a gpt-5.x chat model, so it reads
+ * the generation's own parameters (`verbosity`) while not being a reasoning model in the sense that
+ * matters for `reasoning_effort` and `temperature`.
+ */
+const GPT5_GENERATION = /^(gpt-5|chat-latest)/;
+
 /** Cascade-only generation knobs. Stored in every mode, read only in cascade. */
 export const CASCADE_LLM_FIELDS: FieldSpec[] = [
   {
@@ -245,6 +254,37 @@ export const CASCADE_LLM_FIELDS: FieldSpec[] = [
     advanced: true,
   },
 ];
+
+/**
+ * Why a cascade knob is dead for this model, or `undefined` when the model reads it.
+ *
+ * This lives beside the specs rather than in the section that renders it because two callers need
+ * the same answer: the form greys the control, and `buildAssistantPayload` drops the key. Sending
+ * one of these is not a silent no-op — OpenAI answers 400, the LiveKit plugin raises a
+ * non-retryable `APIStatusError` on every turn, and the assistant connects and never speaks:
+ *
+ *   APIStatusError: message="Unsupported parameter: 'reasoning.effort' is not supported with
+ *   this model." ... retryable=False
+ *
+ * So a greyed control has to mean the value is gone from the payload too, not just from the UI.
+ */
+export const llmInertReason = (key: string, model?: string): string | undefined => {
+  const id = model?.trim() || "";
+  if (!id) return undefined;
+
+  if (key === "temperature" && isReasoningModel(id)) {
+    return `${id} is a reasoning model and ignores temperature — set reasoning effort instead.`;
+  }
+  if (key === "reasoning_effort" && !isReasoningModel(id)) {
+    return `${id} does not reason, so this is ignored — use temperature to control variation.`;
+  }
+  // ponytail: verbosity is `text.verbosity`, a gpt-5 parameter — same 400 as reasoning.effort on an
+  // older model. Gated on the generation rather than on reasoning so `chat-latest` keeps it.
+  if (key === "verbosity" && !GPT5_GENERATION.test(id)) {
+    return `${id} does not read verbosity — it is a gpt-5 parameter. Cap reply length with max output tokens instead.`;
+  }
+  return undefined;
+};
 
 // --- STT ----------------------------------------------------------------------------------
 
@@ -480,7 +520,47 @@ export const STT_PROVIDERS: ProviderSpec[] = [
   },
 ];
 
+/**
+ * Why a transcriber knob is dead for this provider's current model and settings.
+ *
+ * Same contract as `llmInertReason`: the form greys it, the payload drops it. Milder consequences
+ * here — most of these are ignored rather than rejected — but a stored setting that never runs is
+ * still a lie about what the call does, and `language_code` on ElevenLabs proves the category can
+ * kill a call outright.
+ */
+export const sttInertReason = (
+  provider: string,
+  key: string,
+  config: Record<string, unknown> = {},
+): string | undefined => {
+  const fallback = findProvider(STT_PROVIDERS, provider)?.fields.find((f) => f.key === "model")?.fallback;
+  const model = String(config.model ?? fallback ?? "");
+
+  if (provider === "sarvam" && key === "mode" && model !== "saaras:v3") {
+    return `Only saaras:v3 reads transcription style. ${model} rejects it, so it is dropped before the call.`;
+  }
+  if (provider === "deepgram") {
+    if (key === "keyterm" && model === "nova-2") {
+      return "nova-2 uses a different keyword mechanism and ignores this.";
+    }
+    if (key === "enable_diarization" && model.startsWith("flux")) {
+      return "Flux models drop speaker labels — switch to a nova model to use them.";
+    }
+  }
+  if (provider === "openai") {
+    if (key === "language" && config.detect_language) {
+      return "Auto-detect is on, so this language is ignored.";
+    }
+    if (key === "prompt" && model !== "whisper-1") {
+      return "Only whisper-1 reads the prompt. This model accepts it and does nothing with it.";
+    }
+  }
+  return undefined;
+};
+
 // --- TTS ----------------------------------------------------------------------------------
+// No model-dependent dead knobs here yet: the one provider with a model select (ElevenLabs) reads
+// every field on every model. If that changes, this is where a `ttsInertReason` goes.
 
 export const TTS_PROVIDERS: ProviderSpec[] = [
   {

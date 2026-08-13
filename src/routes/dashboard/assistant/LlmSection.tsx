@@ -11,6 +11,7 @@ import {
   OPENAI_CASCADE_MODELS,
   OPENAI_REALTIME_MODELS,
   isReasoningModel,
+  llmInertReason,
 } from "./providerCatalog";
 
 interface LlmSectionProps {
@@ -46,16 +47,11 @@ export function LlmSection({ mode, llmConfig, onChange, step, last }: LlmSection
     isCascade ? (reasoning ? `effort ${llmConfig?.reasoning_effort ?? "unset"}` : `temp ${llmConfig?.temperature ?? 0.8}`) : undefined,
   ].filter(Boolean) as string[];
 
-  /** Cascade-only knobs, split by whether this model family reads them. */
-  const inertReasonFor = (key: string) => {
-    if (key === "temperature" && reasoning) {
-      return `${model} is a reasoning model and ignores temperature — set reasoning effort instead.`;
-    }
-    if (key === "reasoning_effort" && !reasoning) {
-      return `${model} does not reason, so this is ignored — use temperature to control variation.`;
-    }
-    return undefined;
-  };
+  /**
+   * Which knobs this model throws away. Shared with `buildAssistantPayload`, which drops the same
+   * keys — a control greyed here has to be absent from the save, or the call fails on every turn.
+   */
+  const inertReasonFor = (key: string) => llmInertReason(key, model);
 
   const visibleKnobs = CASCADE_LLM_FIELDS.filter((f) => !f.advanced);
   const advancedKnobs = CASCADE_LLM_FIELDS.filter((f) => f.advanced);

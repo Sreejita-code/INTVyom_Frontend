@@ -22,6 +22,8 @@ import {
   TTS_PROVIDERS,
   defaultConfigFor,
   findProvider,
+  llmInertReason,
+  sttInertReason,
 } from "./providerCatalog";
 
 const CASCADE_MODEL_IDS = OPENAI_CASCADE_MODELS.map((m) => m.value);
@@ -53,6 +55,26 @@ const clean = (config: Record<string, any> | undefined): Record<string, any> => 
       continue;
     }
     out[key] = NUMERIC_KEYS.has(key) ? Number(value) : value;
+  }
+  return out;
+};
+
+/**
+ * Drops transcriber keys the selected model does not read.
+ *
+ * The form already greys these out, but greying a control does not remove the value it was holding
+ * — switch model and the old key is still in the config, still sent. See `buildAssistantPayload`
+ * for why that is not cosmetic.
+ */
+const pruneStt = (
+  provider: string,
+  config: AssistantDetail["assistant_stt_config"],
+): Record<string, unknown> => {
+  const source = { ...(config ?? {}) } as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (sttInertReason(provider, key, source)) continue;
+    out[key] = value;
   }
   return out;
 };
@@ -154,6 +176,11 @@ export const hydrateForm = (detail: any): AssistantDetail => {
  * Only fields the selected mode actually reads go out: realtime sends no speech stages, and
  * the cascade generation knobs are dropped outside cascade so a pipeline assistant does not
  * carry settings nothing will read.
+ *
+ * The same applies within a mode, per model. A knob the chosen model rejects is dropped here —
+ * `llmInertReason` and `sttInertReason` decide which, and the form greys out exactly what this
+ * drops, so the editor and the wire cannot disagree. They used to: the sections greyed a stale
+ * knob while this function kept sending it.
  */
 export const buildAssistantPayload = (form: AssistantDetail): Record<string, any> => {
   const mode = form.assistant_mode;
@@ -168,6 +195,11 @@ export const buildAssistantPayload = (form: AssistantDetail): Record<string, any
   if (isRealtime && llm.voice?.trim()) llmConfig.voice = llm.voice.trim();
   if (isCascade) {
     for (const spec of CASCADE_LLM_FIELDS) {
+      // A knob this model rejects is dropped rather than sent. `reasoning_effort` on a non-reasoning
+      // model — which a cascade → pipeline → cascade round trip produces on its own, since coming
+      // back re-picks gpt-4.1 while the stored effort survives — is a 400 on every turn, so the
+      // assistant answers the call and never speaks. The form greys the same keys.
+      if (llmInertReason(spec.key, llm.model)) continue;
       const value = (llm as Record<string, any>)[spec.key];
       if (value !== undefined && value !== null && value !== "") {
         llmConfig[spec.key] = NUMERIC_KEYS.has(spec.key) ? Number(value) : value;
@@ -201,7 +233,10 @@ export const buildAssistantPayload = (form: AssistantDetail): Record<string, any
     payload.assistant_tts_config = clean(form.assistant_tts_config);
     payload.assistant_stt_model = form.assistant_stt_model;
     // `native` takes no config at all; anything else would be an unknown-key 422.
-    payload.assistant_stt_config = form.assistant_stt_model === "native" ? {} : clean(form.assistant_stt_config);
+    payload.assistant_stt_config =
+      form.assistant_stt_model === "native"
+        ? {}
+        : clean(pruneStt(form.assistant_stt_model, form.assistant_stt_config));
   }
 
   return payload;
