@@ -171,6 +171,8 @@ const pruneStt = (
   return out;
 };
 
+import { isGeminiVoice } from "./providerCatalog";
+
 /** Model IDs are per-mode and the two families are disjoint, so a mode change re-picks one. */
 const repairLlmForMode = (llm: AssistantLlmConfig | undefined, mode: AssistantMode): AssistantLlmConfig => {
   const next: AssistantLlmConfig = { ...(llm ?? {}) };
@@ -178,25 +180,28 @@ const repairLlmForMode = (llm: AssistantLlmConfig | undefined, mode: AssistantMo
   if (mode !== "realtime" && next.provider === "gemini") next.provider = "openai";
 
   const provider = next.provider || "openai";
-  if (provider === "gemini") return next;
+  if (provider === "gemini") {
+    if (!next.model || !["gemini-2.5-flash-native-audio-preview-12-2025", "gemini-live-2.5-flash-native-audio", "gemini-3.1-flash-live-preview"].includes(next.model)) {
+      next.model = "gemini-2.5-flash-native-audio-preview-12-2025";
+    }
+    if (!next.voice || !isGeminiVoice(next.voice)) {
+      next.voice = "Puck";
+    }
+    return next;
+  }
 
   const allowed = mode === "cascade" ? CASCADE_MODEL_IDS : REALTIME_MODEL_IDS;
   if (!next.model || !allowed.includes(next.model)) {
     next.model = mode === "cascade" ? "gpt-4.1" : "gpt-realtime-1.5";
+  }
+  if (next.voice && isGeminiVoice(next.voice)) {
+    next.voice = "marin";
   }
   return next;
 };
 
 /**
  * Repairs the LLM config for the mode: provider, and a model that mode can actually run.
- *
- * It deliberately does *not* prune the model-gated generation knobs. `buildAssistantPayload`
- * already drops each one the model rejects, via the same `llmInertReason` the form greys the
- * control with, so pruning here was a second copy of one rule — and the two copies drifted, each
- * carrying its own `/^gpt-5/` regex that misread the `*-chat-latest` aliases. Editing form state
- * also lost the operator's setting: a cascade → pipeline → cascade round trip re-picks gpt-4.1 and
- * would delete a reasoning effort that switching back to a gpt-5 model should restore. Nothing
- * invalid reaches the wire either way — the payload builder is the gate.
  */
 export const validateAndRepairLlmConfig = (llm: AssistantLlmConfig | undefined, mode: AssistantMode): AssistantLlmConfig =>
   repairLlmForMode(llm, mode);
@@ -214,11 +219,6 @@ export const applyModeChange = (form: AssistantDetail, mode: AssistantMode): Ass
     next.assistant_stt_config = defaultConfigFor(findProvider(STT_PROVIDERS, "sarvam"));
   }
 
-  // Pipeline only ever runs sarvam or native; the rest are replaced by native at call time. The
-  // API would accept them, but carrying one through a deliberate mode change would save a setting
-  // the call is going to ignore, so switching *into* pipeline repairs it to the default tap. A
-  // value that was already stored is left alone — `SttSection` shows it with an explanation
-  // instead, so the assistant stays repairable rather than being silently rewritten on open.
   if (mode === "pipeline" && !PIPELINE_STT_MODELS.includes(next.assistant_stt_model)) {
     next.assistant_stt_model = "sarvam";
     next.assistant_stt_config = defaultConfigFor(findProvider(STT_PROVIDERS, "sarvam"));
@@ -246,9 +246,7 @@ export const applyTtsProvider = (form: AssistantDetail, provider: TtsProvider): 
 });
 
 /**
- * Fetched assistant → form state. Stored configs are carried over whole rather than reduced to
- * the handful of fields the editor used to know about, so editing a name cannot wipe a knob
- * the form does not render.
+ * Fetched assistant → form state.
  */
 export const hydrateForm = (detail: any): AssistantDetail => {
   const mode: AssistantMode = detail.assistant_mode ?? "pipeline";
@@ -281,18 +279,36 @@ export const hydrateForm = (detail: any): AssistantDetail => {
 };
 
 /**
+ * Drops TTS keys the selected model does not read.
+ * e.g., ElevenLabs eleven_v3 model has no speed control.
+ */
+const pruneTts = (
+  provider: string,
+  config: AssistantDetail["assistant_tts_config"],
+): Record<string, unknown> => {
+  const source = clean(config);
+  if (provider === "elevenlabs" && source.voice_settings) {
+    const model = String(source.model ?? "eleven_v3");
+    if (model === "eleven_v3") {
+      const vs = { ...(source.voice_settings as Record<string, unknown>) };
+      delete vs.speed;
+      if (Object.keys(vs).length > 0) {
+        source.voice_settings = vs;
+      } else {
+        delete source.voice_settings;
+      }
+    }
+  }
+  return source;
+};
+
+/**
  * Form state → create/update body.
  *
- * Only fields the selected mode actually reads go out: realtime sends no speech stages, and
- * the cascade generation knobs are dropped outside cascade so a pipeline assistant does not
- * carry settings nothing will read.
- *
- * The same applies within a mode, per model. A knob the chosen model rejects is dropped here —
- * `llmInertReason` and `sttInertReason` decide which, and the form greys out exactly what this
- * drops, so the editor and the wire cannot disagree. They used to: the sections greyed a stale
- * knob while this function kept sending it.
+ * Explicitly sends `null` for inert or model-rejected knobs (e.g. temperature on reasoning models,
+ * voice in pipeline/cascade) so backend key-by-key dictionary merging clears stored invalid keys.
  */
-export const buildAssistantPayload = (form: AssistantDetail): Record<string, any> => {
+export const buildAssistantPayload = (form: AssistantDetail, hasTools?: boolean): Record<string, any> => {
   const mode = form.assistant_mode;
   const isRealtime = mode === "realtime";
   const isCascade = mode === "cascade";
@@ -314,18 +330,40 @@ export const buildAssistantPayload = (form: AssistantDetail): Record<string, any
     }
     llmConfig.model = llm.model.trim();
   }
-  if (isRealtime && llm.voice?.trim()) llmConfig.voice = llm.voice.trim();
-  if (isCascade) {
-    for (const spec of CASCADE_LLM_FIELDS) {
-      // A knob this model rejects is dropped rather than sent. `reasoning_effort` on a non-reasoning
-      // model — which a cascade → pipeline → cascade round trip produces on its own, since coming
-      // back re-picks gpt-4.1 while the stored effort survives — is a 400 on every turn, so the
-      // assistant answers the call and never speaks. The form greys the same keys.
-      if (llmInertReason(spec.key, llm.model)) continue;
-      const value = (llm as Record<string, any>)[spec.key];
-      if (value !== undefined && value !== null && value !== "") {
-        llmConfig[spec.key] = NUMERIC_KEYS.has(spec.key) ? Number(value) : value;
+
+  if (isRealtime) {
+    if (llm.voice?.trim()) {
+      if (llm.provider === "openai" && isGeminiVoice(llm.voice)) {
+        llmConfig.voice = "marin";
+      } else {
+        llmConfig.voice = llm.voice.trim();
       }
+    } else {
+      llmConfig.voice = null;
+    }
+  } else {
+    // Explicit null clears stored voice in DB when mode is not realtime
+    llmConfig.voice = null;
+  }
+
+  if (isCascade) {
+    const toolsPresent = hasTools ?? (form.assistant_end_call_enabled ?? false);
+    for (const spec of CASCADE_LLM_FIELDS) {
+      const value = (llm as Record<string, any>)[spec.key];
+      const inert = llmInertReason(spec.key, llm.model, toolsPresent, value);
+      if (inert) {
+        // Explicit null clears stored inert knob in DB on backend update!
+        llmConfig[spec.key] = null;
+      } else if (value !== undefined && value !== null && value !== "") {
+        llmConfig[spec.key] = NUMERIC_KEYS.has(spec.key) ? Number(value) : value;
+      } else {
+        llmConfig[spec.key] = null;
+      }
+    }
+  } else {
+    // In non-cascade modes, explicitly clear cascade generation knobs
+    for (const spec of CASCADE_LLM_FIELDS) {
+      llmConfig[spec.key] = null;
     }
   }
 
@@ -358,7 +396,7 @@ export const buildAssistantPayload = (form: AssistantDetail): Record<string, any
     }
     
     payload.assistant_tts_model = form.assistant_tts_model;
-    payload.assistant_tts_config = clean(form.assistant_tts_config);
+    payload.assistant_tts_config = pruneTts(form.assistant_tts_model, form.assistant_tts_config);
     payload.assistant_stt_model = form.assistant_stt_model;
     // `native` takes no config at all; anything else would be an unknown-key 422.
     payload.assistant_stt_config =
@@ -366,19 +404,11 @@ export const buildAssistantPayload = (form: AssistantDetail): Record<string, any
         ? {}
         : clean(pruneStt(form.assistant_stt_model, form.assistant_stt_config));
   } else {
-    // Even in realtime mode, validate that stored configs won't cause issues
-    const sttError = getProviderModeError(mode, 'stt', form.assistant_stt_model);
-    if (sttError) {
-      console.warn(`STT Configuration Warning (Realtime Mode): ${sttError}`);
-    }
-  }
-
-  // Validate TTS provider compatibility (except in realtime where it's ignored)
-  if (!isRealtime) {
-    const ttsError = getProviderModeError(mode, 'tts', form.assistant_tts_model);
-    if (ttsError) {
-      console.warn(`TTS Configuration Warning: ${ttsError}`);
-    }
+    // In Realtime mode, STT & TTS stages are not used
+    payload.assistant_tts_model = null;
+    payload.assistant_tts_config = null;
+    payload.assistant_stt_model = null;
+    payload.assistant_stt_config = null;
   }
 
   return payload;

@@ -410,6 +410,7 @@ export function AssistantForm({
               last={isRealtimeMode}
               mode={formData.assistant_mode}
               llmConfig={formData.assistant_llm_config}
+              hasTools={attachedToolIds.length > 0 || (formData.assistant_end_call_enabled ?? false)}
               onChange={(patch) =>
                 setFormData((prev) => ({
                   ...prev,

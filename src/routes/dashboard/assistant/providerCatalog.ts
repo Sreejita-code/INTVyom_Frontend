@@ -166,9 +166,53 @@ export const getLanguageCodeError = (provider: string, code: string): string | n
 export const OPENAI_REALTIME_MODELS: FieldOption[] = [
   { value: "gpt-realtime-1.5", label: "gpt-realtime-1.5", hint: "Default. Current realtime model." },
   { value: "gpt-realtime", label: "gpt-realtime", hint: "Previous generation." },
+  { value: "gpt-realtime-2", label: "gpt-realtime-2", hint: "Next-gen realtime model." },
+  { value: "gpt-realtime-2025-08-28", label: "gpt-realtime-2025-08-28", hint: "Realtime snapshot." },
   { value: "gpt-realtime-mini", label: "gpt-realtime-mini", hint: "Cheaper and faster, less capable." },
-  { value: "gpt-4o-realtime-preview", label: "gpt-4o-realtime-preview", hint: "Legacy preview model." },
-  { value: "gpt-4o-mini-realtime-preview", label: "gpt-4o-mini-realtime-preview", hint: "Legacy preview, smaller." },
+];
+
+/** Gemini Live models for Realtime mode. */
+export const GEMINI_LIVE_MODELS: FieldOption[] = [
+  {
+    value: "gemini-2.5-flash-native-audio-preview-12-2025",
+    label: "gemini-2.5-flash-native-audio-preview-12-2025",
+    hint: "Default. Recommended — supports farewells and silence reprompts.",
+  },
+  {
+    value: "gemini-live-2.5-flash-native-audio",
+    label: "gemini-live-2.5-flash-native-audio",
+    hint: "GA Live model.",
+  },
+  {
+    value: "gemini-3.1-flash-live-preview",
+    label: "gemini-3.1-flash-live-preview",
+    hint: "Preview model — ignores farewells & silence reprompts after 1st turn.",
+  },
+];
+
+/** The 30 Gemini Live voice roster names. */
+export const GEMINI_LIVE_VOICES: FieldOption[] = [
+  "Puck", "Charon", "Kore", "Fenrir", "Aoede", "Zephyr", "Leto", "Nereid", "Orion", "Pegasus",
+  "Rhea", "Tethys", "Titan", "Vesta", "Acastus", "Achilles", "Actaeon", "Adonis", "Agamemnon", "Ajax",
+  "Alcander", "Alcon", "Alexander", "Althea", "Amphion", "Anchises", "Andromache", "Antigone", "Apollo", "Ariadne",
+].map((v) => ({ value: v, label: v }));
+
+export const isGeminiVoice = (voice?: string): boolean => {
+  if (!voice) return false;
+  const target = voice.trim().toLowerCase();
+  return GEMINI_LIVE_VOICES.some((v) => v.value.toLowerCase() === target);
+};
+
+/** OpenAI Realtime voice options. */
+export const OPENAI_REALTIME_VOICES: FieldOption[] = [
+  { value: "marin", label: "marin", hint: "Default." },
+  { value: "cedar", label: "cedar" },
+  { value: "alloy", label: "alloy" },
+  { value: "echo", label: "echo" },
+  { value: "shimmer", label: "shimmer" },
+  { value: "verse", label: "verse" },
+  { value: "sol", label: "sol" },
+  { value: "ballad", label: "ballad" },
 ];
 
 /**
@@ -177,23 +221,30 @@ export const OPENAI_REALTIME_MODELS: FieldOption[] = [
 /**
  * Gets validation error for LLM generation knob/model compatibility
  */
-export const getLlmKnobError = (key: string, model?: string): string | null => {
+export const getLlmKnobError = (key: string, model?: string, hasTools?: boolean, val?: any): string | null => {
   const id = model?.trim() || "";
   if (!id) return null;
 
-  // These are rejections, not silences: OpenAI answers a knob the model does not read with a 400
-  // on every LLM turn, so the call would connect and the assistant would never speak. The knob is
-  // stripped from the payload before it is sent — this string explains why it is greyed out.
   if (key === "temperature" && isReasoningModel(id)) {
     return `${id} is a reasoning model and rejects temperature — set reasoning effort instead.`;
   }
-  if (key === "reasoning_effort" && !isReasoningModel(id)) {
-    return `${id} is a chat model and rejects reasoning effort — use temperature to control variation.`;
+  if (key === "reasoning_effort") {
+    if (!isReasoningModel(id)) {
+      return `${id} is a chat model and rejects reasoning effort — use temperature to control variation.`;
+    }
+    if (hasTools && ["gpt-5.2", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"].includes(id)) {
+      return `${id} rejects reasoning effort when function tools are attached — reasoning.effort will be cleared automatically.`;
+    }
   }
-  // ponytail: verbosity is `text.verbosity`, a gpt-5 parameter. Gated on the generation rather than
-  // on reasoning so the chat aliases keep it.
+  // verbosity is `text.verbosity`, a gpt-5 parameter.
   if (key === "verbosity" && !isGpt5Generation(id)) {
     return `${id} does not read verbosity — it is a gpt-5 generation parameter. Cap reply length with max output tokens instead.`;
+  }
+  if (key === "service_tier" && val === "flex" && !isReasoningModel(id)) {
+    return "flex service tier is supported on gpt-5 reasoning models only.";
+  }
+  if (key === "tool_choice" && val === "required" && !hasTools) {
+    return "tool_choice 'required' forces a tool call on every turn, but no tools are attached to this assistant.";
   }
   return null;
 };
@@ -209,10 +260,7 @@ export const OPENAI_CASCADE_MODELS: FieldOption[] = [
   { value: "gpt-5-mini", label: "gpt-5-mini", hint: "Reasoning, smaller and cheaper." },
   { value: "gpt-5-nano", label: "gpt-5-nano", hint: "Reasoning, cheapest." },
   { value: "gpt-5.1", label: "gpt-5.1", hint: "Reasoning model." },
-  { value: "gpt-5.1-chat-latest", label: "gpt-5.1-chat-latest", hint: "Chat snapshot of 5.1 — takes temperature, not reasoning effort." },
   { value: "gpt-5.2", label: "gpt-5.2", hint: "Reasoning model." },
-  { value: "gpt-5.2-chat-latest", label: "gpt-5.2-chat-latest", hint: "Chat snapshot of 5.2 — takes temperature, not reasoning effort." },
-  { value: "gpt-5.3-chat-latest", label: "gpt-5.3-chat-latest", hint: "Chat snapshot of 5.3 — takes temperature, not reasoning effort." },
   { value: "gpt-5.4", label: "gpt-5.4", hint: "Reasoning model." },
   { value: "gpt-5.4-mini", label: "gpt-5.4-mini", hint: "Reasoning, smaller." },
   { value: "gpt-5.4-nano", label: "gpt-5.4-nano", hint: "Reasoning, cheapest of the 5.4 line." },
@@ -220,18 +268,11 @@ export const OPENAI_CASCADE_MODELS: FieldOption[] = [
   { value: "gpt-5.6-sol", label: "gpt-5.6-sol", hint: "Reasoning model." },
   { value: "gpt-5.6-terra", label: "gpt-5.6-terra", hint: "Reasoning model." },
   { value: "gpt-5.6-luna", label: "gpt-5.6-luna", hint: "Reasoning model." },
-  { value: "chat-latest", label: "chat-latest", hint: "Follows the newest gpt-5.x chat snapshot." },
-  { value: "gpt-oss-120b", label: "gpt-oss-120b", hint: "Open-weight model, not a reasoning model." },
 ];
 
 /**
  * Reasoning models: they take `reasoning_effort` and are answered with a 400 if sent
  * `temperature`. The form shows both knobs either way and greys out the one this model rejects.
- *
- * Spelled out per model, never matched by prefix. `gpt-5.2-chat-latest` starts with "gpt-5" but is
- * a *chat* model, and a `/^gpt-5/` test classified all three `*-chat-latest` aliases as reasoning
- * models — greying out the one knob they actually read. Mirrors the backend's REASONING_MODELS and
- * api_livekit's llm_capabilities.py; a new model goes into all three.
  */
 const REASONING_MODELS = new Set([
   "gpt-5", "gpt-5-mini", "gpt-5-nano",
@@ -239,19 +280,11 @@ const REASONING_MODELS = new Set([
   "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
 ]);
 
-/** The gpt-5.x chat snapshots, plus the alias that follows the newest one. */
-const GPT5_CHAT_ALIASES = ["gpt-5.1-chat-latest", "gpt-5.2-chat-latest", "gpt-5.3-chat-latest", "chat-latest"];
+/** The gpt-5.x chat snapshots (if any). */
+const GPT5_CHAT_ALIASES: string[] = [];
 
 export const isReasoningModel = (model?: string) => REASONING_MODELS.has(model?.trim() ?? "");
 
-/**
- * The gpt-5 generation — what `verbosity` (`text.verbosity`) is gated on.
- *
- * Wider than `isReasoningModel` on purpose: the chat aliases track a gpt-5.x chat model, so they
- * read the generation's own parameters while not being reasoning models in the sense that matters
- * for `reasoning_effort` and `temperature`. Narrower than "starts with gpt-5" too — `gpt-oss-120b`
- * is served off-platform and does not read verbosity.
- */
 export const isGpt5Generation = (model?: string) =>
   isReasoningModel(model) || GPT5_CHAT_ALIASES.includes(model?.trim() ?? "");
 
@@ -310,11 +343,11 @@ export const CASCADE_LLM_FIELDS: FieldSpec[] = [
     options: [
       { value: "auto", label: "auto" },
       { value: "default", label: "default" },
-      { value: "flex", label: "flex", hint: "Cheaper, can queue under load." },
-      { value: "scale", label: "scale" },
+      { value: "fast", label: "fast", hint: "Undocumented by OpenAI, works everywhere." },
+      { value: "flex", label: "flex", hint: "gpt-5 generation only. Cheaper, can queue under load." },
       { value: "priority", label: "priority", hint: "Dearest, most consistent latency." },
     ],
-    help: "OpenAI's processing and billing tier. Priority buys steadier latency; flex trades latency for cost.",
+    help: "OpenAI's processing and billing tier. Priority buys steadier latency; flex trades latency for cost (gpt-5 models only).",
     advanced: true,
   },
   {
@@ -352,8 +385,8 @@ export const CASCADE_LLM_FIELDS: FieldSpec[] = [
  *
  * So a greyed control has to mean the value is gone from the payload too, not just from the UI.
  */
-export const llmInertReason = (key: string, model?: string): string | undefined => {
-  return getLlmKnobError(key, model) || undefined;
+export const llmInertReason = (key: string, model?: string, hasTools?: boolean, val?: any): string | undefined => {
+  return getLlmKnobError(key, model, hasTools, val) || undefined;
 };
 
 // --- STT ----------------------------------------------------------------------------------
@@ -725,6 +758,27 @@ export const getSttModelError = (
 // No model-dependent dead knobs here yet: the one provider with a model select (ElevenLabs) reads
 // every field on every model. If that changes, this is where a `ttsInertReason` goes.
 
+export const SARVAM_BULBUL_V3_SPEAKERS = [
+  "aayan", "aditya", "advait", "amelia", "amit", "ashutosh", "dev", "ishita",
+  "kabir", "kavitha", "kavya", "manan", "neha", "pooja", "priya", "rahul",
+  "ratan", "ritu", "rohan", "roopa", "rupali", "shreya", "shruti", "shubh",
+  "simran", "sophia", "suhani", "sumit", "tanya", "varun",
+] as const;
+
+export const ttsInertReason = (
+  provider: string,
+  key: string,
+  config: Record<string, unknown> = {},
+): string | undefined => {
+  if (provider === "elevenlabs" && key === "speed") {
+    const model = String(config.model ?? "eleven_v3");
+    if (model === "eleven_v3") {
+      return "eleven_v3 has no speed control. Switch to eleven_multilingual_v2, eleven_turbo_v2_5, or eleven_flash_v2_5 to adjust speed.";
+    }
+  }
+  return undefined;
+};
+
 export const TTS_PROVIDERS: ProviderSpec[] = [
   {
     value: "cartesia",
@@ -796,11 +850,12 @@ export const TTS_PROVIDERS: ProviderSpec[] = [
       {
         key: "speaker",
         label: "Speaker",
-        control: "text",
-        mono: true,
+        control: "select",
+        fallback: "shubh",
         required: true,
-        placeholder: "Sarvam speaker name",
-        help: "The Sarvam speaker that voices this assistant.",
+        options: asOptions(SARVAM_BULBUL_V3_SPEAKERS),
+        help: "The Sarvam speaker that voices this assistant (Bulbul v3 roster).",
+        warn: "v2 speakers (e.g. anushka, manisha, vidya) are not available on bulbul:v3 and will cause call setup errors.",
       },
       {
         key: "target_language_code",

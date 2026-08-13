@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "api-livekit-docs": {
+      "serverUrl": "https://api-livekit-vyom.indusnettechnologies.com/mcp"
+    }
+  }
+}

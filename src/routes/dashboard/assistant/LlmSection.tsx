@@ -10,6 +10,9 @@ import {
   CASCADE_LLM_FIELDS,
   OPENAI_CASCADE_MODELS,
   OPENAI_REALTIME_MODELS,
+  GEMINI_LIVE_MODELS,
+  GEMINI_LIVE_VOICES,
+  OPENAI_REALTIME_VOICES,
   isReasoningModel,
   llmInertReason,
   getLlmKnobError,
@@ -22,24 +25,25 @@ interface LlmSectionProps {
   onChange: (patch: Partial<AssistantLlmConfig>) => void;
   step: number;
   last?: boolean;
+  hasTools?: boolean;
 }
 
 /**
  * The model that decides what to say — the one stage every mode runs.
- *
- * The two model families are mutually exclusive: pipeline and realtime talk to OpenAI's
- * realtime API, cascade talks to the chat API, and sending one family's ID to the other is
- * rejected. The mode picks the list, so the wrong ID is not reachable from the form.
  */
-export function LlmSection({ mode, llmConfig, onChange, step, last }: LlmSectionProps) {
+export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: LlmSectionProps) {
   const provider = llmConfig?.provider || "openai";
   const isCascade = mode === "cascade";
   const isRealtime = mode === "realtime";
   const isGemini = provider === "gemini";
 
   const models = isCascade ? OPENAI_CASCADE_MODELS : OPENAI_REALTIME_MODELS;
-  const defaultModel = isCascade ? "gpt-4.1" : "gpt-realtime-1.5";
-  const model = llmConfig?.model?.trim() || (isGemini ? "" : defaultModel);
+  const defaultModel = isCascade
+    ? "gpt-4.1"
+    : isGemini
+      ? "gemini-2.5-flash-native-audio-preview-12-2025"
+      : "gpt-realtime-1.5";
+  const model = llmConfig?.model?.trim() || defaultModel;
   const reasoning = isReasoningModel(model);
 
   // Validation
@@ -50,33 +54,29 @@ export function LlmSection({ mode, llmConfig, onChange, step, last }: LlmSection
   const knobErrors: string[] = [];
   if (isCascade && model) {
     if (llmConfig?.temperature !== undefined) {
-      const tempError = getLlmKnobError("temperature", model);
+      const tempError = getLlmKnobError("temperature", model, hasTools, llmConfig?.temperature);
       if (tempError) knobErrors.push(tempError);
     }
     
     if (llmConfig?.reasoning_effort !== undefined) {
-      const effortError = getLlmKnobError("reasoning_effort", model);
+      const effortError = getLlmKnobError("reasoning_effort", model, hasTools, llmConfig?.reasoning_effort);
       if (effortError) knobErrors.push(effortError);
     }
     
     if (llmConfig?.verbosity !== undefined) {
-      const verbosityError = getLlmKnobError("verbosity", model);
+      const verbosityError = getLlmKnobError("verbosity", model, hasTools, llmConfig?.verbosity);
       if (verbosityError) knobErrors.push(verbosityError);
     }
   }
 
   const summary = [
     isGemini ? "Gemini" : "OpenAI",
-    model || "gemini-3.1-flash-live-preview",
+    model,
     isRealtime ? llmConfig?.voice || (isGemini ? "Puck" : "marin") : undefined,
     isCascade ? (reasoning ? `effort ${llmConfig?.reasoning_effort ?? "unset"}` : `temp ${llmConfig?.temperature ?? 0.8}`) : undefined,
   ].filter(Boolean) as string[];
 
-  /**
-   * Which knobs this model throws away. Shared with `buildAssistantPayload`, which drops the same
-   * keys — a control greyed here has to be absent from the save, or the call fails on every turn.
-   */
-  const inertReasonFor = (key: string) => llmInertReason(key, model);
+  const inertReasonFor = (key: string) => llmInertReason(key, model, hasTools, (llmConfig as Record<string, any>)?.[key]);
 
   const visibleKnobs = CASCADE_LLM_FIELDS.filter((f) => !f.advanced);
   const advancedKnobs = CASCADE_LLM_FIELDS.filter((f) => f.advanced);
@@ -99,7 +99,6 @@ export function LlmSection({ mode, llmConfig, onChange, step, last }: LlmSection
       advanced={
         isCascade ? (
           <>
-            {/* Validation Errors for Advanced Knobs */}
             {knobErrors.length > 0 && (
               <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive mb-4">
                 <div className="flex items-start gap-2">
@@ -128,7 +127,6 @@ export function LlmSection({ mode, llmConfig, onChange, step, last }: LlmSection
         ) : undefined
       }
     >
-      {/* Validation Errors */}
       {(providerError || modelError) && (
         <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive mb-4 border border-destructive/20">
           <div className="flex items-start gap-2">
@@ -167,7 +165,6 @@ export function LlmSection({ mode, llmConfig, onChange, step, last }: LlmSection
                   </span>
                 </span>
               </SelectItem>
-              {/* Gemini runs only in realtime — pipeline and cascade reject it. */}
               {isRealtime ? (
                 <SelectItem value="gemini">
                   <span className="flex flex-col gap-0.5 py-0.5">
@@ -195,14 +192,30 @@ export function LlmSection({ mode, llmConfig, onChange, step, last }: LlmSection
       {isGemini ? (
         <FieldRow
           label="Model"
-          help="Free text — Google ships new Live models often, so this is not restricted to a list. Left empty it uses gemini-3.1-flash-live-preview. A model ID that does not exist fails when the call connects, not when you save."
+          help="Google Gemini Live model. Non-Live models (such as gemini-2.5-flash) are rejected by the backend at save."
           control={
-            <Input
-              className="font-mono text-sm"
-              placeholder="gemini-3.1-flash-live-preview"
-              value={llmConfig?.model ?? ""}
-              onChange={(e) => onChange({ model: e.target.value })}
-            />
+            <Select
+              value={model}
+              onValueChange={(v) => onChange({ model: v })}
+            >
+              <SelectTrigger aria-label="Model" className={TRIGGER_ONE_LINE}>
+                <SelectValue placeholder="Select a Gemini Live model" />
+              </SelectTrigger>
+              <SelectContent className="max-w-[min(24rem,calc(100vw-2rem))]">
+                {GEMINI_LIVE_MODELS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    <span className="flex flex-col gap-0.5 py-0.5">
+                      <span className="font-mono text-sm">{option.label}</span>
+                      {option.hint && (
+                        <span data-tagline className="text-xs leading-5 text-muted-foreground">
+                          {option.hint}
+                        </span>
+                      )}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           }
         />
       ) : (
@@ -242,11 +255,28 @@ export function LlmSection({ mode, llmConfig, onChange, step, last }: LlmSection
           label="Voice"
           help="The model speaks its own audio in realtime mode, so the voice comes from here rather than a text-to-speech provider."
           control={
-            <Input
-              value={llmConfig?.voice ?? ""}
-              placeholder={isGemini ? "Puck" : "marin"}
-              onChange={(e) => onChange({ voice: e.target.value })}
-            />
+            <Select
+              value={llmConfig?.voice || (isGemini ? "Puck" : "marin")}
+              onValueChange={(v) => onChange({ voice: v })}
+            >
+              <SelectTrigger aria-label="Voice" className={TRIGGER_ONE_LINE}>
+                <SelectValue placeholder="Select a voice" />
+              </SelectTrigger>
+              <SelectContent className="max-w-[min(24rem,calc(100vw-2rem))]">
+                {(isGemini ? GEMINI_LIVE_VOICES : OPENAI_REALTIME_VOICES).map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    <span className="flex flex-col gap-0.5 py-0.5">
+                      <span className="text-sm">{option.label}</span>
+                      {option.hint && (
+                        <span data-tagline className="text-xs leading-5 text-muted-foreground">
+                          {option.hint}
+                        </span>
+                      )}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           }
         />
       )}

@@ -325,7 +325,8 @@ export default function AssistantPage() {
     setSaving(true);
 
     try {
-      const payload = { user_id: user.user_id, ...buildAssistantPayload(formData) };
+      const hasTools = (formData.assistant_end_call_enabled ?? false) || attachedToolIds.length > 0;
+      const payload = { user_id: user.user_id, ...buildAssistantPayload(formData, hasTools) };
 
       let json: unknown;
       if (mode === "create") {

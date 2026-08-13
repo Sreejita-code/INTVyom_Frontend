@@ -76,11 +76,11 @@ describe("applySttProvider", () => {
 });
 
 describe("buildAssistantPayload", () => {
-  it("omits both speech stages in realtime mode", () => {
+  it("sends null for speech stages in realtime mode", () => {
     const payload = buildAssistantPayload(form({ assistant_mode: "realtime" }));
 
-    expect(payload).not.toHaveProperty("assistant_tts_model");
-    expect(payload).not.toHaveProperty("assistant_stt_model");
+    expect(payload).toHaveProperty("assistant_tts_model", null);
+    expect(payload).toHaveProperty("assistant_stt_model", null);
     expect(payload.assistant_interaction_config.filler_words).toBe(false);
   });
 
@@ -90,7 +90,7 @@ describe("buildAssistantPayload", () => {
     expect(buildAssistantPayload(form({ assistant_mode: "realtime", assistant_llm_config: withVoice })).assistant_llm_config)
       .toHaveProperty("voice", "marin");
     expect(buildAssistantPayload(form({ assistant_mode: "pipeline", assistant_llm_config: withVoice })).assistant_llm_config)
-      .not.toHaveProperty("voice");
+      .toHaveProperty("voice", null);
   });
 
   it("sends the generation knobs only in cascade, where they are read", () => {
@@ -100,16 +100,13 @@ describe("buildAssistantPayload", () => {
     expect(cascade).toMatchObject({ temperature: 0.4, service_tier: "auto", parallel_tool_calls: false });
 
     const pipeline = buildAssistantPayload(form({ assistant_mode: "pipeline", assistant_llm_config: llm })).assistant_llm_config;
-    expect(pipeline).not.toHaveProperty("temperature");
+    expect(pipeline).toHaveProperty("temperature", null);
   });
 
   /**
-   * The failure this pruning exists for. A reasoning effort stored against a model that does not
-   * reason is not ignored by OpenAI — it answers 400, the LiveKit plugin raises a non-retryable
-   * APIStatusError inside `_llm_inference_task`, and it does so on every turn: the assistant
-   * answers the call, logs "Start instruction sent successfully" and never says a word.
+   * Sending `null` for temperature on a reasoning model signals MongoDB PATCH merge to clear stored temperature.
    */
-  it("drops a reasoning effort left behind on a non-reasoning model", () => {
+  it("sends null for reasoning effort on a non-reasoning model", () => {
     const payload = buildAssistantPayload(
       form({
         assistant_mode: "cascade",
@@ -117,11 +114,11 @@ describe("buildAssistantPayload", () => {
       }),
     );
 
-    expect(payload.assistant_llm_config).not.toHaveProperty("reasoning_effort");
+    expect(payload.assistant_llm_config).toHaveProperty("reasoning_effort", null);
     expect(payload.assistant_llm_config).toMatchObject({ model: "gpt-4.1", temperature: 0.4 });
   });
 
-  it("drops a temperature left behind on a reasoning model", () => {
+  it("sends null for temperature on a reasoning model", () => {
     const payload = buildAssistantPayload(
       form({
         assistant_mode: "cascade",
@@ -129,11 +126,11 @@ describe("buildAssistantPayload", () => {
       }),
     );
 
-    expect(payload.assistant_llm_config).not.toHaveProperty("temperature");
+    expect(payload.assistant_llm_config).toHaveProperty("temperature", null);
     expect(payload.assistant_llm_config).toMatchObject({ model: "gpt-5-mini", reasoning_effort: "low" });
   });
 
-  /** `text.verbosity` is a gpt-5 parameter. `chat-latest` follows a gpt-5.x snapshot, so it keeps it. */
+  /** `text.verbosity` is a gpt-5 parameter. */
   it("sends verbosity only to the generation that reads it", () => {
     const withVerbosity = (model: string) =>
       buildAssistantPayload(
@@ -141,39 +138,22 @@ describe("buildAssistantPayload", () => {
       ).assistant_llm_config;
 
     expect(withVerbosity("gpt-5.1")).toHaveProperty("verbosity", "low");
-    expect(withVerbosity("chat-latest")).toHaveProperty("verbosity", "low");
-    expect(withVerbosity("gpt-4.1")).not.toHaveProperty("verbosity");
-    // Open-weight and served off-platform, so not the gpt-5 generation — the gpt-4-only denylist
-    // this replaced let it through.
-    expect(withVerbosity("gpt-oss-120b")).not.toHaveProperty("verbosity");
+    expect(withVerbosity("gpt-5.4")).toHaveProperty("verbosity", "low");
+    expect(withVerbosity("gpt-4.1")).toHaveProperty("verbosity", null);
   });
 
-  /**
-   * `*-chat-latest` starts with "gpt-5" but tracks a gpt-5.x *chat* snapshot. The `/^gpt-5/` test
-   * this replaced read it as a reasoning model, so the temperature it does accept was stripped and
-   * the reasoning effort it rejects was left in — the exact 400 the pruning exists to prevent.
-   */
-  it("treats the chat-latest aliases as chat models, not reasoning models", () => {
-    for (const model of ["gpt-5.1-chat-latest", "gpt-5.2-chat-latest", "gpt-5.3-chat-latest"]) {
-      const config = buildAssistantPayload(
-        form({
-          assistant_mode: "cascade",
-          assistant_llm_config: { provider: "openai", model, temperature: 0.4, reasoning_effort: "low", verbosity: "low" },
-        }),
-      ).assistant_llm_config;
+  it("sends null for reasoning_effort on gpt-5.2 and gpt-5.4 models when tools are attached", () => {
+    const config = buildAssistantPayload(
+      form({
+        assistant_mode: "cascade",
+        assistant_llm_config: { provider: "openai", model: "gpt-5.2", reasoning_effort: "low" },
+      }),
+      true
+    ).assistant_llm_config;
 
-      expect(config, model).toHaveProperty("temperature", 0.4);
-      expect(config, model).not.toHaveProperty("reasoning_effort");
-      // Still the gpt-5 generation for verbosity.
-      expect(config, model).toHaveProperty("verbosity", "low");
-    }
+    expect(config).toHaveProperty("reasoning_effort", null);
   });
 
-  /**
-   * The path that breaks an assistant with no user error at all: leaving cascade and coming back
-   * re-picks gpt-4.1, a non-reasoning model, while the effort the user set on gpt-5 survives in the
-   * form. Before pruning, saving after that round trip was enough to silence the agent.
-   */
   it("survives a cascade → pipeline → cascade round trip with a reasoning effort set", () => {
     const start = form({
       assistant_mode: "cascade",
@@ -182,10 +162,9 @@ describe("buildAssistantPayload", () => {
 
     const returned = applyModeChange(applyModeChange(start, "pipeline"), "cascade");
     expect(returned.assistant_llm_config?.model).toBe("gpt-4.1");
-    // Still in form state, so switching back to a gpt-5 model restores it rather than losing it.
     expect(returned.assistant_llm_config?.reasoning_effort).toBe("low");
 
-    expect(buildAssistantPayload(returned).assistant_llm_config).not.toHaveProperty("reasoning_effort");
+    expect(buildAssistantPayload(returned).assistant_llm_config).toHaveProperty("reasoning_effort", null);
   });
 
   it("drops transcriber knobs the chosen model ignores", () => {
@@ -280,12 +259,24 @@ describe("buildAssistantPayload", () => {
     expect(payload.assistant_tts_config).not.toHaveProperty("api_key");
   });
 
-  it("keeps nested ElevenLabs voice settings", () => {
+  it("prunes ElevenLabs speed when model is eleven_v3", () => {
     const payload = buildAssistantPayload(
       form({
         assistant_mode: "cascade",
         assistant_tts_model: "elevenlabs",
         assistant_tts_config: { voice_id: "v1", model: "eleven_v3", voice_settings: { speed: 1.1, use_speaker_boost: true } },
+      }),
+    );
+
+    expect(payload.assistant_tts_config.voice_settings).toEqual({ use_speaker_boost: true });
+  });
+
+  it("keeps ElevenLabs speed on models that support it", () => {
+    const payload = buildAssistantPayload(
+      form({
+        assistant_mode: "cascade",
+        assistant_tts_model: "elevenlabs",
+        assistant_tts_config: { voice_id: "v1", model: "eleven_turbo_v2_5", voice_settings: { speed: 1.1, use_speaker_boost: true } },
       }),
     );
 

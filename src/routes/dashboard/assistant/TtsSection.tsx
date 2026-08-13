@@ -5,7 +5,7 @@ import { AssistantDetail, TtsProvider } from "@/types/assistant";
 import { FieldRow } from "./FieldRow";
 import { ProviderFields } from "./ProviderFields";
 import { StageSection, TRIGGER_ONE_LINE } from "./StageSection";
-import { TTS_PROVIDERS, findProvider, getLanguageCodeError } from "./providerCatalog";
+import { TTS_PROVIDERS, findProvider, ttsInertReason } from "./providerCatalog";
 import { getProviderModeError } from "./assistantConfig";
 
 interface TtsSectionProps {
@@ -28,10 +28,6 @@ export function TtsSection({ ttsModel, ttsConfig, onProviderChange, onConfigChan
   const spec = findProvider(TTS_PROVIDERS, ttsModel);
   const config = (ttsConfig ?? {}) as Record<string, any>;
 
-  // Validation
-  // Note: TTS validation is simpler as it doesn't have mode-specific restrictions like LLM/STT
-  // The main validation happens in assistantConfig.ts when building the payload
-  
   const voiceLabel = ttsModel === "sarvam" ? config.speaker : config.voice_id;
   const rate = ttsModel === "sarvam" ? config.pace : ttsModel === "elevenlabs" ? config.voice_settings?.speed : config.speed;
 
@@ -45,6 +41,8 @@ export function TtsSection({ ttsModel, ttsConfig, onProviderChange, onConfigChan
   const visible = spec?.fields.filter((f) => !f.advanced) ?? [];
   const advanced = spec?.fields.filter((f) => f.advanced) ?? [];
 
+  const inertReasonFor = (field: any) => ttsInertReason(ttsModel, field.key, config);
+
   return (
     <StageSection
       step={step}
@@ -56,7 +54,12 @@ export function TtsSection({ ttsModel, ttsConfig, onProviderChange, onConfigChan
       advancedCount={advanced.length}
       advanced={
         advanced.length > 0 ? (
-          <ProviderFields fields={advanced} config={config} onChange={onConfigChange} />
+          <ProviderFields
+            fields={advanced}
+            config={config}
+            onChange={onConfigChange}
+            inertReasonFor={inertReasonFor}
+          />
         ) : undefined
       }
     >
@@ -84,7 +87,12 @@ export function TtsSection({ ttsModel, ttsConfig, onProviderChange, onConfigChan
         }
       />
 
-      <ProviderFields fields={visible} config={config} onChange={onConfigChange} />
+      <ProviderFields
+        fields={visible}
+        config={config}
+        onChange={onConfigChange}
+        inertReasonFor={inertReasonFor}
+      />
     </StageSection>
   );
 }
