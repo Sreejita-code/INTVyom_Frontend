@@ -247,6 +247,13 @@ describe("buildAssistantPayload", () => {
     expect(payload.assistant_stt_config).toEqual({});
   });
 
+  it("sends empty stt/tts configs in realtime, never null (backend reads config.language)", () => {
+    const payload = buildAssistantPayload(form({ assistant_mode: "realtime" }));
+
+    expect(payload.assistant_stt_config).toEqual({});
+    expect(payload.assistant_tts_config).toEqual({});
+  });
+
   it("strips the masked api_key the API returns, which it would reject on the way back", () => {
     const payload = buildAssistantPayload(
       form({

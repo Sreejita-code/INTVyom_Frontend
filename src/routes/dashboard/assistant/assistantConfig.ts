@@ -404,11 +404,13 @@ export const buildAssistantPayload = (form: AssistantDetail, hasTools?: boolean)
         ? {}
         : clean(pruneStt(form.assistant_stt_model, form.assistant_stt_config));
   } else {
-    // In Realtime mode, STT & TTS stages are not used
+    // In Realtime mode, STT & TTS stages are not used.
+    // ponytail: empty objects, not null — backend reads config.language unconditionally
+    // and crashes on null ("Cannot read properties of null (reading 'language')").
     payload.assistant_tts_model = null;
-    payload.assistant_tts_config = null;
+    payload.assistant_tts_config = {};
     payload.assistant_stt_model = null;
-    payload.assistant_stt_config = null;
+    payload.assistant_stt_config = {};
   }
 
   return payload;
