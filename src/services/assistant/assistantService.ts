@@ -1,5 +1,7 @@
-import { AssistantItem, AssistantMode, AssistantSummary } from "@/types/assistant";
+import { AssistantCallLogsPage, AssistantItem, AssistantMode, AssistantSummary } from "@/types/assistant";
+import { CallLog, CallTranscript, CallUsage, CallUsageLine } from "@/types/callLog";
 import { ServiceResponse } from "@/types/http";
+import { parseUsd } from "@/lib/formatUsd";
 
 const ASSISTANT_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/assistant`;
 
@@ -153,7 +155,73 @@ export async function callGetAssistantCallLogsEndpoint(args: {
   return json;
 }
 
-export const condenseCallLogsResponse = (json: unknown) => {
+const asFiniteNumber = (value: unknown): number | undefined => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  return undefined;
+};
+
+const asString = (value: unknown): string =>
+  typeof value === "string" ? value : "";
+
+const condenseUsageLine = (raw: unknown): CallUsageLine | null => {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as Record<string, unknown>;
+  const typeRaw = asString(row.type);
+  return {
+    type: typeRaw.replace(/_usage$/, "") || "other",
+    provider: asString(row.provider),
+    model: asString(row.model),
+    estimatedCostUsd: parseUsd(row.estimated_cost_usd),
+    inputTokens: asFiniteNumber(row.input_tokens),
+    outputTokens: asFiniteNumber(row.output_tokens),
+    charactersCount: asFiniteNumber(row.characters_count),
+    audioDuration: asFiniteNumber(row.audio_duration),
+  };
+};
+
+const condenseCallUsage = (raw: unknown): CallUsage | null => {
+  if (!raw || typeof raw !== "object") return null;
+  const node = raw as Record<string, unknown>;
+  const unpriced = Array.isArray(node.unpriced_model_usage) ? node.unpriced_model_usage : [];
+  const lines = Array.isArray(node.model_usage)
+    ? node.model_usage.map(condenseUsageLine).filter((line): line is CallUsageLine => line !== null)
+    : [];
+  return {
+    estimatedCostUsd: parseUsd(node.estimated_cost_usd),
+    pricingComplete: node.pricing_complete === true && unpriced.length === 0,
+    usageFinalized: node.usage_finalized === true,
+    lines,
+  };
+};
+
+const condenseCallLog = (raw: unknown): CallLog | null => {
+  if (!raw || typeof raw !== "object") return null;
+  const node = raw as Record<string, unknown>;
+  if (typeof node.started_at !== "string") return null;
+
+  const transcripts = Array.isArray(node.transcripts)
+    ? node.transcripts.filter(
+        (item): item is CallTranscript => !!item && typeof item === "object",
+      )
+    : undefined;
+
+  const metadata =
+    node.metadata && typeof node.metadata === "object" && !Array.isArray(node.metadata)
+      ? (node.metadata as Record<string, unknown>)
+      : undefined;
+
+  return {
+    started_at: node.started_at,
+    to_number: typeof node.to_number === "string" ? node.to_number : undefined,
+    call_duration_minutes: asFiniteNumber(node.call_duration_minutes),
+    recording_path: typeof node.recording_path === "string" ? node.recording_path : null,
+    transcripts,
+    metadata,
+    usage: condenseCallUsage(node.usage),
+  };
+};
+
+export const condenseCallLogsResponse = (json: unknown): AssistantCallLogsPage => {
   if (!json || typeof json !== "object") return { logs: [], totalPages: 1, total: 0 };
   const node = json as Record<string, unknown>;
   if (!node.data || typeof node.data !== "object") return { logs: [], totalPages: 1, total: 0 };
@@ -164,7 +232,9 @@ export const condenseCallLogsResponse = (json: unknown) => {
     : {};
 
   return {
-    logs: Array.isArray(data.logs) ? data.logs : [],
+    logs: Array.isArray(data.logs)
+      ? data.logs.map(condenseCallLog).filter((log): log is CallLog => log !== null)
+      : [],
     totalPages: typeof pagination.total_pages === "number" ? pagination.total_pages : 1,
     total: typeof pagination.total === "number" ? pagination.total : 0,
   };

@@ -94,7 +94,7 @@ INTVyom_Frontend/
 │   │       │                     #   useAssistantList.ts, useChatTranscriptions.ts, constants.ts
 │   │       ├── tools/            # Tools & utilities
 │   │       ├── audio-library/    # Audio file library
-│   │       ├── call-logs/        # Call history logs
+│   │       ├── call-logs/        # Call history — CallLogs.tsx + CallLogCost.tsx
 │   │       ├── analytics/        # Dashboard analytics & charts
 │   │       ├── phone-number/     # Phone number management
 │   │       ├── inbound/          # Inbound route config
@@ -117,7 +117,7 @@ INTVyom_Frontend/
 │   │   ├── webCall/webCallService.ts
 │   │   ├── auth/authService.ts
 │   │   └── storage/storageService.ts   # localStorage helpers (getStoredUser, etc.)
-│   ├── types/                    # One module per domain (http, auth, assistant, tool, ...)
+│   ├── types/                    # One module per domain (http, auth, assistant, callLog, ...)
 │   ├── components/
 │   │   ├── common/               # App-aware, domain-agnostic; shared by 3+ routes
 │   │   │   ├── MasterDetailShell.tsx   # Two-pane list/detail layout with mobile toggle
@@ -127,7 +127,8 @@ INTVyom_Frontend/
 │   ├── hooks/
 │   │   └── use-toast.ts          # Toast notification reducer
 │   ├── lib/
-│   │   └── utils.ts              # cn() (clsx + tailwind-merge)
+│   │   ├── utils.ts              # cn() (clsx + tailwind-merge)
+│   │   └── formatUsd.ts          # parse/format estimated USD costs from the API
 │   ├── App.tsx                   # Root component (providers + routes)
 │   ├── index.css                 # Tailwind directives + design tokens
 │   ├── main.tsx                  # Application entry point
@@ -137,7 +138,10 @@ INTVyom_Frontend/
 │   ├── components/common/        # MasterDetailShell, EmptyState
 │   ├── routes/dashboard/analytics/Analytics.test.tsx
 │   ├── routes/dashboard/assistant/useAssistantList.test.tsx
-│   └── services/analytics/analyticsService.test.ts
+│   ├── routes/dashboard/call-logs/CallLogCost.test.tsx
+│   ├── services/analytics/analyticsService.test.ts
+│   ├── services/assistant/assistantService.test.ts
+│   └── lib/formatUsd.test.ts
 ├── dist/                         # Production build output
 ├── Dockerfile                    # Multi-stage: Node build → nginx serve
 ├── docker-compose.yml            # Single frontend service
@@ -186,7 +190,7 @@ itself is driven by `@livekit/components-react` inside the `assistant` and
 | **Assistant** | `/dashboard/assistant` | Configure AI assistant (realtime, pipeline or cascade mode) |
 | **Tools** | `/dashboard/tools` | Utility tools and actions |
 | **Audio Library** | `/dashboard/audio-library` | Upload and manage audio files |
-| **Call Logs** | `/dashboard/call-logs` | Browse call history and recordings |
+| **Call Logs** | `/dashboard/call-logs` | Browse call history, recordings, and estimated USD cost |
 | **Analytics** | `/dashboard/analytics` | Usage metrics, charts, and breakdowns |
 | **Phone Number** | `/dashboard/phone-number` | Manage purchased phone numbers |
 | **Inbound Routes** | `/dashboard/inbound` | Configure inbound call routing |
@@ -423,6 +427,8 @@ Two limits shape these pages. Both are upstream, not local, so do not "fix" them
 search box on `/dashboard/call-logs` therefore filters **only the rows already loaded**, and says so
 in its own help text; the page size is 50 so that is worth something. If a real server-side search is
 ever needed, it has to be a separate cross-assistant view built on `/call/records`, not a filter here.
+Each row also shows estimated USD cost from `usage` on the log; click the amount for the LLM / TTS /
+STT breakdown.
 
 **Billable minutes is slow by construction.** There is no upstream aggregate — the backend reads every
 call log for every assistant to build it (see the backend README). So on `/dashboard/analytics` it is

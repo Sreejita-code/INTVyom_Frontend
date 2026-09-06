@@ -42,6 +42,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { modeAccent } from "@/lib/assistantModes";
+import { CallLog } from "@/types/callLog";
+import CallLogCost from "./CallLogCost";
 
 export default function CallLogsPage() {
   const user = getStoredUser();
@@ -50,7 +52,7 @@ export default function CallLogsPage() {
   const [assistants, setAssistants] = useState<any[]>([]);
   const [selectedAssistant, setSelectedAssistant] = useState<string>("");
 
-  const [logs, setLogs] = useState<any[]>([]);
+  const [logs, setLogs] = useState<CallLog[]>([]);
   const [loading, setLoading] = useState(false);
   
   // Pagination & Filtering State
@@ -341,6 +343,7 @@ export default function CallLogsPage() {
                   <TableHead>Date / Time</TableHead>
                   <TableHead>To Number</TableHead>
                   <TableHead>Duration</TableHead>
+                  <TableHead>Cost</TableHead>
                   <TableHead>Recording</TableHead>
                   <TableHead className="text-right">Transcripts</TableHead>
                 </TableRow>
@@ -348,7 +351,7 @@ export default function CallLogsPage() {
               <TableBody>
                 {visibleLogs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-10 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
                       {search.trim()
                         ? `Nothing on this page matches "${search.trim()}".`
                         : "No call logs found for the selected criteria."}
@@ -364,8 +367,11 @@ export default function CallLogsPage() {
                       <TableCell className="font-mono text-sm">{log.to_number}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className="font-mono bg-background">
-                          {formatDuration(log.call_duration_minutes)}
+                          {formatDuration(log.call_duration_minutes ?? 0)}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <CallLogCost usage={log.usage} />
                       </TableCell>
                       <TableCell>
                         {log.recording_path ? (

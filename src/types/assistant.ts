@@ -1,3 +1,5 @@
+import type { CallLog } from "./callLog";
+
 export type AssistantMode = "pipeline" | "realtime" | "cascade";
 
 export type TtsProvider = "cartesia" | "sarvam" | "elevenlabs" | "mistral";
@@ -126,7 +128,7 @@ export interface AssistantDetail {
 }
 
 export interface AssistantCallLogsPage {
-  logs: unknown[];
+  logs: CallLog[];
   totalPages: number;
   total: number;
 }
