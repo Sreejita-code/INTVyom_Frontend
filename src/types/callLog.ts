@@ -25,6 +25,16 @@ export interface CallUsage {
 export interface CallLog {
   started_at: string;
   to_number?: string;
+  platform_number?: string | null;
+  call_type?: string;
+  call_service?: string | null;
+  is_passthrough?: boolean;
+  call_status?: string;
+  call_status_reason?: string | null;
+  sip_status_code?: number | null;
+  sip_status_text?: string | null;
+  answered_at?: string | null;
+  ended_at?: string | null;
   call_duration_minutes?: number;
   recording_path?: string | null;
   transcripts?: CallTranscript[];

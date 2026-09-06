@@ -210,9 +210,24 @@ const condenseCallLog = (raw: unknown): CallLog | null => {
       ? (node.metadata as Record<string, unknown>)
       : undefined;
 
+  const reasonRaw = node.call_status_reason;
+  const sipTextRaw = node.sip_status_text;
+  const answeredRaw = node.answered_at;
+  const endedRaw = node.ended_at;
+
   return {
     started_at: node.started_at,
     to_number: typeof node.to_number === "string" ? node.to_number : undefined,
+    platform_number: typeof node.platform_number === "string" ? node.platform_number : null,
+    call_type: typeof node.call_type === "string" ? node.call_type : undefined,
+    call_service: typeof node.call_service === "string" ? node.call_service : null,
+    is_passthrough: node.is_passthrough === true,
+    call_status: typeof node.call_status === "string" ? node.call_status : undefined,
+    call_status_reason: typeof reasonRaw === "string" ? reasonRaw : null,
+    sip_status_code: asFiniteNumber(node.sip_status_code) ?? null,
+    sip_status_text: typeof sipTextRaw === "string" ? sipTextRaw : null,
+    answered_at: typeof answeredRaw === "string" ? answeredRaw : null,
+    ended_at: typeof endedRaw === "string" ? endedRaw : null,
     call_duration_minutes: asFiniteNumber(node.call_duration_minutes),
     recording_path: typeof node.recording_path === "string" ? node.recording_path : null,
     transcripts,

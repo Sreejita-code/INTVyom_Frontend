@@ -99,4 +99,67 @@ describe("condenseCallLogsResponse", () => {
   it("returns an empty page when the envelope is missing", () => {
     expect(condenseCallLogsResponse(null)).toEqual({ logs: [], totalPages: 1, total: 0 });
   });
+
+  it("carries direction, platform, and outcome fields when present", () => {
+    const page = condenseCallLogsResponse({
+      data: {
+        logs: [
+          {
+            ...sampleLog,
+            call_type: "outbound",
+            call_service: "exotel",
+            platform_number: "+918044319240",
+            is_passthrough: false,
+            call_status: "completed",
+            call_status_reason: null,
+            sip_status_code: null,
+            sip_status_text: null,
+            answered_at: "2026-09-06T10:40:15.259000Z",
+            ended_at: "2026-09-06T10:40:43.548000Z",
+          },
+        ],
+        pagination: { total_pages: 1, total: 1 },
+      },
+    });
+
+    expect(page.logs[0]).toMatchObject({
+      call_type: "outbound",
+      call_service: "exotel",
+      platform_number: "+918044319240",
+      is_passthrough: false,
+      call_status: "completed",
+      answered_at: "2026-09-06T10:40:15.259000Z",
+      ended_at: "2026-09-06T10:40:43.548000Z",
+    });
+  });
+
+  it("keeps failure reason and SIP detail, tolerates missing direction fields", () => {
+    const page = condenseCallLogsResponse({
+      data: {
+        logs: [
+          {
+            started_at: "2026-09-06T10:00:00.000Z",
+            to_number: "+15550200000",
+            call_status: "busy",
+            call_status_reason: "SIP 486 Busy Here",
+            sip_status_code: 486,
+            sip_status_text: "Busy Here",
+            answered_at: null,
+          },
+          { started_at: "2026-09-06T10:01:00.000Z" },
+        ],
+        pagination: { total_pages: 1, total: 2 },
+      },
+    });
+
+    expect(page.logs[0]).toMatchObject({
+      call_status: "busy",
+      call_status_reason: "SIP 486 Busy Here",
+      sip_status_code: 486,
+      sip_status_text: "Busy Here",
+    });
+    expect(page.logs[1].call_status).toBeUndefined();
+    expect(page.logs[1].platform_number).toBeNull();
+    expect(page.logs[1].sip_status_code).toBeNull();
+  });
 });

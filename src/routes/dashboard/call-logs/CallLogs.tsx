@@ -151,6 +151,9 @@ export default function CallLogsPage() {
     if (!needle) return logs;
     return logs.filter((log) => {
       if (String(log.to_number ?? "").toLowerCase().includes(needle)) return true;
+      if (String(log.platform_number ?? "").toLowerCase().includes(needle)) return true;
+      if (String(log.call_type ?? "").toLowerCase().includes(needle)) return true;
+      if (String(log.call_service ?? "").toLowerCase().includes(needle)) return true;
       return (log.transcripts ?? []).some((t: { text?: string }) =>
         String(t?.text ?? "").toLowerCase().includes(needle),
       );
@@ -164,6 +167,25 @@ export default function CallLogsPage() {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}m ${secs}s`;
+  };
+
+  const directionLabel = (log: CallLog): string => {
+    const type = (log.call_type ?? "").toLowerCase();
+    if (type === "inbound") return "Inbound";
+    if (type === "outbound") return log.is_passthrough ? "Outbound · Passthrough" : "Outbound";
+    if (type === "web") return "Web";
+    const service = (log.call_service ?? "").toLowerCase();
+    if (service === "exotel" || service === "twilio") return "Phone";
+    if (service === "web") return "Web";
+    return "—";
+  };
+
+  const serviceLabel = (log: CallLog): string | null => {
+    const service = (log.call_service ?? "").toLowerCase();
+    if (service === "exotel") return "Exotel";
+    if (service === "twilio") return "Twilio";
+    if (service === "web") return "Web";
+    return typeof log.call_service === "string" && log.call_service ? log.call_service : null;
   };
 
   return (
@@ -311,7 +333,7 @@ export default function CallLogsPage() {
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
               className="h-10 bg-background pl-9"
-              placeholder="Search this page — number or transcript text"
+              placeholder="Search this page — number, direction, or transcript text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               disabled={!selectedAssistant}
@@ -341,7 +363,8 @@ export default function CallLogsPage() {
               <TableHeader className="bg-muted/50">
                 <TableRow>
                   <TableHead>Date / Time</TableHead>
-                  <TableHead>To Number</TableHead>
+                  <TableHead>Numbers</TableHead>
+                  <TableHead>Direction</TableHead>
                   <TableHead>Duration</TableHead>
                   <TableHead>Cost</TableHead>
                   <TableHead>Recording</TableHead>
@@ -351,7 +374,7 @@ export default function CallLogsPage() {
               <TableBody>
                 {visibleLogs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                       {search.trim()
                         ? `Nothing on this page matches "${search.trim()}".`
                         : "No call logs found for the selected criteria."}
@@ -361,10 +384,39 @@ export default function CallLogsPage() {
                   visibleLogs.map((log, idx) => (
                     <TableRow key={idx}>
                       <TableCell>
-                        <div className="font-medium">{new Date(log.started_at).toLocaleDateString()}</div>
-                        <div className="text-xs text-muted-foreground">{new Date(log.started_at).toLocaleTimeString()}</div>
+                        <div className="flex flex-col items-start gap-1">
+                          <div className="font-medium">{new Date(log.started_at).toLocaleDateString()}</div>
+                          <div className="text-xs text-muted-foreground">{new Date(log.started_at).toLocaleTimeString()}</div>
+                        </div>
                       </TableCell>
-                      <TableCell className="font-mono text-sm">{log.to_number}</TableCell>
+                      <TableCell className="font-mono text-sm">
+                        <div className="flex flex-col items-start gap-1">
+                          {log.to_number ? (
+                            log.to_number
+                          ) : (log.call_type ?? "").toLowerCase() === "web" ||
+                            (log.call_service ?? "").toLowerCase() === "web" ? (
+                            <span className="font-sans text-muted-foreground">Web call</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                          {log.platform_number && (
+                            <div className="text-xs text-muted-foreground">
+                              {(log.call_type ?? "").toLowerCase() === "inbound" ? "Via " : "From "}
+                              {log.platform_number}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col items-start gap-1">
+                          <Badge variant="outline" className="bg-background">
+                            {directionLabel(log)}
+                          </Badge>
+                          {serviceLabel(log) && (log.call_type ?? "").toLowerCase() !== "web" && (
+                            <div className="px-2.5 text-xs text-muted-foreground">{serviceLabel(log)}</div>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="font-mono bg-background">
                           {formatDuration(log.call_duration_minutes ?? 0)}
