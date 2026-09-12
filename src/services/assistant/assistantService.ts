@@ -116,7 +116,7 @@ export async function callUpdateAssistantEndpoint(assistantId: string, payload: 
   return json;
 }
 
-export async function callGetAssistantCallLogsEndpoint(args: {
+export interface AssistantCallLogsQuery {
   userId: string;
   assistantId: string;
   page: number;
@@ -125,25 +125,37 @@ export async function callGetAssistantCallLogsEndpoint(args: {
   sortOrder: string;
   startDate?: Date;
   endDate?: Date;
-}): Promise<unknown> {
-  const queryParams = new URLSearchParams({
+}
+
+/**
+ * The query string for the call-logs endpoint. Exported so the developer snippet on the page can
+ * show the same dates the request uses — a picked day means the whole day, not midnight.
+ */
+export function buildAssistantCallLogsQuery(args: AssistantCallLogsQuery): Record<string, string> {
+  const query: Record<string, string> = {
     user_id: args.userId,
     page: String(args.page),
     limit: String(args.limit),
     sort_by: args.sortBy,
     sort_order: args.sortOrder,
-  });
+  };
 
   if (args.startDate) {
     const start = new Date(args.startDate);
     start.setHours(0, 0, 0, 0);
-    queryParams.append("start_date", start.toISOString());
+    query.start_date = start.toISOString();
   }
   if (args.endDate) {
     const end = new Date(args.endDate);
     end.setHours(23, 59, 59, 999);
-    queryParams.append("end_date", end.toISOString());
+    query.end_date = end.toISOString();
   }
+
+  return query;
+}
+
+export async function callGetAssistantCallLogsEndpoint(args: AssistantCallLogsQuery): Promise<unknown> {
+  const queryParams = new URLSearchParams(buildAssistantCallLogsQuery(args));
 
   const res = await fetch(`${ASSISTANT_BASE}/call-logs/${args.assistantId}?${queryParams.toString()}`);
   const json = await res.json();

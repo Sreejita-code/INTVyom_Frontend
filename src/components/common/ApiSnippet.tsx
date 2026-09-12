@@ -1,0 +1,186 @@
+import { ReactNode, useState } from "react";
+import { Check, Code2, Copy } from "lucide-react";
+
+import { Button, ButtonProps } from "@/components/ui/button";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useToast } from "@/hooks/use-toast";
+import {
+  RequestSpec,
+  SNIPPET_LANGUAGES,
+  SNIPPET_LANGUAGE_LABELS,
+  SnippetLanguage,
+  USER_ID_PLACEHOLDER,
+  buildRequestUrl,
+  renderSnippet,
+} from "@/lib/apiSnippet";
+import { getStoredUser } from "@/services/storage/storageService";
+
+interface ApiSnippetButtonProps extends Pick<ButtonProps, "variant" | "size" | "className"> {
+  /**
+   * Builds the request from the values currently on screen. Receives the identifier to print as
+   * `user_id` — either the placeholder or, once the user reveals it, their real one.
+   */
+  buildSpec: (userId: string) => RequestSpec;
+  /** Tooltip and accessible name for the trigger. */
+  label?: string;
+  children?: ReactNode;
+  disabled?: boolean;
+}
+
+// A blank env var would render a relative URL, which is not runnable when pasted into a shell.
+const backendUrl = () => import.meta.env.VITE_BACKEND_URL || "https://<your-backend>";
+
+export const ApiSnippetButton = ({
+  buildSpec,
+  label = "View as API request",
+  children,
+  disabled,
+  variant = "ghost",
+  size,
+  className,
+}: ApiSnippetButtonProps) => {
+  const [open, setOpen] = useState(false);
+  const [language, setLanguage] = useState<SnippetLanguage>("curl");
+  const [revealUserId, setRevealUserId] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
+  const user = getStoredUser();
+
+  // Only built while the sheet is open: the builders do real work (assistant payloads run the
+  // provider validation), so calling one on every keystroke of a form would be wasteful and noisy.
+  const spec = open
+    ? buildSpec(revealUserId && user?.user_id ? user.user_id : USER_ID_PLACEHOLDER)
+    : null;
+
+  const options = { baseUrl: backendUrl() };
+
+  const copySnippet = async () => {
+    if (!spec) return;
+    try {
+      await navigator.clipboard.writeText(renderSnippet(language, spec, options));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast({ variant: "destructive", title: "Error", description: "Could not copy the snippet" });
+    }
+  };
+
+  const trigger = children ? (
+    <Button variant={variant} size={size} className={className} disabled={disabled}>
+      <Code2 className="h-4 w-4 mr-2" />
+      {children}
+    </Button>
+  ) : (
+    <Button
+      variant={variant}
+      size={size ?? "icon"}
+      className={className}
+      disabled={disabled}
+      aria-label={label}
+    >
+      <Code2 className="h-4 w-4" />
+    </Button>
+  );
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <SheetTrigger asChild>{trigger}</SheetTrigger>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-2xl bg-card border-border flex flex-col gap-0 p-0"
+      >
+        {spec && (
+        <>
+        <SheetHeader className="p-4 md:p-6 pb-4 border-b border-border space-y-3 text-left">
+          <div>
+            <SheetTitle className="text-lg font-semibold">{spec.title}</SheetTitle>
+            {spec.note ? (
+              <SheetDescription className="mt-1.5">{spec.note}</SheetDescription>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="status-chip status-chip-info shrink-0">{spec.method}</span>
+            <code className="text-xs font-mono text-muted-foreground truncate">
+              {buildRequestUrl(spec, options)}
+            </code>
+          </div>
+        </SheetHeader>
+
+        <Tabs
+          value={language}
+          onValueChange={(value) => setLanguage(value as SnippetLanguage)}
+          className="flex-1 min-h-0 flex flex-col"
+        >
+          <div className="flex items-center justify-between gap-2 px-4 md:px-6 pt-4">
+            <TabsList>
+              {SNIPPET_LANGUAGES.map((item) => (
+                <TabsTrigger key={item} value={item}>
+                  {SNIPPET_LANGUAGE_LABELS[item]}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            <Button variant="outline" size="sm" onClick={copySnippet}>
+              {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+              {copied ? "Copied" : "Copy"}
+            </Button>
+          </div>
+
+          {SNIPPET_LANGUAGES.map((item) => (
+            <TabsContent
+              key={item}
+              value={item}
+              className="flex-1 min-h-0 mt-4 px-4 md:px-6 pb-4 data-[state=inactive]:hidden"
+            >
+              <ScrollArea className="h-full rounded-lg border border-border bg-background">
+                <pre className="p-4 text-xs font-mono leading-relaxed text-foreground">
+                  {renderSnippet(item, spec, options)}
+                </pre>
+                <ScrollBar orientation="horizontal" />
+              </ScrollArea>
+            </TabsContent>
+          ))}
+        </Tabs>
+
+        <div className="border-t border-border p-4 md:p-6 space-y-2">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm text-foreground">Show my real user ID</p>
+              <p className="text-xs text-muted-foreground break-words">
+                Off, the snippet prints{" "}
+                <code className="font-mono">{USER_ID_PLACEHOLDER}</code>. Your user ID identifies
+                your account to the backend — keep it out of anything you share.
+              </p>
+            </div>
+            <Switch
+              checked={revealUserId}
+              onCheckedChange={setRevealUserId}
+              disabled={!user?.user_id}
+              aria-label="Show my real user ID"
+            />
+          </div>
+        </div>
+        </>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+};
+
+export default ApiSnippetButton;

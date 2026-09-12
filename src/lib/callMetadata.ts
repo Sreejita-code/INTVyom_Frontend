@@ -47,3 +47,12 @@ export function metadataFrom(
   const built = expandDottedKeys(Object.fromEntries(rows.map((row) => [row.key, row.value])));
   return Object.keys(built).length > 0 ? built : undefined;
 }
+
+/**
+ * True when the raw-JSON editor holds something that will not parse, so `metadataFrom` returns
+ * `undefined` for a reason other than "nothing to send". Callers refuse the call on this; the
+ * developer snippet says so rather than showing a request with the metadata silently missing.
+ */
+export function rawMetadataIsInvalid(rawJson: string, useRaw: boolean): boolean {
+  return useRaw && rawJson.trim().length > 0 && metadataFrom([], rawJson, true) === undefined;
+}

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { MetadataRow, metadataFrom, rowsForPlaceholders } from "@/lib/callMetadata";
+import {
+  MetadataRow,
+  metadataFrom,
+  rawMetadataIsInvalid,
+  rowsForPlaceholders,
+} from "@/lib/callMetadata";
 
 describe("rowsForPlaceholders", () => {
   it("makes one row per placeholder, in prompt order", () => {
@@ -56,5 +61,15 @@ describe("metadataFrom", () => {
     // An array has no keys for a placeholder to read, so it is not usable metadata.
     expect(metadataFrom([], "[1, 2]", true)).toBeUndefined();
     expect(metadataFrom([], "   ", true)).toBeUndefined();
+  });
+});
+
+describe("rawMetadataIsInvalid", () => {
+  it("is true only for raw JSON that will not parse into an object", () => {
+    expect(rawMetadataIsInvalid('{"a":', true)).toBe(true);
+    expect(rawMetadataIsInvalid("[1,2]", true)).toBe(true);
+    expect(rawMetadataIsInvalid('{"a":1}', true)).toBe(false);
+    expect(rawMetadataIsInvalid("   ", true)).toBe(false);
+    expect(rawMetadataIsInvalid('{"a":', false)).toBe(false);
   });
 });

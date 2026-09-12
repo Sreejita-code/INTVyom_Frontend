@@ -32,7 +32,7 @@ const ROUTES = [
   "/dashboard/inbound",
   "/dashboard/inbound-context",
   "/dashboard/passthrough-call-records",
-  "/dashboard/api-keys",
+  "/dashboard/developer",
   "/dashboard/integration",
   "/no-such-page",
 ];

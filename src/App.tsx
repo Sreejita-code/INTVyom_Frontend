@@ -10,7 +10,7 @@ import DashboardLayout from "./routes/dashboard";
 import Assistant from "./routes/dashboard/assistant";
 import Tools from "./routes/dashboard/tools";
 import CallLogs from "./routes/dashboard/call-logs";
-import ApiKeys from "./routes/dashboard/api-keys";
+import Developer from "./routes/dashboard/developer";
 import PhoneNumber from "./routes/dashboard/phone-number";
 import Inbound from "./routes/dashboard/inbound";
 import InboundContext from "./routes/dashboard/inbound-context";
@@ -45,7 +45,9 @@ const App = () => (
               <Route path="inbound-context" element={<InboundContext />} /> {/* <-- Add Route */}
               <Route path="make-call" element={<MakeCall />} />
               <Route path="passthrough-call-records" element={<PassthroughCallRecords />} />
-              <Route path="api-keys" element={<ApiKeys />} />
+              <Route path="developer" element={<Developer />} />
+              {/* Renamed route; the old path is still bookmarked. */}
+              <Route path="api-keys" element={<Navigate to="/dashboard/developer" replace />} />
               <Route path="integration" element={<Integrations />} />
             </Route>
             <Route path="*" element={<NotFound />} />

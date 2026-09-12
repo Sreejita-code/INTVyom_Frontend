@@ -5,7 +5,9 @@ import { Bot, Braces, Plus, Loader2, Save, Trash2, Phone, Check, Mic, X, Copy, M
 import { EmptyState } from "@/components/common/EmptyState";
 import { MasterDetailShell } from "@/components/common/MasterDetailShell";
 import { MetadataEditor } from "@/components/common/MetadataEditor";
-import { MetadataRow, metadataFrom, rowsForPlaceholders } from "@/lib/callMetadata";
+import { MetadataRow, metadataFrom, rawMetadataIsInvalid, rowsForPlaceholders } from "@/lib/callMetadata";
+import { ApiSnippetButton } from "@/components/common/ApiSnippet";
+import { RequestSpec } from "@/lib/apiSnippet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -356,6 +358,43 @@ export default function AssistantPage() {
     }
   };
 
+  // --- Developer snippets ---
+  // Built from the same values the handlers above send, so the snippet cannot drift from the
+  // request the page actually makes.
+  const saveAssistantSpec = (userId: string): RequestSpec => {
+    const hasTools = (formData.assistant_end_call_enabled ?? false) || attachedToolIds.length > 0;
+    // Same branch handleSubmit takes, so the snippet cannot show create while the app patches.
+    const creating = mode === "create";
+    return {
+      id: creating ? "assistant.create" : "assistant.update",
+      title: creating ? "Create an assistant" : "Update this assistant",
+      note: creating
+        ? "The response carries the new assistant_id — keep it, every call endpoint needs it."
+        : "Only the fields you send are merged; an explicit null clears one.",
+      method: creating ? "POST" : "PATCH",
+      path: creating ? "/api/assistant/create" : `/api/assistant/update/${selectedId}`,
+      body: { user_id: userId, ...buildAssistantPayload(formData, hasTools) },
+    };
+  };
+
+  const webCallSpec = (userId: string): RequestSpec => {
+    const note =
+      "Returns a LiveKit room token for the browser. Send text_only: true for a text chat instead of voice. Keys in metadata fill the prompt's {{placeholders}}.";
+    const invalid = rawMetadataIsInvalid(testRawJson, testUseRaw);
+    return {
+      id: "webCall.getToken",
+      title: "Start a web call",
+      note: invalid ? note + " Your raw JSON does not parse, so metadata is left out here — and the call would be refused." : note,
+      method: "POST",
+      path: "/api/web-call/get-token",
+      body: {
+        user_id: userId,
+        assistant_id: selectedId || "<assistant_id>",
+        ...(testMetadata ? { metadata: testMetadata } : {}),
+      },
+    };
+  };
+
   const handleToggleTool = async (toolId: string, attach: boolean) => {
     if (!user?.user_id || !selectedId) return;
 
@@ -609,6 +648,12 @@ export default function AssistantPage() {
                       Web Call
                     </Button>
                   )}
+                  {mode === "edit" && selectedId && (
+                    <ApiSnippetButton
+                      buildSpec={webCallSpec}
+                      label="View the web call as an API request"
+                    />
+                  )}
                   {mode === 'edit' && selectedId && (
                     <Button
                       variant="secondary"
@@ -629,6 +674,10 @@ export default function AssistantPage() {
                     {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                     Save
                   </Button>
+                  <ApiSnippetButton
+                    buildSpec={saveAssistantSpec}
+                    label="View this save as an API request"
+                  />
                 </div>
               </div>
 

@@ -39,7 +39,9 @@ import { cn } from "@/lib/utils";
 import { modeAccent } from "@/lib/assistantModes";
 import { extractPlaceholders } from "@/lib/placeholders";
 import { MetadataEditor } from "@/components/common/MetadataEditor";
-import { MetadataRow, metadataFrom, rowsForPlaceholders } from "@/lib/callMetadata";
+import { MetadataRow, metadataFrom, rawMetadataIsInvalid, rowsForPlaceholders } from "@/lib/callMetadata";
+import { ApiSnippetButton } from "@/components/common/ApiSnippet";
+import { RequestSpec } from "@/lib/apiSnippet";
 import { LiveKitRoom, RoomAudioRenderer, useLocalParticipant } from "@livekit/components-react";
 import "@livekit/components-styles";
 
@@ -285,6 +287,47 @@ export default function MakeCallPage() {
         }
     };
 
+    const PLACEHOLDER_METADATA_NOTE =
+        "Keys in `metadata` fill the {{placeholders}} in the assistant's prompt and start instruction. Nest a value and you reference it with a dot.";
+
+    const agentCallSpec = (userId: string): RequestSpec => {
+        const metadata = metadataFrom(agentRows, agentRawJson, agentUseRaw);
+        const invalid = rawMetadataIsInvalid(agentRawJson, agentUseRaw);
+        return {
+            id: "call.outbound",
+            title: "Start an outbound call",
+            note: invalid ? PLACEHOLDER_METADATA_NOTE + " Your raw JSON does not parse, so metadata is left out here — and the call would be refused." : PLACEHOLDER_METADATA_NOTE,
+            method: "POST",
+            path: "/api/call/outbound",
+            body: {
+                user_id: userId,
+                assistant_id: agentCallData.assistant_id || "<assistant_id>",
+                trunk_id: agentCallData.trunk_id || "<trunk_id>",
+                to_number: agentCallData.customer_number || "+919876543210",
+                ...(metadata ? { metadata } : {}),
+            },
+        };
+    };
+
+    const passthroughCallSpec = (userId: string): RequestSpec => {
+        const metadata = metadataFrom(passthroughRows, passthroughRawJson, passthroughUseRaw);
+        const invalid = rawMetadataIsInvalid(passthroughRawJson, passthroughUseRaw);
+        const note = "A passthrough call has no assistant — `metadata` only tags the call record.";
+        return {
+            id: "passthroughCall.outbound",
+            title: "Start a passthrough call",
+            note: invalid ? note + " Your raw JSON does not parse, so metadata is left out here — and the call would be refused." : note,
+            method: "POST",
+            path: "/api/passthrough-call/passthrough-outbound",
+            body: {
+                user_id: userId,
+                trunk_id: passthroughTrunkId || "<trunk_id>",
+                to_number: passthroughNumber.trim() || "+919876543210",
+                ...(metadata ? { metadata } : {}),
+            },
+        };
+    };
+
     const handlePassthroughCallEnded = useCallback(() => {
         setIsCallActive(false);
         setRoomToken("");
@@ -427,6 +470,11 @@ export default function MakeCallPage() {
                                             >
                                                 {agentCallLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><PhoneCall className="h-4 w-4" /> Start call</>}
                                             </Button>
+                                            <ApiSnippetButton
+                                                buildSpec={agentCallSpec}
+                                                label="View this call as an API request"
+                                                className="h-11 w-11 shrink-0 border border-border/50"
+                                            />
                                         </div>
                                     </div>
 
@@ -550,6 +598,11 @@ export default function MakeCallPage() {
                                                 </>
                                             )}
                                         </Button>
+                                        <ApiSnippetButton
+                                            buildSpec={passthroughCallSpec}
+                                            label="View this call as an API request"
+                                            className="h-11 w-11 shrink-0 border border-border/50"
+                                        />
                                     </div>
 
                                     {/* Collapsed by default: a passthrough call has no assistant, so these tag

@@ -34,11 +34,14 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { getStoredUser } from "@/services/storage/storageService";
 import {
+  buildAssistantCallLogsQuery,
   callGetAssistantCallLogsEndpoint,
   callListAssistantsEndpoint,
   condenseCallLogsResponse,
   condenseListAssistantsResponse,
 } from "@/services/assistant/assistantService";
+import { ApiSnippetButton } from "@/components/common/ApiSnippet";
+import { RequestSpec } from "@/lib/apiSnippet";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { modeAccent } from "@/lib/assistantModes";
@@ -140,6 +143,24 @@ export default function CallLogsPage() {
   }, [selectedAssistant, page, limit, sortBy, sortOrder]);
 
   // Manual search trigger for date filters
+  const callLogsSpec = (userId: string): RequestSpec => ({
+    id: "assistant.callLogs",
+    title: "List an assistant's call logs",
+    note: "Paged, newest first by default. Transcripts and per-call usage come back with each row.",
+    method: "GET",
+    path: `/api/assistant/call-logs/${selectedAssistant || "<assistant_id>"}`,
+    query: buildAssistantCallLogsQuery({
+      userId,
+      assistantId: selectedAssistant,
+      page,
+      limit,
+      sortBy,
+      sortOrder,
+      startDate,
+      endDate,
+    }),
+  });
+
   const handleApplyFilters = () => {
     setPage(1); // Reset to first page
     fetchLogs();
@@ -240,7 +261,7 @@ export default function CallLogsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-9 items-end gap-3 glass p-4 rounded-xl border border-border/50">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-10 items-end gap-3 glass p-4 rounded-xl border border-border/50">
           {/* Start Date Calendar Picker */}
           <div className="grid min-w-0 gap-2 xl:col-span-2">
             <Label>Start Date</Label>
@@ -320,10 +341,17 @@ export default function CallLogsPage() {
             </Select>
           </div>
 
-          <Button onClick={handleApplyFilters} disabled={!selectedAssistant || loading} className="w-full xl:w-auto xl:col-span-1 shrink-0 gap-2 h-10">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Filter className="h-4 w-4" />}
-            Apply
-          </Button>
+          <div className="flex min-w-0 items-center gap-2 xl:col-span-2">
+            <Button onClick={handleApplyFilters} disabled={!selectedAssistant || loading} className="flex-1 shrink-0 gap-2 h-10">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Filter className="h-4 w-4" />}
+              Apply
+            </Button>
+            <ApiSnippetButton
+              buildSpec={callLogsSpec}
+              label="View this query as an API request"
+              className="h-10 w-10 shrink-0 border border-border/50"
+            />
+          </div>
         </div>
 
         {/* Client-side, and it says so. `GET /assistant/call-logs/{id}` takes only paging, a date
