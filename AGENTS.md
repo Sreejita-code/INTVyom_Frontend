@@ -99,7 +99,7 @@ is `src/index.css`. Add those layers when a real need arrives, not before.
 Pre-existing, not regressions — compare against these before claiming a
 regression. Measured 2026-09-12.
 
-- `npm run test` — 16 files, 166 tests pass
+- `npm run test` — 16 files, 171 tests pass
 - `npm run typecheck` — clean
 - `npm run lint` — 89 problems (80 errors, 9 warnings), almost all
   `@typescript-eslint/no-explicit-any` spread across routes, plus

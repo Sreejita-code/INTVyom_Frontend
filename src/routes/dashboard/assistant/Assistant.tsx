@@ -328,10 +328,11 @@ export default function AssistantPage() {
 
     try {
       const hasTools = (formData.assistant_end_call_enabled ?? false) || attachedToolIds.length > 0;
-      const payload = { user_id: user.user_id, ...buildAssistantPayload(formData, hasTools) };
+      const creating = mode === "create";
+      const payload = { user_id: user.user_id, ...buildAssistantPayload(formData, hasTools, { creating }) };
 
       let json: unknown;
-      if (mode === "create") {
+      if (creating) {
         json = await callCreateAssistantEndpoint(payload);
       } else {
         json = await callUpdateAssistantEndpoint(selectedId, payload);
@@ -373,7 +374,7 @@ export default function AssistantPage() {
         : "Only the fields you send are merged; an explicit null clears one.",
       method: creating ? "POST" : "PATCH",
       path: creating ? "/api/assistant/create" : `/api/assistant/update/${selectedId}`,
-      body: { user_id: userId, ...buildAssistantPayload(formData, hasTools) },
+      body: { user_id: userId, ...buildAssistantPayload(formData, hasTools, { creating }) },
     };
   };
 

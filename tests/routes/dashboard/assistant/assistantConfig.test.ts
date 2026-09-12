@@ -291,6 +291,59 @@ describe("buildAssistantPayload", () => {
   });
 });
 
+describe("buildAssistantPayload on create", () => {
+  it("drops the clearing nulls, since a create has no stored value to clear", () => {
+    const payload = buildAssistantPayload(
+      form({ assistant_mode: "pipeline", assistant_llm_config: { provider: "openai", model: "gpt-realtime-1.5" } }),
+      false,
+      { creating: true },
+    );
+
+    expect(payload.assistant_llm_config).toEqual({ provider: "openai", model: "gpt-realtime-1.5" });
+    expect(payload.assistant_llm_config).not.toHaveProperty("voice");
+    expect(payload.assistant_llm_config).not.toHaveProperty("temperature");
+  });
+
+  it("drops the null speech stages in realtime but keeps their empty configs", () => {
+    const payload = buildAssistantPayload(form({ assistant_mode: "realtime" }), false, { creating: true });
+
+    expect(payload).not.toHaveProperty("assistant_tts_model");
+    expect(payload).not.toHaveProperty("assistant_stt_model");
+    expect(payload.assistant_tts_config).toEqual({});
+    expect(payload.assistant_stt_config).toEqual({});
+  });
+
+  it("keeps the knobs that do have a value", () => {
+    const payload = buildAssistantPayload(
+      form({
+        assistant_mode: "cascade",
+        assistant_llm_config: { provider: "openai", model: "gpt-4.1", temperature: 0.4 },
+      }),
+      false,
+      { creating: true },
+    );
+
+    expect(payload.assistant_llm_config).toMatchObject({ model: "gpt-4.1", temperature: 0.4 });
+    expect(payload.assistant_llm_config).not.toHaveProperty("verbosity");
+  });
+
+  it("keeps falsy values that are not null", () => {
+    const payload = buildAssistantPayload(form({ assistant_mode: "pipeline" }), false, { creating: true });
+
+    expect(payload.assistant_end_call_enabled).toBe(false);
+    expect(payload.assistant_end_call_url).toBe("");
+    expect(payload.assistant_greeting_audio).toEqual({ enabled: false, audio_id: "" });
+    expect(payload.assistant_interaction_config).toBeTypeOf("object");
+  });
+
+  it("still sends the nulls on an update, which is the only place they clear anything", () => {
+    const payload = buildAssistantPayload(form({ assistant_mode: "pipeline" }), false, { creating: false });
+
+    expect(payload.assistant_llm_config).toHaveProperty("voice", null);
+    expect(payload.assistant_llm_config).toHaveProperty("temperature", null);
+  });
+});
+
 describe("hydrateForm", () => {
   it("keeps provider config whole instead of reducing it to the fields the form once knew", () => {
     const hydrated = hydrateForm({

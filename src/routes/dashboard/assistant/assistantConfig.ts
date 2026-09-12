@@ -302,13 +302,33 @@ const pruneTts = (
   return source;
 };
 
+/** Recursively removes `null` values. Empty objects, `false` and `""` all survive — only null goes. */
+const dropNulls = (value: Record<string, unknown>): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (item === null) continue;
+    out[key] =
+      item && typeof item === "object" && !Array.isArray(item)
+        ? dropNulls(item as Record<string, unknown>)
+        : item;
+  }
+  return out;
+};
+
 /**
  * Form state → create/update body.
  *
  * Explicitly sends `null` for inert or model-rejected knobs (e.g. temperature on reasoning models,
  * voice in pipeline/cascade) so backend key-by-key dictionary merging clears stored invalid keys.
+ *
+ * Those nulls only mean something on update. Pass `creating` and they are stripped: a create has no
+ * stored document to clear, so a null there is noise in the request a developer reads first.
  */
-export const buildAssistantPayload = (form: AssistantDetail, hasTools?: boolean): Record<string, any> => {
+export const buildAssistantPayload = (
+  form: AssistantDetail,
+  hasTools?: boolean,
+  { creating = false }: { creating?: boolean } = {},
+): Record<string, any> => {
   const mode = form.assistant_mode;
   const isRealtime = mode === "realtime";
   const isCascade = mode === "cascade";
@@ -413,5 +433,5 @@ export const buildAssistantPayload = (form: AssistantDetail, hasTools?: boolean)
     payload.assistant_stt_config = {};
   }
 
-  return payload;
+  return creating ? dropNulls(payload) : payload;
 };
