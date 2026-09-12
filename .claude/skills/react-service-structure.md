@@ -1,1 +1,0 @@
-../../.agents/skills/react-service-structure/SKILL.md
