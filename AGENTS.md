@@ -10,12 +10,22 @@ and passthrough web calls). LiveKit is used for realtime voice/text chat in the 
 
 ## Mandatory skills
 
-- **`react-service-structure`** (`.agents/skills/react-service-structure/SKILL.md`) —
-  the canonical folder layout, naming conventions, and README standard. Read it before
-  adding a file, moving one, or deciding where something belongs. This file (`AGENTS.md`)
-  overrides it wherever the two disagree.
-- `.claude/skills/*.md` are symlinks to `.agents/skills/<name>/SKILL.md`. `.agents/` is the
-  single source of truth — edit there, never the mirror.
+Skills live in `.agents/skills/<name>/SKILL.md`. **`.agents/` is the single
+source of truth** — `.claude/skills/<name>` is a directory symlink into it.
+Edit `.agents/`, never the mirror. This file (`AGENTS.md`) overrides any skill
+wherever the two disagree.
+
+- **`plan-before-implement`** — read → baseline → audit → propose → **ask the
+  user and wait** → implement one step at a time → verify. Follow it for
+  anything larger than a typo.
+- **`react-service-structure`** — the canonical folder layout, naming
+  conventions, service `call`/`condense` contract, and README standard. Read it
+  before adding a file, moving one, or deciding where something belongs.
+- **`ui-design-system`** — the visual and responsive quality bar in this repo's
+  tokens and utilities. Read it before any UI change.
+- **`run-intvyom-frontend`** — launches the app and drives it in a real browser.
+  Run it to see a change, screenshot a page, or sweep every route at five
+  viewport widths for layout breaks. UI work is not verified until this has run.
 
 ## Commands
 
@@ -86,11 +96,14 @@ is `src/index.css`. Add those layers when a real need arrives, not before.
 
 ## Baseline
 
-Pre-existing, not regressions — compare against these before claiming a regression:
+Pre-existing, not regressions — compare against these before claiming a
+regression. Measured 2026-09-12.
 
-- `npm run test` — 5 files, 22 tests pass, no errors
+- `npm run test` — 15 files, 150 tests pass
 - `npm run typecheck` — clean
-- `npm run lint` — 52 problems (45 errors, 7 warnings), almost all
+- `npm run lint` — 89 problems (80 errors, 9 warnings), almost all
   `@typescript-eslint/no-explicit-any` spread across routes, plus
   `tailwind.config.ts` and `src/components/ui`
-- `npm run build` — succeeds; emits a >500 kB chunk warning (~1.73 MB main bundle)
+- `npm run build` — succeeds; emits a >500 kB chunk warning (~1.90 MB main bundle)
+- `node .agents/skills/run-intvyom-frontend/driver.mjs sweep` — 0 failing
+  checks across 15 routes × 5 widths

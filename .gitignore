@@ -27,3 +27,6 @@ dist-ssr
 .env 
 
 .codex
+
+# Driver screenshots (.agents/skills/run-intvyom-frontend)
+.artifacts

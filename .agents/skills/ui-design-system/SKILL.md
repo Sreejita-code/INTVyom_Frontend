@@ -1,71 +1,108 @@
 ---
-name: ui-ux-premium
-description: Activates a premium UI/UX mindset for frontend improvements. Use this skill for redesigns, UI polish, spacing, typography, visual hierarchy, responsive layout updates, and UX refinements while preserving the current product theme.
+name: ui-design-system
+description: >
+  The visual and responsive quality bar for the INTVyom frontend, expressed in
+  this repo's own tokens and utilities. Use when building or changing any UI —
+  a new page, a redesign, spacing or typography work, a responsive fix, or a
+  polish pass. Triggers on "improve the UI", "make this look better", "fix the
+  spacing", "redesign this page", "make it responsive", "premium look".
 ---
 
-# Premium UI/UX Skill
+# UI Design System
 
-You design like a senior product designer and frontend engineer.
+Paths below are relative to the repo root.
 
-> **Create clean, minimal, premium UI that upgrades clarity and quality without changing the current theme.**
+The theme is dark neon-cyber and **stays that way**. The reference is the
+*discipline* of Apple, Linear, and the Vercel docs — one spacing grid, one type
+scale, restraint with colour and motion, generous whitespace — not their light
+palette. Every rule below points at a value that already exists in
+`src/index.css` or `tailwind.config.ts`. Read those two files before styling
+anything.
 
----
+## Colour — tokens only
 
-## Core Design Rules
+- Use the semantic Tailwind colours that map to the HSL vars: `bg-background`,
+  `bg-card`, `text-foreground`, `text-muted-foreground`, `border-border`,
+  `bg-primary` (teal `172 66% 50%`), `bg-destructive`.
+- **Never hardcode a hex or an arbitrary `[#...]` class.** If a needed colour
+  has no token, add one to `:root` in `src/index.css` and to
+  `tailwind.config.ts`, then use it by name.
+- Assistant runtime modes read from `mode.pipeline` / `mode.realtime` /
+  `mode.cascade`. Do not invent a second colour for a mode anywhere.
+- Opacity comes from the token: `bg-primary/10`, `border-border/60`. That is how
+  every existing surface is tinted.
 
-1. Preserve the existing brand/theme direction. Improve it, do not replace it.
-2. Keep layouts simple and intentional. Remove clutter before adding elements.
-3. Maintain visual uniformity across all sections, components, and pages.
-4. Favor symmetrical and balanced composition unless asymmetry clearly improves UX.
-5. Use strong visual hierarchy with clear spacing, type scale, and contrast.
-6. Prioritize readability, scanability, and usability over decoration.
+## Reuse the utilities before writing classes
 
----
+`src/index.css` already defines the page vocabulary. Composing a page out of ad
+hoc classes when one of these exists is the most common way this UI drifts:
 
-## Visual Style Guidelines
+| Need | Use |
+|---|---|
+| page wrapper | `page-shell` |
+| page gutter | `page-padding` (`p-4 md:p-6 lg:p-8`) |
+| centred column | `content-max` (`max-w-6xl mx-auto`) |
+| status pill | `status-chip` + `status-chip-info` / `-neutral` / `-warning` |
+| focused/active surface | `neon-border` |
+| translucent panel | `glass` |
 
-- Keep the look minimal and premium: clean composition, balanced whitespace, refined alignment.
-- Keep spacing, corner radius, shadows, and component rhythm uniform across the interface.
-- Use premium color application from the current palette only (no theme switch, no random color system changes).
-- Use high-quality typography choices that fit the current brand voice.
-- Apply subtle motion only when it improves comprehension and polish.
-- Ensure desktop and mobile layouts both feel intentional, complete, and visually consistent.
+Check `src/components/common/` for an existing shell (`MasterDetailShell`,
+`EmptyState`) before building a new layout.
 
----
+## Spacing, radius, type
 
-## Responsiveness Standards
+- **Spacing is Tailwind's 4px scale.** No arbitrary `px` values. Stack rhythm
+  inside a card: `space-y-4`; between page sections: `space-y-6`.
+- **Radius comes from `--radius` (0.5rem)** through `rounded-lg` / `-md` /
+  `-sm`. No per-component radius. `rounded-full` is for pills and avatars only.
+- **Type is Inter (`font-sans`) and JetBrains Mono (`font-mono`).** Mono is for
+  IDs, keys, phone numbers, and code — not for prose. Steps in use:
+  `text-3xl font-bold` page title, `text-lg font-semibold` section, `text-sm`
+  body, `text-xs text-muted-foreground` meta. Do not add a step between these.
 
-- Design and build mobile-first, then scale cleanly to tablet, laptop, desktop, and ultra-wide screens.
-- Ensure all UI generated is fully responsive for small and large screens without layout breaks.
-- Keep grids, spacing, and typography proportional at every breakpoint.
-- Prevent overflow, clipping, and overlapping content in all supported viewports.
-- Maintain consistent hierarchy, symmetry, and usability across screen sizes.
+## Responsive
 
----
+Mobile-first. Design at 375, then let it widen. The five widths that matter are
+the five the driver sweeps: **375, 768, 1024, 1440, 1920**.
 
-## UX Quality Bar
+- The dashboard sidebar is desktop-only; below `md` navigation is a Sheet
+  (`src/routes/dashboard/DashboardLayout.tsx`). A new page inherits this — do
+  not add a second mobile nav.
+- Tables overflow on phones. Wrap in `overflow-x-auto`, or render a card list
+  below `md`. Never let the page itself scroll sideways.
+- Long values (IDs, URLs, transcripts) need `truncate` or `break-words`. An
+  unbroken string is the usual cause of an overflow failure.
+- Wide layouts stay readable: cap with `content-max`, do not let a form stretch
+  to 1920px.
 
-- Every interactive element must have a clear purpose.
-- Improve affordance, feedback, and states (hover, focus, active, disabled).
-- Keep interactions predictable and accessible.
-- Avoid noisy patterns, unnecessary gradients, and over-animated components.
+## Motion
 
----
+Framer Motion and `tailwindcss-animate` are already here. Keep transitions at
+150–250ms (`transition-all` on interactive elements is the existing pattern).
+Animate to explain a change of state, never for decoration. Nothing that loops
+forever except an actual live indicator — `pulse-neon` exists for that.
 
-## Implementation Guardrails
+## States and accessibility
 
-- Do not introduce a new design system unless explicitly requested.
-- Do not break existing information architecture without a product reason.
-- Do not add visual complexity when a simpler pattern solves the problem.
-- Reuse existing components/tokens first, then extend only where necessary.
+- Every interactive element needs hover, focus-visible, active, and disabled.
+  Radix primitives in `src/components/ui/` give you these — use the primitive
+  rather than a styled `div`.
+- Buttons that trigger a request show a pending state; lists show loading,
+  empty, and error states. `EmptyState` exists for the empty one.
+- Body text must hit AA contrast over `--background` and `--card`.
+  `text-muted-foreground` is the floor for readable text — do not go dimmer for
+  anything a user has to read.
+- Keep the tab order sensible and label icon-only buttons with `aria-label`.
 
----
+## Before handing UI work back
 
-## Before Handing Back UI Changes
+Not adjectives — run the checks:
 
-Ask yourself:
-- Does this look more premium while still feeling like the same product?
-- Is the interface cleaner and easier to use than before?
-- Is spacing, typography, alignment, and symmetry consistent across screen sizes?
-- Is the final UI fully responsive on both very small and very large displays?
-- Did I preserve the current theme while improving the quality?
+1. `node .agents/skills/run-intvyom-frontend/driver.mjs route <the route>` —
+   zero overflow failures, zero console errors, at all five widths.
+2. **Open the 375 and 1920 screenshots and look at them.** A green overflow
+   check does not mean the page reads well.
+3. No new hex colours, no arbitrary spacing values, no duplicated utility that
+   `src/index.css` already provides.
+4. It still looks like the same product. Improving the theme is in scope;
+   replacing it is not.

@@ -19,8 +19,8 @@ component body.
 > **A great developer seeks simplicity. An idiot developer seeks complexity.**
 
 This skill defines the *target layout*. The discipline for getting there —
-understand → audit → plan → **get approval** → execute → document — is in
-"Working procedure" below. Never skip the approval step on a restructure.
+read → baseline → audit → propose → **ask** → implement → verify — lives in the
+`plan-before-implement` skill. Never skip the approval step on a restructure.
 
 **The repo's root `AGENTS.md` wins.** This skill is the default; where a repo's
 `AGENTS.md` states something different (licence policy, extra layers, stricter
@@ -221,27 +221,7 @@ first; some repos deliberately ship without one.
 Rules: if the README exists, read it before changing anything. If it is
 missing, create it. After any change, re-check the **whole** README for
 staleness — env vars, routes, and the structure tree drift first and fastest.
-
-## Working procedure
-
-1. **Read before changing, and capture a baseline.** Walk the tree, read the
-   entrypoint, map component dependencies. Record the current output of the
-   lint, test, and build commands — you cannot claim "no regressions" without
-   a number to compare against. Never restructure code you have not read.
-2. **Audit** against the layer rules above; list each violation with its path.
-3. **Plan** — before/after tree, file splits, component decompositions,
-   renames with rationale, docs to update. **Present the plan and wait for
-   approval.**
-4. **Execute** — `git mv` to preserve history, move code, split oversized
-   files, update every import, delete dead code. External behaviour must not
-   change: no feature changes, no regressions. Verify after each phase, not
-   only at the end.
-5. **Document** — update the README (tree, env, routes) and `AGENTS.md` (new
-   layers, new conventions), and add prop-type/JSDoc comments to new public
-   components and hooks.
-6. **Verify** — the app still builds and boots, and lint / test / build results
-   are no worse than the baseline from step 1. Manually click through every
-   route touched by a component extraction, including its mobile path.
+A structure change is not complete until the README lands in the same change.
 
 ## New app scaffold
 
@@ -274,8 +254,9 @@ Add `src/components/common/`, `src/hooks/`, `src/stores/`, `src/features/`, and
    ln -s ../../.agents/skills/react-service-structure .claude/skills/react-service-structure
    ln -s ../../.agents/skills/react-service-structure .opencode/skills/react-service-structure
    ```
-   If the toolchain expects flat `.md` files instead of skill directories,
-   symlink `SKILL.md` to `<toolchain>/skills/react-service-structure.md`.
+   Symlink the **directory**, not `SKILL.md`. Claude Code discovers
+   `.claude/skills/<name>/SKILL.md`; a flat `.claude/skills/<name>.md` is
+   silently ignored.
 3. Ensure the repo has a root `AGENTS.md` naming this skill as mandatory, and
    recording anything this skill defers to it — licence policy, extra layers,
    and the lint/test/build baseline.

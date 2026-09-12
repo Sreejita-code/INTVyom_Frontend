@@ -70,10 +70,11 @@ records this repo's deviations from it.
 INTVyom_Frontend/
 ├── AGENTS.md                     # Repo rules for AI coding agents — read first
 ├── .agents/skills/               # Agent skill definitions (single source of truth)
-│   ├── coding-skills/SKILL.md
+│   ├── plan-before-implement/SKILL.md     # Read → baseline → propose → ask → implement
 │   ├── react-service-structure/SKILL.md   # Canonical folder layout + README standard
-│   └── ui-ux-premium/SKILL.md
-├── .claude/skills/               # Symlinks into .agents/skills/ — never edit directly
+│   ├── ui-design-system/SKILL.md          # Visual + responsive quality bar
+│   └── run-intvyom-frontend/              # SKILL.md + driver.mjs (Playwright)
+├── .claude/skills/               # Directory symlinks into .agents/skills/ — never edit directly
 ├── public/                       # Static assets (served as-is)
 │   ├── logos/                    # TTS provider logos (cartesia, elevenlabs, sarvam)
 │   ├── robots.txt                # Crawler allowlist
@@ -278,6 +279,20 @@ APP_PORT=3000
 ```bash
 npm run test         # Run once
 npm run test:watch   # Watch mode
+```
+
+### Browser checks
+
+`.agents/skills/run-intvyom-frontend/driver.mjs` boots the dev server and drives
+the app with Playwright: it signs itself in, stubs the backend, and visits every
+route at 375 / 768 / 1024 / 1440 / 1920 px, failing on horizontal overflow or
+console errors. Screenshots land in `.artifacts/screens/` (gitignored).
+
+```bash
+npx playwright install chromium                                  # once per machine
+node .agents/skills/run-intvyom-frontend/driver.mjs sweep        # every route
+node .agents/skills/run-intvyom-frontend/driver.mjs route /dashboard/analytics
+node .agents/skills/run-intvyom-frontend/driver.mjs shot /dashboard/tools 375
 ```
 
 ## Assistant Editor
