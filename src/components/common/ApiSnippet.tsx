@@ -36,6 +36,10 @@ interface ApiSnippetButtonProps extends Pick<ButtonProps, "variant" | "size" | "
   label?: string;
   children?: ReactNode;
   disabled?: boolean;
+  /** Rendered under the snippet. The web call uses it for what the browser does with the token. */
+  footer?: ReactNode;
+  /** Heading for `footer`. */
+  footerTitle?: string;
 }
 
 // A blank env var would render a relative URL, which is not runnable when pasted into a shell.
@@ -46,6 +50,8 @@ export const ApiSnippetButton = ({
   label = "View as API request",
   children,
   disabled,
+  footer,
+  footerTitle,
   variant = "ghost",
   size,
   className,
@@ -123,10 +129,13 @@ export const ApiSnippetButton = ({
           </div>
         </SheetHeader>
 
+        {/* With a footer the whole body scrolls as one column; without one the snippet keeps
+            growing to fill the sheet, the way it did before the footer existed. */}
+        <div className={footer ? "flex-1 min-h-0 overflow-y-auto" : "contents"}>
         <Tabs
           value={language}
           onValueChange={(value) => setLanguage(value as SnippetLanguage)}
-          className="flex-1 min-h-0 flex flex-col"
+          className={footer ? "flex flex-col" : "flex-1 min-h-0 flex flex-col"}
         >
           <div className="flex items-center justify-between gap-2 px-4 md:px-6 pt-4">
             <TabsList>
@@ -146,9 +155,15 @@ export const ApiSnippetButton = ({
             <TabsContent
               key={item}
               value={item}
-              className="flex-1 min-h-0 mt-4 px-4 md:px-6 pb-4 data-[state=inactive]:hidden"
+              className={`mt-4 px-4 md:px-6 pb-4 data-[state=inactive]:hidden${
+                footer ? "" : " flex-1 min-h-0"
+              }`}
             >
-              <ScrollArea className="h-full rounded-lg border border-border bg-background">
+              <ScrollArea
+                className={`rounded-lg border border-border bg-background ${
+                  footer ? "h-[24rem]" : "h-full"
+                }`}
+              >
                 <pre className="p-4 text-xs font-mono leading-relaxed text-foreground">
                   {renderSnippet(item, spec, options)}
                 </pre>
@@ -157,6 +172,16 @@ export const ApiSnippetButton = ({
             </TabsContent>
           ))}
         </Tabs>
+
+        {footer ? (
+          <div className="border-t border-border p-4 md:p-6 space-y-3">
+            {footerTitle ? (
+              <h4 className="text-sm font-semibold text-foreground">{footerTitle}</h4>
+            ) : null}
+            {footer}
+          </div>
+        ) : null}
+        </div>
 
         <div className="border-t border-border p-4 md:p-6 space-y-2">
           <div className="flex items-center justify-between gap-4">

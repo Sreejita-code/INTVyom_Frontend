@@ -7,6 +7,7 @@ import { MasterDetailShell } from "@/components/common/MasterDetailShell";
 import { MetadataEditor } from "@/components/common/MetadataEditor";
 import { MetadataRow, metadataFrom, rawMetadataIsInvalid, rowsForPlaceholders } from "@/lib/callMetadata";
 import { ApiSnippetButton } from "@/components/common/ApiSnippet";
+import { WebCallClientGuide } from "@/routes/dashboard/developer/WebCallClientGuide";
 import { RequestSpec } from "@/lib/apiSnippet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -653,6 +654,8 @@ export default function AssistantPage() {
                     <ApiSnippetButton
                       buildSpec={webCallSpec}
                       label="View the web call as an API request"
+                      footer={<WebCallClientGuide />}
+                      footerTitle="Then receive the call in your frontend"
                     />
                   )}
                   {mode === 'edit' && selectedId && (

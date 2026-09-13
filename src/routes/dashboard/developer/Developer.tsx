@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Copy, Eye, EyeOff, KeyRound, Link2, Loader2, Terminal } from "lucide-react";
+import { Copy, Eye, EyeOff, KeyRound, Link2, Loader2, MonitorPlay, Terminal } from "lucide-react";
 
 import { ApiSnippetButton } from "@/components/common/ApiSnippet";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { getStoredUser } from "@/services/storage/storageService";
 import { callGetApiKeysEndpoint, condenseGetApiKeysResponse, ApiKeyData } from "@/services/auth/authService";
 import { useToast } from "@/hooks/use-toast";
 import { developerActions } from "./developerActions";
+import { WebCallClientGuide } from "./WebCallClientGuide";
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL || "https://<your-backend>";
 
@@ -196,6 +197,20 @@ const Developer = () => {
                 );
               })}
             </div>
+          </section>
+
+          <section className="space-y-3">
+            <div className="flex items-center gap-2">
+              <MonitorPlay className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-semibold text-foreground">
+                Receive the call in your frontend
+              </h3>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The token above is half of a web call. These samples take it from there — connect to
+              the room, play the assistant, type to it, and render the transcript as it is spoken.
+            </p>
+            <WebCallClientGuide />
           </section>
         </motion.div>
       </div>
