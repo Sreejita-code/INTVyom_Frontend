@@ -3,7 +3,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     PhoneCall, Loader2, Phone, Webhook, PhoneOff,
-    PhoneIncoming, AlertCircle, Mic, MicOff, Bot
+    PhoneIncoming, AlertCircle, Mic, MicOff, Bot, Video
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,7 @@ import { MetadataEditor } from "@/components/common/MetadataEditor";
 import { MetadataRow, metadataFrom, rawMetadataIsInvalid, rowsForPlaceholders } from "@/lib/callMetadata";
 import { ApiSnippetButton } from "@/components/common/ApiSnippet";
 import { RequestSpec } from "@/lib/apiSnippet";
+import { MeetingCallTab } from "./MeetingCallTab";
 import { LiveKitRoom, RoomAudioRenderer, useLocalParticipant } from "@livekit/components-react";
 import "@livekit/components-styles";
 
@@ -385,12 +386,15 @@ export default function MakeCallPage() {
             <div className="flex-1 min-h-0 overflow-y-auto">
                 <div className="p-4 md:p-6 max-w-4xl mx-auto w-full">
                     <Tabs defaultValue="agent" className="w-full">
-                        <TabsList className="mb-6 bg-muted/30">
+                        <TabsList className="mb-6 bg-muted/30 max-w-full justify-start overflow-x-auto">
                             <TabsTrigger value="agent" className="gap-2">
                                 <Bot className="h-4 w-4" /> Agent Call
                             </TabsTrigger>
                             <TabsTrigger value="passthrough" className="gap-2">
                                 <Webhook className="h-4 w-4" /> Passthrough Call
+                            </TabsTrigger>
+                            <TabsTrigger value="meeting" className="gap-2">
+                                <Video className="h-4 w-4" /> Google Meet
                             </TabsTrigger>
                         </TabsList>
 
@@ -625,6 +629,16 @@ export default function MakeCallPage() {
                                     </Accordion>
                                   </div>
                                 )}
+                            </section>
+                        </TabsContent>
+
+                        <TabsContent value="meeting">
+                            <section className="glass rounded-2xl p-6 border border-border/50">
+                                <MeetingCallTab
+                                    assistants={assistants}
+                                    assistantsLoading={assistantsLoading}
+                                    userId={user?.user_id}
+                                />
                             </section>
                         </TabsContent>
                     </Tabs>

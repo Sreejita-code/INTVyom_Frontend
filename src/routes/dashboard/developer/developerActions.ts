@@ -10,6 +10,7 @@ import { RequestSpec } from "@/lib/apiSnippet";
 const EXAMPLE_ASSISTANT_ID = "<assistant_id>";
 const EXAMPLE_TRUNK_ID = "<trunk_id>";
 const EXAMPLE_NUMBER = "+919876543210";
+const EXAMPLE_MEETING_URL = "https://meet.google.com/abc-defg-hij";
 const EXAMPLE_METADATA = { customer: { name: "John Doe", plan: "Enterprise" }, agent_name: "Sarah" };
 
 const PLACEHOLDER_NOTE =
@@ -114,6 +115,25 @@ export const developerActions: DeveloperAction[] = [
         trunk_id: EXAMPLE_TRUNK_ID,
         to_number: EXAMPLE_NUMBER,
         metadata: { campaign: "renewals" },
+      },
+    }),
+  },
+  {
+    name: "Join a Google Meet call",
+    summary: "Send the assistant into a meeting as a bot participant.",
+    buildSpec: (userId) => ({
+      id: "meetingCall.join",
+      title: "Join a Google Meet call",
+      note: "The LiveKit connector service and the agent worker must both be running, or nothing joins the meeting. " + PLACEHOLDER_NOTE,
+      method: "POST",
+      path: "/api/meeting-call/join",
+      body: {
+        user_id: userId,
+        assistant_id: EXAMPLE_ASSISTANT_ID,
+        meeting_url: EXAMPLE_MEETING_URL,
+        platform: "google_meet",
+        bot_display_name: "Meeting Assistant",
+        metadata: EXAMPLE_METADATA,
       },
     }),
   },
