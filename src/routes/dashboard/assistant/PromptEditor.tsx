@@ -37,7 +37,7 @@ export function PromptEditor({
         </p>
       </div>
 
-      <div className="grid gap-4 rounded-2xl border border-border/60 bg-card/60 p-5 sm:p-6">
+      <div className="grid gap-4 rounded-xl border border-border/60 bg-card/60 p-5 sm:p-6">
         <div className="grid gap-2">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <Label htmlFor="assistant-prompt" className="text-[0.9375rem] font-medium">
@@ -89,7 +89,7 @@ export function PromptEditor({
             </p>
           ) : (
             <>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-2">
                 {placeholders.map((p) => (
                   <span
                     key={p.path}

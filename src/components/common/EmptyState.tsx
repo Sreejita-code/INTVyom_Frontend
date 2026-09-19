@@ -9,6 +9,8 @@ interface EmptyStateProps {
   className?: string;
   /** Extra classes for the description, e.g. a wider `max-w-*`. */
   descriptionClassName?: string;
+  /** Compact variant for stacking under onboarding content. */
+  compact?: boolean;
 }
 
 /**
@@ -21,6 +23,7 @@ export function EmptyState({
   description,
   className,
   descriptionClassName,
+  compact = false,
 }: EmptyStateProps) {
   return (
     <div
@@ -29,10 +32,13 @@ export function EmptyState({
         className,
       )}
     >
-      <div className="w-24 h-24 rounded-3xl bg-primary/5 flex items-center justify-center mb-6 border border-primary/10">
-        <Icon className="h-10 w-10 text-primary/30" />
+      <div className={cn(
+        "rounded-xl bg-primary/5 flex items-center justify-center border border-primary/10",
+        compact ? "w-14 h-14 mb-3" : "w-24 h-24 mb-6",
+      )}>
+        <Icon className={compact ? "h-7 w-7 text-primary/30" : "h-10 w-10 text-primary/30"} />
       </div>
-      <h2 className="text-2xl font-bold text-foreground mb-2">{title}</h2>
+      <h2 className={compact ? "text-xl font-bold text-foreground mb-2" : "text-2xl font-bold text-foreground mb-2"}>{title}</h2>
       <p
         className={cn(
           "max-w-xs text-center text-sm text-muted-foreground leading-relaxed",

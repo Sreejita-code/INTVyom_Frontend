@@ -68,7 +68,7 @@ export default function PhoneNumberPage() {
             }
         } catch (error) {
             console.error(error);
-            toast({ variant: "destructive", title: "Failed to load SIP trunks" });
+            toast({ variant: "destructive", title: "Failed to load phone lines" });
         } finally {
             setListLoading(false);
         }
@@ -136,7 +136,7 @@ export default function PhoneNumberPage() {
         }
 
         if (!modalForm.trunk_name) {
-            toast({ variant: "destructive", title: "Validation Error", description: "Trunk name is required" });
+            toast({ variant: "destructive", title: "Validation Error", description: "Line nickname is required" });
             return;
         }
 
@@ -190,7 +190,7 @@ export default function PhoneNumberPage() {
                 });
                 await fetchList();
             } else {
-                toast({ variant: "destructive", title: "Error", description: (json as { error?: string })?.error || "Failed to create trunk" });
+                toast({ variant: "destructive", title: "Error", description: (json as { error?: string })?.error || "Failed to connect line" });
             }
         } catch (error) {
             console.error(error);
@@ -203,19 +203,19 @@ export default function PhoneNumberPage() {
     const handleDeleteTrunk = async () => {
         if (!selectedTrunk || !user?.user_id) return;
 
-        if (!window.confirm("Are you sure you want to delete this SIP trunk?")) return;
+        if (!window.confirm("Are you sure you want to remove this phone line?")) return;
 
         setIsDeleting(true);
         try {
             const { ok, json } = await callDeleteTrunkEndpoint({ userId: user.user_id, trunkId: selectedTrunk._id });
 
             if (ok) {
-                toast({ title: "Success", description: "SIP trunk deleted successfully" });
+                toast({ title: "Removed", description: "Phone line removed successfully" });
                 setSelectedTrunk(null);
                 setMobileDetailOpen(false);
                 await fetchList();
             } else {
-                toast({ variant: "destructive", title: "Error", description: (json as { error?: string })?.error || "Failed to delete trunk" });
+                toast({ variant: "destructive", title: "Error", description: (json as { error?: string })?.error || "Failed to remove line" });
             }
         } catch (error) {
             console.error(error);
@@ -253,7 +253,7 @@ export default function PhoneNumberPage() {
                                     <button
                                         onClick={() => setActiveTab("twilio")}
                                         className={cn(
-                                            "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all",
+                                            "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors duration-200",
                                             activeTab === "twilio"
                                                 ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
                                                 : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
@@ -265,7 +265,7 @@ export default function PhoneNumberPage() {
                                     <button
                                         onClick={() => setActiveTab("exotel")}
                                         className={cn(
-                                            "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all",
+                                            "w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors duration-200",
                                             activeTab === "exotel"
                                                 ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
                                                 : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
@@ -280,13 +280,16 @@ export default function PhoneNumberPage() {
                             {/* Modal Right Side Form */}
                             <div className="flex-1 flex flex-col bg-background">
                                 <DialogHeader className="p-6 border-b border-border bg-card/10 backdrop-blur-sm">
-                                    <DialogTitle className="text-xl">Configure {activeTab === 'twilio' ? 'Twilio' : 'Exotel'} Trunk</DialogTitle>
+                                    <DialogTitle className="text-xl">Connect {activeTab === 'twilio' ? 'Twilio' : 'Exotel'}</DialogTitle>
+                                    <p className="text-xs text-muted-foreground mt-1 font-normal">
+                                        A phone line connects INTVOICEKIT to {activeTab === 'twilio' ? 'Twilio' : 'Exotel'} so your assistants can call and receive calls. Copy the values below from your provider's dashboard.
+                                    </p>
                                 </DialogHeader>
 
                                 <ScrollArea className="flex-1 p-4 sm:p-8">
-                                    <div className="space-y-6 max-w-md mx-auto">
+                                    <div className="space-y-6 max-w-lg mx-auto">
                                         <div className="space-y-2">
-                                            <Label htmlFor="trunk_name" className="text-sm font-medium">Trunk Name</Label>
+                                            <Label htmlFor="trunk_name" className="text-sm font-medium">Line nickname</Label>
                                             <Input
                                                 id="trunk_name"
                                                 value={modalForm.trunk_name}
@@ -294,13 +297,14 @@ export default function PhoneNumberPage() {
                                                 placeholder="e.g. Twilio Production"
                                                 className="bg-muted/30 border-border/50 focus:border-primary"
                                             />
+                                            <p className="text-xs text-muted-foreground">A name only you see, so you can tell lines apart.</p>
                                         </div>
 
                                         {activeTab === "twilio" ? (
-                                            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                            <div className="space-y-6 animate-in fade-in duration-200">
                                                 <div className="space-y-2">
                                                     <Label htmlFor="address" className="text-sm font-medium flex items-center gap-2">
-                                                        <MapPin className="h-4 w-4 text-primary" /> Address
+                                                        <MapPin className="h-4 w-4 text-primary" /> Twilio address
                                                     </Label>
                                                     <Input
                                                         id="address"
@@ -309,10 +313,11 @@ export default function PhoneNumberPage() {
                                                         placeholder="example.pstn.twilio.com"
                                                         className="bg-muted/30 border-border/50"
                                                     />
+                                                    <p className="text-xs text-muted-foreground">Find it in the Twilio dashboard under Elastic SIP Trunking → Termination.</p>
                                                 </div>
                                                 <div className="space-y-2">
                                                     <Label htmlFor="numbers" className="text-sm font-medium flex items-center gap-2">
-                                                        <Hash className="h-4 w-4 text-primary" /> Numbers (comma separated)
+                                                        <Hash className="h-4 w-4 text-primary" /> Phone numbers
                                                     </Label>
                                                     <Input
                                                         id="numbers"
@@ -321,11 +326,12 @@ export default function PhoneNumberPage() {
                                                         placeholder="+15550100000, +15550100001"
                                                         className="bg-muted/30 border-border/50"
                                                     />
+                                                    <p className="text-xs text-muted-foreground">The numbers on this line, separated by commas.</p>
                                                 </div>
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                     <div className="space-y-2">
                                                         <Label htmlFor="username" className="text-sm font-medium flex items-center gap-2">
-                                                            <User className="h-4 w-4 text-primary" /> Username
+                                                            <User className="h-4 w-4 text-primary" /> Twilio Account SID
                                                         </Label>
                                                         <Input
                                                             id="username"
@@ -337,7 +343,7 @@ export default function PhoneNumberPage() {
                                                     </div>
                                                     <div className="space-y-2">
                                                         <Label htmlFor="password" className="text-sm font-medium flex items-center gap-2">
-                                                            <Lock className="h-4 w-4 text-primary" /> Password
+                                                            <Lock className="h-4 w-4 text-primary" /> Twilio Auth Token
                                                         </Label>
                                                         <Input
                                                             id="password"
@@ -351,9 +357,9 @@ export default function PhoneNumberPage() {
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                            <div className="space-y-2 animate-in fade-in duration-200">
                                                 <Label htmlFor="exotel_number" className="text-sm font-medium flex items-center gap-2">
-                                                    <Phone className="h-4 w-4 text-primary" /> Exotel Number
+                                                    <Phone className="h-4 w-4 text-primary" /> Exotel number
                                                 </Label>
                                                 <Input
                                                     id="exotel_number"
@@ -362,6 +368,7 @@ export default function PhoneNumberPage() {
                                                     placeholder="+918044319240"
                                                     className="bg-muted/30 border-border/50"
                                                 />
+                                                <p className="text-xs text-muted-foreground">Your Exotel virtual number, exactly as shown in Exotel.</p>
                                             </div>
                                         )}
                                         {/* Passthrough Mode */}
@@ -372,8 +379,8 @@ export default function PhoneNumberPage() {
                                                         <Webhook className="h-4 w-4" />
                                                     </div>
                                                     <div>
-                                                        <p className="text-sm font-medium">Passthrough Mode</p>
-                                                        <p className="text-xs text-muted-foreground">Forward calls to external webhook</p>
+                                                        <p className="text-sm font-medium">Direct forwarding, no assistant</p>
+                                                        <p className="text-xs text-muted-foreground">Send calls straight to your own web address instead of an assistant</p>
                                                     </div>
                                                 </div>
                                                 <Switch
@@ -383,9 +390,9 @@ export default function PhoneNumberPage() {
                                             </div>
 
                                             {modalForm.passthrough_mode && (
-                                                <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                <div className="space-y-2 animate-in fade-in duration-200">
                                                     <Label htmlFor="passthrough_webhook_url" className="text-sm font-medium flex items-center gap-2">
-                                                        <Webhook className="h-4 w-4 text-primary" /> Webhook URL
+                                                        <Webhook className="h-4 w-4 text-primary" /> Your web address
                                                     </Label>
                                                     <Input
                                                         id="passthrough_webhook_url"
@@ -394,6 +401,7 @@ export default function PhoneNumberPage() {
                                                         placeholder="https://your-server.com/webhook"
                                                         className="bg-muted/30 border-border/50 focus:border-primary font-mono text-xs"
                                                     />
+                                                    <p className="text-xs text-muted-foreground">Calls are forwarded here as web requests.</p>
                                                 </div>
                                             )}
                                         </div>
@@ -406,7 +414,7 @@ export default function PhoneNumberPage() {
                                         {isCreating ? (
                                             <Loader2 className="h-4 w-4 animate-spin" />
                                         ) : (
-                                            "Create Trunk"
+                                            "Connect line"
                                         )}
                                     </Button>
                                 </div>
@@ -420,7 +428,7 @@ export default function PhoneNumberPage() {
                         {listLoading ? (
                             <div className="flex flex-col items-center justify-center py-12 gap-3">
                                 <Loader2 className="h-8 w-8 animate-spin text-primary/50" />
-                                <span className="text-xs text-muted-foreground animate-pulse">Fetching trunks...</span>
+                                <span className="text-xs text-muted-foreground animate-pulse">Loading phone lines...</span>
                             </div>
                         ) : trunks.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
@@ -429,7 +437,7 @@ export default function PhoneNumberPage() {
                                 </div>
                                 <h3 className="text-sm font-medium mb-1">No phone numbers</h3>
                                 <p className="text-xs text-muted-foreground max-w-[180px]">
-                                    Add your first Twilio or Exotel trunk to get started.
+                                    Connect your first Twilio or Exotel line to get started.
                                 </p>
                             </div>
                         ) : (
@@ -442,7 +450,7 @@ export default function PhoneNumberPage() {
                                         key={itemId}
                                         onClick={() => handleSelectTrunk(item)}
                                         className={cn(
-                                            "group flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all border",
+                                            "group flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-colors duration-200 border",
                                             (selectedTrunk?.external_trunk_id === itemId || selectedTrunk?._id === itemId)
                                                 ? "bg-primary/5 border-primary/30 shadow-[0_0_20px_-5px_rgba(var(--primary),0.2)]"
                                                 : "bg-transparent border-transparent hover:bg-muted/50 hover:border-border/50"
@@ -480,11 +488,6 @@ export default function PhoneNumberPage() {
             }
             detail={
             <>
-                {/* Background Pattern */}
-                <div className="absolute inset-0 z-0 opacity-[0.03] pointer-events-none">
-                    <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,hsl(var(--primary))_0%,transparent_50%)]" />
-                </div>
-
                 {!selectedTrunk ? (
                     detailLoading ? (
                         <div className="flex-1 flex flex-col items-center justify-center gap-4 text-muted-foreground p-8 relative z-10">
@@ -494,12 +497,12 @@ export default function PhoneNumberPage() {
                     ) : (
                         <EmptyState
                             icon={Phone}
-                            title="Trunk Details"
-                            description="Select a phone number trunk from the sidebar to view its configuration and status."
+                            title="Pick a phone setup to see it"
+                            description="Each entry connects Twilio or Exotel numbers so people can call your assistants. Select one on the left, or add a new one."
                         />
                     )
                 ) : (
-                    <div className="flex-1 flex flex-col h-full overflow-hidden z-10 animate-in fade-in slide-in-from-right-4 duration-500">
+                    <div key={selectedTrunk._id} className="flex-1 flex flex-col h-full overflow-hidden z-10 animate-in fade-in slide-in-from-right-4 duration-500">
                         {/* Header */}
                         <div className="p-4 md:p-8 border-b border-border bg-card/10 backdrop-blur-xl flex flex-wrap items-end justify-between gap-4">
                             <div className="space-y-2">
@@ -513,7 +516,7 @@ export default function PhoneNumberPage() {
                                     Back
                                 </Button>
                                 <div className="flex items-center gap-3">
-                                    <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
+                                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
                                         <Phone className="h-6 w-6" />
                                     </div>
                                     <div>
@@ -565,7 +568,7 @@ export default function PhoneNumberPage() {
                                             <h3 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
                                                 <Info className="h-3 w-3" /> Information
                                             </h3>
-                                            <div className="glass rounded-2xl p-6 space-y-6">
+                                            <div className="glass rounded-xl p-6 space-y-6">
                                                 <div className="space-y-1">
                                                     <Label className="text-[10px] uppercase font-bold text-muted-foreground">Provider</Label>
                                                     <p className="text-sm font-semibold capitalize">{selectedTrunk.trunk_type}</p>
@@ -594,9 +597,9 @@ export default function PhoneNumberPage() {
                                             <h3 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
                                                 <Webhook className="h-3 w-3" /> Passthrough
                                             </h3>
-                                            <div className="glass rounded-2xl p-6 space-y-4">
+                                            <div className="glass rounded-xl p-6 space-y-4">
                                                 <div className="flex items-center justify-between">
-                                                    <div className="space-y-0.5">
+                                                    <div className="space-y-1">
                                                         <p className="text-sm font-semibold">Passthrough Mode</p>
                                                         <p className="text-xs text-muted-foreground">Forward inbound calls to external webhook</p>
                                                     </div>
@@ -623,7 +626,7 @@ export default function PhoneNumberPage() {
                                             <h3 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
                                                 <Shield className="h-3 w-3" /> Configuration
                                             </h3>
-                                            <div className="glass rounded-2xl p-8 space-y-8">
+                                            <div className="glass rounded-xl p-8 space-y-8">
                                                 {selectedTrunk.trunk_type === "twilio" ? (
                                                     <>
                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -667,7 +670,7 @@ export default function PhoneNumberPage() {
                                                 ) : (
                                                     <div className="space-y-4">
                                                         <Label className="text-[10px] uppercase font-bold text-muted-foreground">Exotel Number</Label>
-                                                        <div className="bg-primary/5 p-6 rounded-2xl border border-primary/20 flex items-center gap-4">
+                                                        <div className="bg-primary/5 p-6 rounded-xl border border-primary/20 flex items-center gap-4">
                                                             <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center text-primary">
                                                                 <Phone className="h-6 w-6" />
                                                             </div>

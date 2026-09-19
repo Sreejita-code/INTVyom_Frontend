@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { Music, Plus, Loader2, Trash2, Search, Upload, PlayCircle, FileAudio, ArrowLeft } from "lucide-react";
+import { CopyIdButton } from "@/components/common/CopyIdButton";
 import { EmptyState } from "@/components/common/EmptyState";
 import { MasterDetailShell } from "@/components/common/MasterDetailShell";
 import { Button } from "@/components/ui/button";
@@ -138,18 +139,21 @@ export default function AudioLibrary() {
     <MasterDetailShell
       mobileDetailOpen={mobileDetailOpen}
       className="h-screen overflow-hidden"
-      listClassName="animate-in slide-in-from-left h-full"
+      listClassName="animate-in fade-in duration-200 h-full"
       detailClassName="bg-background h-full"
       list={
         <>
-        <div className="p-4 border-b flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2">
-            <Music className="h-5 w-5 text-primary" />
-            <span className="font-semibold">Audio Library</span>
+        <div className="p-4 border-b space-y-3 shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Music className="h-5 w-5 text-primary" />
+              <span className="font-semibold">Audio Library</span>
+            </div>
+            <Button size="sm" onClick={handleCreateNew} className="h-8 px-2 bg-primary">
+              <Plus className="h-4 w-4 mr-1" /> Upload
+            </Button>
           </div>
-          <Button size="sm" onClick={handleCreateNew} className="h-8 px-2 bg-primary">
-            <Plus className="h-4 w-4 mr-1" /> Upload
-          </Button>
+          <p className="text-xs text-muted-foreground">Greetings and hold music your assistant can play.</p>
         </div>
 
         <div className="p-4 border-b shrink-0">
@@ -169,14 +173,17 @@ export default function AudioLibrary() {
             {listLoading ? (
               <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
             ) : filteredAudios.length === 0 ? (
-              <div className="text-center py-10 text-muted-foreground text-sm">No audio files found.</div>
+              <div className="text-center py-10 px-4 space-y-1">
+                <p className="text-sm font-medium text-foreground">{searchQuery ? `No audio matches “${searchQuery}”.` : "No audio yet"}</p>
+                <p className="text-xs text-muted-foreground">{searchQuery ? "Try another name." : "Upload a greeting, then pick it in your assistant's voice settings."}</p>
+              </div>
             ) : (
               filteredAudios.map((item) => (
                 <div
                   key={item.audio_id}
                   onClick={() => handleSelectAudio(item.audio_id)}
                   className={cn(
-                    "group flex items-start gap-3 p-3 rounded-md cursor-pointer transition-all border",
+                    "group flex items-start gap-3 p-3 rounded-md cursor-pointer transition-colors duration-200 border",
                     selectedId === item.audio_id ? "bg-accent/50 border-primary/50" : "bg-transparent border-transparent hover:bg-accent/30"
                   )}
                 >
@@ -209,18 +216,18 @@ export default function AudioLibrary() {
         {mode === "empty" ? (
           <EmptyState
             icon={Music}
-            title="No Audio Selected"
-            description='Select an audio file from the sidebar or click "Upload" to add a new one.'
+            title="Pick a sound to preview it"
+            description="Audio files are greetings and music your assistant can play. Select one on the left, or upload a new one."
             descriptionClassName="max-w-md"
           />
         ) : (
-          <div className="flex-1 flex flex-col h-full overflow-hidden">
+          <div key={mode === "upload" ? "upload" : selectedId} className="flex-1 flex flex-col h-full overflow-hidden animate-in fade-in slide-in-from-right-4 duration-500">
             <div className="p-4 md:p-6 border-b flex items-center justify-between bg-card/20 backdrop-blur-md shrink-0">
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="sm" className="lg:hidden -ml-2 text-muted-foreground" onClick={() => setMobileDetailOpen(false)}>
                   <ArrowLeft className="h-4 w-4 mr-1" /> Back
                 </Button>
-                <h2 className="text-xl font-bold">{mode === "upload" ? "Upload New Audio" : selectedAudio?.audio_name}</h2>
+                <h2 className="text-2xl font-bold">{mode === "upload" ? "Upload New Audio" : selectedAudio?.audio_name}</h2>
               </div>
             </div>
 
@@ -256,7 +263,10 @@ export default function AudioLibrary() {
                       <PlayCircle className="h-16 w-16 mx-auto text-primary opacity-80" />
                       <div>
                         <h3 className="text-lg font-semibold">{selectedAudio.audio_name}</h3>
-                        <p className="text-sm text-muted-foreground">ID: {selectedAudio.audio_id}</p>
+                        <p className="text-xs text-muted-foreground flex items-center justify-center gap-2">
+                          <span>Audio ID · used when an assistant plays this file:</span>
+                          <CopyIdButton value={selectedAudio.audio_id} label="Audio ID" />
+                        </p>
                       </div>
                       
                       {selectedAudio.s3_url ? (

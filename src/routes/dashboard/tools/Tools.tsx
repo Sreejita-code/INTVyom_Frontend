@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { Wrench, Plus, Loader2, Save, Trash2, X, ArrowLeft } from "lucide-react";
+import { CopyIdButton } from "@/components/common/CopyIdButton";
 import { EmptyState } from "@/components/common/EmptyState";
 import { MasterDetailShell } from "@/components/common/MasterDetailShell";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,11 @@ export default function ToolsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [toolSearch, setToolSearch] = useState("");
+
+  const filteredTools = tools.filter((t) =>
+    `${t.tool_name || ""} ${t.tool_execution_type || ""}`.toLowerCase().includes(toolSearch.trim().toLowerCase()),
+  );
 
   const fetchList = useCallback(async () => {
     if (!user?.user_id) return;
@@ -229,14 +235,25 @@ export default function ToolsPage() {
       mobileDetailOpen={mobileDetailOpen}
       list={
         <>
-        <div className="p-4 border-b border-border flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Wrench className="h-5 w-5 text-primary" />
-            <span className="font-semibold">Tools</span>
+        <div className="p-4 border-b border-border space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Wrench className="h-5 w-5 text-primary" />
+              <span className="font-semibold">Tools</span>
+            </div>
+            <Button size="sm" onClick={handleCreateNew} className="h-8 px-2">
+              <Plus className="h-4 w-4 mr-1" /> New
+            </Button>
           </div>
-          <Button size="sm" onClick={handleCreateNew} className="h-8 px-2">
-            <Plus className="h-4 w-4 mr-1" /> New
-          </Button>
+          <p className="text-xs text-muted-foreground">Actions your assistant can use, like checking weather or booking.</p>
+          <Input
+            type="search"
+            value={toolSearch}
+            onChange={(e) => setToolSearch(e.target.value)}
+            placeholder="Search tools…"
+            aria-label="Search tools"
+            className="h-9 bg-background"
+          />
         </div>
 
         <ScrollArea className="flex-1">
@@ -244,9 +261,14 @@ export default function ToolsPage() {
             {listLoading ? (
               <div className="flex justify-center py-8"><Loader2 className="animate-spin" /></div>
             ) : tools.length === 0 ? (
-              <div className="text-center py-10 text-muted-foreground text-sm">No tools found.</div>
+              <div className="text-center py-10 px-4 space-y-2">
+                <p className="text-sm text-foreground font-medium">No tools yet</p>
+                <p className="text-xs text-muted-foreground">Create one, then attach it to an assistant on the Assistants page.</p>
+              </div>
+            ) : filteredTools.length === 0 ? (
+              <div className="text-center py-10 px-4 text-muted-foreground text-sm">No tools match “{toolSearch}”.</div>
             ) : (
-              tools.map((item) => (
+              filteredTools.map((item) => (
                 <div
                   key={item.tool_id}
                   onClick={() => handleSelectTool(item.tool_id)}
@@ -259,7 +281,7 @@ export default function ToolsPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="text-sm font-medium truncate">{item.tool_name}</h4>
-                    <p className="text-xs text-muted-foreground truncate">{item.tool_execution_type}</p>
+                    <p className="text-xs text-muted-foreground truncate">{item.tool_execution_type === "webhook" ? "Calls your web address" : "Returns a fixed reply"}</p>
                   </div>
                   <Button
                     variant="ghost"
@@ -281,13 +303,13 @@ export default function ToolsPage() {
         {mode === "empty" ? (
           <EmptyState
             icon={Wrench}
-            title="No Tool Selected"
-            description="Select a tool from the sidebar or create a new one."
+            title="Pick a tool to edit it"
+            description="Tools are actions your assistant can use on a call. Select one on the left, or create a new one, then attach it on the Assistants page."
           />
         ) : detailLoading ? (
           <div className="flex-1 flex items-center justify-center"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>
         ) : (
-          <div className="flex-1 flex flex-col h-full z-10">
+          <div key={selectedId ?? "new"} className="flex-1 flex flex-col h-full z-10 animate-in fade-in slide-in-from-right-4 duration-500">
             {/* HEADER */}
             <div className="p-4 md:p-6 border-b border-border bg-card/20 flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -300,8 +322,13 @@ export default function ToolsPage() {
                   <ArrowLeft className="h-4 w-4 mr-1" />
                   Back
                 </Button>
-                <h2 className="text-xl font-bold">{mode === "create" ? "Create New Tool" : formData.tool_name}</h2>
-                {mode === "edit" && <p className="text-sm text-muted-foreground font-mono">{formData.tool_id}</p>}
+                <h2 className="text-2xl font-bold">{mode === "create" ? "Create New Tool" : formData.tool_name}</h2>
+                {mode === "edit" && formData.tool_id && (
+                  <p className="text-xs text-muted-foreground flex min-w-0 items-center gap-2">
+                    <span className="shrink-0">Tool ID · attached to assistants:</span>
+                    <CopyIdButton value={formData.tool_id} label="Tool ID" />
+                  </p>
+                )}
               </div>
               <Button onClick={handleSubmit} disabled={saving}>
                 {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />} Save
@@ -351,7 +378,7 @@ export default function ToolsPage() {
                   </div>
 
                   {formData.tool_execution_type === "webhook" ? (
-                    <div className="grid gap-4 mt-4 animate-in fade-in">
+                    <div className="grid gap-4 mt-4 animate-in fade-in duration-200">
                       <div className="grid gap-2">
                         <Label>Webhook URL *</Label>
                         <Input
@@ -389,7 +416,7 @@ export default function ToolsPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="grid gap-2 mt-4 animate-in fade-in">
+                    <div className="grid gap-2 mt-4 animate-in fade-in duration-200">
                       <Label>Return Value *</Label>
                       <Textarea
                         placeholder="The string or JSON you want to return to the assistant"
@@ -445,7 +472,7 @@ export default function ToolsPage() {
                       </div>
 
                       {param.type === "string" && (
-                        <div className="grid gap-2 animate-in fade-in slide-in-from-top-2">
+                        <div className="grid gap-2 animate-in fade-in duration-200">
                           <Label>Allowed Values (Comma separated)</Label>
                           <Input 
                             value={param._enumString || ""} 

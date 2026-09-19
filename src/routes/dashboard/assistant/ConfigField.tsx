@@ -93,7 +93,7 @@ export function ConfigField({ spec, value, onChange, inertReason }: ConfigFieldP
             <SelectContent className="max-w-[min(22rem,calc(100vw-2rem))]">
               {spec.options?.map((option) => (
                 <SelectItem key={option.value} value={option.value || EMPTY_OPTION}>
-                  <span className="flex flex-col gap-0.5 py-0.5">
+                  <span className="flex flex-col gap-1 py-0.5">
                     <span className={cn("text-sm", spec.mono && "font-mono")}>{option.label}</span>
                     {option.hint && (
                       <span data-tagline className="text-xs leading-5 text-muted-foreground">

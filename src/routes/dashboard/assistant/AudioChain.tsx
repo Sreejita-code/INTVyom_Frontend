@@ -33,7 +33,7 @@ function Node({
         dim ? "border-border/50 bg-background/40" : cn("bg-card/70", accent),
       )}
     >
-      <span className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider">
+      <span className="flex min-w-0 items-center gap-2 text-[11px] font-semibold uppercase tracking-wider">
         <Icon className={cn("h-3 w-3 shrink-0", dim && "text-muted-foreground")} />
         <span className={cn("truncate", dim && "text-muted-foreground")}>{role}</span>
       </span>

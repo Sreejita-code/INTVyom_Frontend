@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { Webhook, Plus, Loader2, Trash2, ExternalLink, Globe, Shield, Activity, Search, Timer, ArrowLeft, AlertTriangle } from "lucide-react";
+import { CopyIdButton } from "@/components/common/CopyIdButton";
 import { EmptyState } from "@/components/common/EmptyState";
 import { MasterDetailShell } from "@/components/common/MasterDetailShell";
 import { Button } from "@/components/ui/button";
@@ -389,7 +390,7 @@ export default function InboundContextPage() {
                                     key={item.strategy_id}
                                     onClick={() => handleSelectStrategy(item)}
                                     className={cn(
-                                        "group flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all border",
+                                        "group flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-colors duration-200 border",
                                         selectedStrategy?.strategy_id === item.strategy_id
                                             ? "bg-primary/5 border-primary/30 shadow-[0_0_20px_-5px_rgba(var(--primary),0.2)]"
                                             : "bg-transparent border-transparent hover:bg-muted/50 hover:border-border/50"
@@ -423,19 +424,15 @@ export default function InboundContextPage() {
             }
             detail={
             <>
-                <div className="absolute inset-0 z-0 opacity-[0.03] pointer-events-none">
-                    <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,hsl(var(--primary))_0%,transparent_50%)]" />
-                </div>
-
                 {!selectedStrategy ? (
                     <EmptyState
                         icon={Webhook}
-                        title="Inbound Context Strategies"
-                        description="Select a strategy to manage webhook configurations for fetching caller data before an assistant connects. Attach one to a number on the Inbound page."
+                        title="Pick a rule to edit it"
+                        description="Rules fetch caller data before your assistant speaks. Select one on the left, or create one, then attach it to a number on the Inbound Routes page."
                         descriptionClassName="max-w-sm"
                     />
                 ) : (
-                    <div className="flex-1 flex flex-col h-full overflow-hidden z-10 animate-in fade-in slide-in-from-right-4 duration-500">
+                    <div key={selectedStrategy.strategy_id} className="flex-1 flex flex-col h-full overflow-hidden z-10 animate-in fade-in slide-in-from-right-4 duration-500">
                         {/* Header */}
                         <div className="p-4 md:p-8 border-b border-border bg-card/10 backdrop-blur-xl flex flex-wrap items-end justify-between gap-4 shrink-0">
                             <div className="space-y-2">
@@ -449,13 +446,14 @@ export default function InboundContextPage() {
                                     Back
                                 </Button>
                                 <div className="flex items-center gap-3">
-                                    <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
+                                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
                                         <Webhook className="h-6 w-6" />
                                     </div>
                                     <div>
-                                        <h2 className="text-3xl font-black tracking-tight">{selectedStrategy.name}</h2>
-                                        <p className="text-xs font-mono text-muted-foreground/60 flex items-center gap-2">
-                                            ID: {selectedStrategy.strategy_id} <ExternalLink className="h-3 w-3" />
+                                        <h2 className="text-2xl font-bold tracking-tight">{selectedStrategy.name}</h2>
+                                        <p className="text-xs text-muted-foreground flex min-w-0 items-center gap-2">
+                                            <span className="shrink-0">Rule ID · attach it to a number on Inbound Routes:</span>
+                                            <CopyIdButton value={selectedStrategy.strategy_id} label="Rule ID" />
                                         </p>
                                         {formatTimestamp(selectedStrategy.updated_at) && (
                                             <p className="text-[10px] text-muted-foreground/60 mt-1">
@@ -515,7 +513,7 @@ export default function InboundContextPage() {
                                         </Button>
                                     </div>
 
-                                    <div className="glass rounded-2xl p-8 space-y-6 border border-border/50">
+                                    <div className="glass rounded-xl p-8 space-y-6 border border-border/50">
                                         <div className="space-y-2">
                                             <Label className="text-sm font-medium">Strategy Name</Label>
                                             <Input

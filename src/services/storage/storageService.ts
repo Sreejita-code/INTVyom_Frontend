@@ -19,3 +19,13 @@ export function storeUser(user: AuthUser) {
 export function clearUser() {
   localStorage.removeItem(AUTH_KEY);
 }
+
+const ONBOARDING_KEY = "intvyom_onboarding_dismissed";
+
+export function isOnboardingDismissed(): boolean {
+  return localStorage.getItem(ONBOARDING_KEY) === "1";
+}
+
+export function dismissOnboarding() {
+  localStorage.setItem(ONBOARDING_KEY, "1");
+}

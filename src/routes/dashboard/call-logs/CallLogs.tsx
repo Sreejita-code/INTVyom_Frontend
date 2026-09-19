@@ -219,7 +219,7 @@ export default function CallLogsPage() {
             <List className="h-6 w-6 text-primary" />
             Call Logs
           </h2>
-          <p className="text-sm text-muted-foreground mt-1">View past conversations, transcripts, and recordings.</p>
+          <p className="text-sm text-muted-foreground mt-1">Past calls for one assistant, with transcripts, recordings and cost. Pick an assistant first — search below only filters the 50 rows loaded.</p>
         </div>
 
         {/* The assistant is a prerequisite, not a peer filter — every control below is dead
@@ -356,7 +356,7 @@ export default function CallLogsPage() {
 
         {/* Client-side, and it says so. `GET /assistant/call-logs/{id}` takes only paging, a date
             range and a sort — there is no number or status filter to hand this to. */}
-        <div className="grid min-w-0 gap-1.5">
+        <div className="grid min-w-0 gap-2">
           <div className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
@@ -535,7 +535,7 @@ export default function CallLogsPage() {
 
           {/* The variables this call was placed with, when the record carries them. */}
           {selectedMetadata && Object.keys(selectedMetadata).length > 0 && (
-            <dl className="grid gap-1.5 rounded-lg border border-border/50 bg-muted/20 p-3 text-xs">
+            <dl className="grid gap-2 rounded-lg border border-border/50 bg-muted/20 p-3 text-xs">
               <dt className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Variables</dt>
               {Object.entries(selectedMetadata).map(([key, value]) => (
                 <dd key={key} className="flex min-w-0 flex-wrap gap-x-2 font-mono">

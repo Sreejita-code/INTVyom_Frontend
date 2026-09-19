@@ -44,7 +44,7 @@ export function FieldRow({ label, required, help, warn, note, control, inline, w
           !wide && "sm:grid-cols-[minmax(0,1fr)_minmax(0,17rem)] sm:items-start sm:gap-8",
         )}
       >
-        <div className="grid min-w-0 gap-1.5">
+        <div className="grid min-w-0 gap-2">
           <Label className="text-[0.9375rem] font-medium leading-snug">
             {label}
             {required && <span className="ml-1 text-primary">*</span>}

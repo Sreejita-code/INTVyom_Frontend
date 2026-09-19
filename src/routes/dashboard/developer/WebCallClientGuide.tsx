@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, Copy } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -18,20 +19,15 @@ const livekitUrl = () => import.meta.env.VITE_LIVEKIT_URL || "wss://<your-liveki
  */
 export const WebCallClientGuide = () => {
   const [step, setStep] = useState(WEB_CALL_CLIENT_STEPS[0].id);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard(1500);
   const { toast } = useToast();
 
   const active = WEB_CALL_CLIENT_STEPS.find((item) => item.id === step);
 
   const copyCode = async () => {
     if (!active) return;
-    try {
-      await navigator.clipboard.writeText(active.code);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Could not copy the sample" });
-    }
+    const ok = await copy(active.code);
+    if (!ok) toast({ variant: "destructive", title: "Error", description: "Could not copy the sample" });
   };
 
   return (

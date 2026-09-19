@@ -2,6 +2,7 @@ import { ReactNode, useState } from "react";
 import { Check, Code2, Copy } from "lucide-react";
 
 import { Button, ButtonProps } from "@/components/ui/button";
+import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
   Sheet,
@@ -59,7 +60,7 @@ export const ApiSnippetButton = ({
   const [open, setOpen] = useState(false);
   const [language, setLanguage] = useState<SnippetLanguage>("curl");
   const [revealUserId, setRevealUserId] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard(1500);
   const { toast } = useToast();
   const user = getStoredUser();
 
@@ -73,13 +74,8 @@ export const ApiSnippetButton = ({
 
   const copySnippet = async () => {
     if (!spec) return;
-    try {
-      await navigator.clipboard.writeText(renderSnippet(language, spec, options));
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      toast({ variant: "destructive", title: "Error", description: "Could not copy the snippet" });
-    }
+    const ok = await copy(renderSnippet(language, spec, options));
+    if (!ok) toast({ variant: "destructive", title: "Error", description: "Could not copy the snippet" });
   };
 
   const trigger = children ? (

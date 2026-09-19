@@ -89,7 +89,7 @@ export const ChatInner: React.FC<{ assistantName: string; onClose: () => void }>
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div
-        className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md bg-card border border-border rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[min(600px,90vh)]"
+        className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md bg-card border border-border rounded-xl shadow-2xl overflow-hidden flex flex-col h-[min(600px,90vh)]"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-5 py-4 bg-card border-b border-border">
@@ -131,8 +131,8 @@ export const ChatInner: React.FC<{ assistantName: string; onClose: () => void }>
 
           {/* Thinking Animation Bubble */}
           {isThinking && (
-            <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2">
-              <div className="px-4 py-3 text-sm leading-relaxed rounded-[14px_14px_14px_2px] bg-card border border-border text-muted-foreground shadow-sm flex items-center gap-1.5 h-[44px]">
+            <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-200">
+              <div className="px-4 py-3 text-sm leading-relaxed rounded-[14px_14px_14px_2px] bg-card border border-border text-muted-foreground shadow-sm flex items-center gap-2 h-[44px]">
                 <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                 <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                 <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />

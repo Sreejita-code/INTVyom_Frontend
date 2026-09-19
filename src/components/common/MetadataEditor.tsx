@@ -77,7 +77,7 @@ export function MetadataEditor({
       </div>
 
       {useRaw ? (
-        <div className="grid gap-1.5">
+        <div className="grid gap-2">
           <Textarea
             aria-label="Metadata JSON"
             spellCheck={false}

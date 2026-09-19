@@ -179,7 +179,7 @@ export function SttSection({
             <SelectContent className="max-w-[min(24rem,calc(100vw-2rem))]">
               {providers.map((provider) => (
                 <SelectItem key={provider.value} value={provider.value}>
-                  <span className="flex flex-col gap-0.5 py-0.5">
+                  <span className="flex flex-col gap-1 py-0.5">
                     <span className="text-sm">{provider.label}</span>
                     <span data-tagline className="text-xs leading-5 text-muted-foreground">
                       {provider.tagline}

@@ -53,6 +53,13 @@ Check `src/components/common/` for an existing shell (`MasterDetailShell`,
 
 - **Spacing is Tailwind's 4px scale.** No arbitrary `px` values. Stack rhythm
   inside a card: `space-y-4`; between page sections: `space-y-6`.
+- **The gap ladder is `gap-1` (4px), `gap-2` (8px), `gap-3` (12px),
+  `gap-4` (16px), `gap-6` (24px), `gap-8` (32px) — and nothing between.**
+  No `.5` spacing tokens (`gap-1.5`, `space-y-0.5`, …) anywhere in app code or
+  vendored `src/components/ui/`. Job to value: card grids `gap-4`, compact
+  stat/filter rows `gap-3`, icon+label clusters `gap-2`, inline dots `gap-1`.
+  Padding/margin sizes (`py-2.5`, `px-1.5`, …) are control sizing, not
+  inter-element gaps — they may stay off-ladder where a control needs it.
 - **Radius comes from `--radius` (0.5rem)** through `rounded-lg` / `-md` /
   `-sm`. No per-component radius. `rounded-full` is for pills and avatars only.
 - **Type is Inter (`font-sans`) and JetBrains Mono (`font-mono`).** Mono is for

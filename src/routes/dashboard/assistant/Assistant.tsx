@@ -1,9 +1,12 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useLocation } from "react-router-dom";
-import { Bot, Braces, Plus, Loader2, Save, Trash2, Phone, Check, Mic, X, Copy, MessageSquare, PhoneCall, ArrowLeft, Search } from "lucide-react";
+import { Bot, Braces, Plus, Loader2, Save, Trash2, Phone, Mic, X, MessageSquare, PhoneCall, ArrowLeft, Search } from "lucide-react";
+
+import { CopyIdButton } from "@/components/common/CopyIdButton";
 
 import { EmptyState } from "@/components/common/EmptyState";
 import { MasterDetailShell } from "@/components/common/MasterDetailShell";
+import { GettingStarted } from "./GettingStarted";
 import { MetadataEditor } from "@/components/common/MetadataEditor";
 import { MetadataRow, metadataFrom, rawMetadataIsInvalid, rowsForPlaceholders } from "@/lib/callMetadata";
 import { ApiSnippetButton } from "@/components/common/ApiSnippet";
@@ -94,8 +97,6 @@ export default function AssistantPage() {
   const [isWebCallActive, setIsWebCallActive] = useState<boolean>(false);
   const [webCallLoading, setWebCallLoading] = useState<boolean>(false);
   
-  // --- Copy State ---
-  const [copied, setCopied] = useState(false);
   const isFormDirty = useMemo(() => buildFormSnapshot(formData) !== initialFormSnapshot, [formData, initialFormSnapshot]);
 
   const fetchTrunks = useCallback(async () => {
@@ -214,16 +215,6 @@ export default function AssistantPage() {
   const handleDisconnectWebCall = () => {
     setIsWebCallActive(false);
     setWebCallToken("");
-  };
-
-  // --- Copy Actions ---
-  const handleCopyId = () => {
-    if (formData.assistant_id) {
-      navigator.clipboard.writeText(formData.assistant_id);
-      setCopied(true);
-      toast({ title: "Copied!", description: "Assistant ID copied to clipboard." });
-      setTimeout(() => setCopied(false), 2000);
-    }
   };
 
   const handleCreateNew = () => {
@@ -422,18 +413,21 @@ export default function AssistantPage() {
     <MasterDetailShell
       mobileDetailOpen={mobileDetailOpen}
       className="h-screen overflow-hidden"
-      listClassName="animate-in slide-in-from-left duration-300 h-full"
+      listClassName="animate-in fade-in duration-200 h-full"
       detailClassName="bg-background h-full"
       list={
         <>
-          <div className="p-4 border-b border-border flex items-center justify-between bg-background/50 backdrop-blur-sm z-10 shrink-0">
-            <div className="flex items-center gap-2">
-              <Bot className="h-5 w-5 text-primary" />
-              <span className="font-semibold text-foreground">Assistants</span>
+          <div className="p-4 border-b border-border bg-background/50 backdrop-blur-sm z-10 shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Bot className="h-5 w-5 text-primary" />
+                <span className="font-semibold text-foreground">Assistants</span>
+              </div>
+              <Button size="sm" onClick={handleCreateNew} className="h-8 px-2 bg-primary text-primary-foreground hover:bg-primary/90">
+                <Plus className="h-4 w-4 mr-1" /> New
+              </Button>
             </div>
-            <Button size="sm" onClick={handleCreateNew} className="h-8 px-2 bg-primary text-primary-foreground hover:bg-primary/90">
-              <Plus className="h-4 w-4 mr-1" /> New
-            </Button>
+            <p className="text-xs text-muted-foreground mt-1">Voices that answer your calls.</p>
           </div>
 
           <div className="p-4 border-b shrink-0">
@@ -472,7 +466,7 @@ export default function AssistantPage() {
                         ref={isLastElement ? lastElementRef : null}
                         onClick={() => handleSelectAssistant(itemId)}
                         className={`
-                          group flex items-start gap-3 p-3 rounded-md cursor-pointer transition-all border
+                          group flex items-start gap-3 p-3 rounded-md cursor-pointer transition-colors duration-200 border
                           ${selectedId === itemId
                             ? "bg-accent/50 border-primary/50 shadow-[0_0_15px_-3px_rgba(var(--primary),0.3)]"
                             : "bg-transparent border-transparent hover:bg-accent/30 hover:border-border"
@@ -499,8 +493,8 @@ export default function AssistantPage() {
                               {assistantMode}
                             </span>
                           </div>
-                          <p className="text-xs text-muted-foreground truncate font-mono opacity-70 pr-2">
-                            {itemId.slice(0, 8)}...
+                          <p className="text-xs text-muted-foreground truncate font-mono opacity-70 pr-2" title={`Assistant ID: ${itemId}`}>
+                            <span className="font-sans">ID:</span> {itemId.slice(0, 8)}...
                           </p>
                         </div>
 
@@ -525,27 +519,34 @@ export default function AssistantPage() {
               )}
             </div>
           </ScrollArea>
+
+          {/* Mobile onboarding below the list: the detail pane (with the full guide) is hidden below lg,
+              so first-run phone users meet the checklist right after their (empty) list. */}
+          <div className="lg:hidden border-t border-border p-3 shrink-0 max-h-[45%] overflow-y-auto">
+            <GettingStarted />
+          </div>
         </>
       }
       detail={
         <>
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.02]">
-          <span className="text-[5rem] md:text-[8rem] xl:text-[12rem] font-black select-none">VYOM</span>
-        </div>
-
         {mode === "empty" ? (
-          <EmptyState
-            icon={Bot}
-            title="No Assistant Selected"
-            description='Select an assistant from the sidebar or click "New Assistant" to get started.'
-            descriptionClassName="max-w-md"
-          />
+          <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center gap-4 p-4 md:p-8 relative z-10">
+            <GettingStarted />
+            <EmptyState
+              icon={Bot}
+              title="Pick an assistant to edit it"
+              description="Assistants are the voices that answer calls. Select one on the left, or create a new one, then press Save."
+              descriptionClassName="max-w-md"
+              className="flex-none py-4"
+              compact
+            />
+          </div>
         ) : detailLoading ? (
             <div className="flex-1 flex items-center justify-center">
               <Loader2 className="h-10 w-10 animate-spin text-primary" />
             </div>
           ) : (
-            <div className="flex-1 flex flex-col h-full overflow-hidden z-10">
+            <div key={selectedId ?? "new"} className="flex-1 flex flex-col h-full overflow-hidden z-10 animate-in fade-in slide-in-from-right-4 duration-500">
 
               {/* EDITOR HEADER */}
               <div className="p-4 md:p-6 border-b border-border bg-card/20 backdrop-blur-md flex flex-wrap items-start justify-between gap-4 shrink-0">
@@ -591,19 +592,9 @@ export default function AssistantPage() {
                       
                       {/* ID & Copy Button Row */}
                       <div className="flex min-w-0 items-center gap-2">
-                        <p className="min-w-0 truncate font-mono text-sm text-muted-foreground" title={formData.assistant_id}>
-                          {formData.assistant_id}
-                        </p>
+                        <p className="text-xs text-muted-foreground shrink-0">Assistant ID · which assistant runs:</p>
                         {formData.assistant_id && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={handleCopyId}
-                            className="h-6 w-6 text-muted-foreground hover:text-primary bg-muted/30 rounded-md"
-                            title="Copy ID"
-                          >
-                            {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-                          </Button>
+                          <CopyIdButton value={formData.assistant_id} label="Assistant ID" />
                         )}
                       </div>
                     </div>
@@ -706,7 +697,7 @@ export default function AssistantPage() {
       {/* --- LIVEKIT WEB CALL OVERLAY --- */}
       {isWebCallActive && webCallToken && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md bg-card border border-border rounded-3xl shadow-2xl overflow-hidden relative">
+          <div className="w-[calc(100vw-1.5rem)] sm:w-full max-w-md bg-card border border-border rounded-xl shadow-2xl overflow-hidden relative">
             
             <Button 
               variant="ghost" 

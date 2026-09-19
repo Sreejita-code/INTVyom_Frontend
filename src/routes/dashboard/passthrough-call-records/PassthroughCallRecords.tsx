@@ -78,7 +78,7 @@ function CallMetadataCell({ metadata }: { metadata: unknown }) {
                 </Button>
             </PopoverTrigger>
             <PopoverContent align="start" className="w-[min(24rem,calc(100vw-2rem))]">
-                <dl className="grid gap-1.5 text-xs">
+                <dl className="grid gap-2 text-xs">
                     {entries.map(([key, value]) => (
                         <dd key={key} className="flex min-w-0 flex-wrap gap-x-2 font-mono">
                             <span className="shrink-0 text-muted-foreground">{key}</span>
@@ -167,10 +167,10 @@ export default function PassthroughCallRecordsPage() {
             <div className="p-4 md:p-6 border-b border-border bg-card/20 backdrop-blur-md shrink-0">
                 <h2 className="text-2xl font-bold flex items-center gap-2">
                     <Clock className="h-6 w-6 text-primary" />
-                    Passthrough Call Records
+                    Passthrough Calls
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                    History of all passthrough calls — no assistant, direct SIP.
+                    Direct phone calls with no assistant — for forwarding, not AI answers.
                 </p>
             </div>
 

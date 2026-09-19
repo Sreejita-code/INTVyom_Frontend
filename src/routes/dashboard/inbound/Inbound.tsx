@@ -566,7 +566,7 @@ export default function InboundPage() {
                                     key={item.inbound_id}
                                     onClick={() => handleSelectInbound(item)}
                                     className={cn(
-                                        "group flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all border",
+                                        "group flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-colors duration-200 border",
                                         selectedInbound?.inbound_id === item.inbound_id
                                             ? "bg-primary/5 border-primary/30 shadow-[0_0_20px_-5px_rgba(var(--primary),0.2)]"
                                             : "bg-transparent border-transparent hover:bg-muted/50 hover:border-border/50"
@@ -609,18 +609,14 @@ export default function InboundPage() {
             }
             detail={
             <>
-                <div className="absolute inset-0 z-0 opacity-[0.03] pointer-events-none">
-                    <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,hsl(var(--primary))_0%,transparent_50%)]" />
-                </div>
-
                 {!selectedInbound ? (
                     <EmptyState
                         icon={PhoneIncoming}
-                        title="Inbound Routing"
-                        description="Select a mapping from the sidebar to configure where incoming calls are routed."
+                        title="Pick a number to route it"
+                        description="Inbound routes decide which assistant answers each phone number. Select a number on the left, or assign a new one."
                     />
                 ) : (
-                    <div className="flex-1 flex flex-col h-full overflow-hidden z-10 animate-in fade-in slide-in-from-right-4 duration-500">
+                    <div key={selectedInbound.inbound_id} className="flex-1 flex flex-col h-full overflow-hidden z-10 animate-in fade-in slide-in-from-right-4 duration-500">
                         {/* Header */}
                         <div className="p-4 md:p-8 border-b border-border bg-card/10 backdrop-blur-xl flex flex-wrap items-end justify-between gap-4 shrink-0">
                             <div className="space-y-2">
@@ -634,7 +630,7 @@ export default function InboundPage() {
                                     Back
                                 </Button>
                                 <div className="flex items-center gap-3">
-                                    <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
+                                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
                                         <PhoneIncoming className="h-6 w-6" />
                                     </div>
                                     <div>
@@ -725,7 +721,7 @@ export default function InboundPage() {
                                     <h3 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
                                         <Shield className="h-3 w-3" /> Routing Configuration
                                     </h3>
-                                    <div className="glass rounded-2xl p-8 space-y-8 border border-border/50">
+                                    <div className="glass rounded-xl p-8 space-y-8 border border-border/50">
 
                                         <div className="space-y-4">
                                             <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-2">

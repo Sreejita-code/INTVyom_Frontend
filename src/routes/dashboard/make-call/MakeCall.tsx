@@ -80,14 +80,14 @@ const CallControls: React.FC<CallControlsProps> = ({ isMuted, setIsMuted, onHang
                 </div>
             </div>
 
-            <div className="text-center space-y-1.5">
+            <div className="text-center space-y-2">
                 <p className="text-xs uppercase tracking-widest font-bold text-muted-foreground/60">Connected</p>
                 <h3 className="text-2xl font-black tracking-tight truncate max-w-[280px]">{calledNumber}</h3>
                 <p className="text-sm font-mono tabular-nums text-muted-foreground">{formatTime(callDuration)}</p>
             </div>
 
             <div className="flex items-center gap-5">
-                <div className="flex flex-col items-center gap-1.5">
+                <div className="flex flex-col items-center gap-2">
                     <Button
                         variant="outline"
                         size="icon"
@@ -104,7 +104,7 @@ const CallControls: React.FC<CallControlsProps> = ({ isMuted, setIsMuted, onHang
                     <span className="text-[10px] text-muted-foreground/60 font-medium">{isMuted ? "Unmute" : "Mute"}</span>
                 </div>
 
-                <div className="flex flex-col items-center gap-1.5">
+                <div className="flex flex-col items-center gap-2">
                     <Button
                         size="icon"
                         className="h-16 w-16 rounded-full bg-destructive hover:bg-destructive/90 shadow-xl shadow-destructive/30 transition-transform hover:scale-105"
@@ -126,6 +126,13 @@ export default function MakeCallPage() {
     // Shared data
     const [allTrunks, setAllTrunks] = useState<any[]>([]);
     const [trunksLoading, setTrunksLoading] = useState(true);
+    const [callTab, setCallTab] = useState("agent");
+
+    const callTabHelpers: Record<string, string> = {
+        agent: "An assistant talks to the person you call.",
+        passthrough: "A direct connection with no assistant — for forwarding.",
+        meeting: "Bring an assistant into a Google Meet call.",
+    };
 
     // Agent Call State
     const [assistants, setAssistants] = useState<any[]>([]);
@@ -379,16 +386,16 @@ export default function MakeCallPage() {
                     Make a Call
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                    Initiate calls via your agents or directly through passthrough SIP trunks.
+                    Call a real number now. Assistant Call has an assistant talk to them; Passthrough connects you directly with no AI.
                 </p>
             </div>
 
             <div className="flex-1 min-h-0 overflow-y-auto">
                 <div className="p-4 md:p-6 max-w-4xl mx-auto w-full">
-                    <Tabs defaultValue="agent" className="w-full">
-                        <TabsList className="mb-6 bg-muted/30 max-w-full justify-start overflow-x-auto">
+                    <Tabs value={callTab} onValueChange={setCallTab} className="w-full">
+                        <TabsList aria-label="Call type" className="bg-muted/30 w-full h-auto flex flex-wrap justify-start gap-1 p-1">
                             <TabsTrigger value="agent" className="gap-2">
-                                <Bot className="h-4 w-4" /> Agent Call
+                                <Bot className="h-4 w-4" /> Assistant Call
                             </TabsTrigger>
                             <TabsTrigger value="passthrough" className="gap-2">
                                 <Webhook className="h-4 w-4" /> Passthrough Call
@@ -397,27 +404,28 @@ export default function MakeCallPage() {
                                 <Video className="h-4 w-4" /> Google Meet
                             </TabsTrigger>
                         </TabsList>
+                        <p className="text-xs text-muted-foreground mt-2 mb-6">{callTabHelpers[callTab]}</p>
 
                         <TabsContent value="agent">
-                            <section className="glass rounded-2xl p-6 border border-border/50">
+                            <section className="glass rounded-xl p-6 border border-border/50">
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="space-y-2">
                                             <Label className="text-sm font-medium flex items-center gap-2">
-                                                <Bot className="h-3.5 w-3.5 text-primary" /> Select Agent
+                                                <Bot className="h-3.5 w-3.5 text-primary" /> Choose Assistant
                                             </Label>
                                             <Select
                                                 value={agentCallData.assistant_id}
                                                 onValueChange={(val) => setAgentCallData({ ...agentCallData, assistant_id: val })}
                                             >
                                                 <SelectTrigger disabled={assistantsLoading} className="bg-muted/30 border-border/50 h-11">
-                                                    <SelectValue placeholder={assistantsLoading ? "Loading agents..." : "Choose an agent..."} />
+                                                    <SelectValue placeholder={assistantsLoading ? "Loading assistants..." : "Choose an assistant..."} />
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     {assistants.map((a) => (
                                                         <SelectItem key={a.assistant_id || a._id} value={a.assistant_id || a._id}>
                                                             <span className="flex items-center gap-2">
-                                                                <span className="truncate">{a.assistant_name || a.name || "Unnamed Agent"}</span>
+                                                                <span className="truncate">{a.assistant_name || a.name || "Unnamed assistant"}</span>
                                                                 <span
                                                                     className={cn(
                                                                         "shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider",
@@ -435,15 +443,16 @@ export default function MakeCallPage() {
 
                                         <div className="space-y-2">
                                             <Label className="text-sm font-medium flex items-center gap-2">
-                                                <Phone className="h-3.5 w-3.5 text-primary" /> Select Trunk
+                                                <Phone className="h-3.5 w-3.5 text-primary" /> Phone line
                                             </Label>
                                             <Select
                                                 value={agentCallData.trunk_id}
                                                 onValueChange={(val) => setAgentCallData({ ...agentCallData, trunk_id: val })}
                                             >
                                                 <SelectTrigger disabled={trunksLoading} className="bg-muted/30 border-border/50 h-11">
-                                                    <SelectValue placeholder={trunksLoading ? "Loading trunks..." : "Choose a trunk..."} />
+                                                    <SelectValue placeholder={trunksLoading ? "Loading phone lines..." : "Choose a phone line..."} />
                                                 </SelectTrigger>
+                                                <p className="text-xs text-muted-foreground">Which Twilio/Exotel line places the call. Add lines on Phone Numbers.</p>
                                                 <SelectContent>
                                                     {standardTrunks.map((t) => (
                                                         <SelectItem key={t._id || t.trunk_id || t.external_trunk_id} value={t._id || t.trunk_id || t.external_trunk_id}>
@@ -459,18 +468,21 @@ export default function MakeCallPage() {
                                         <Label className="text-sm font-medium flex items-center gap-2">
                                             <PhoneIncoming className="h-3.5 w-3.5 text-primary" /> Phone Number
                                         </Label>
-                                        <div className="flex gap-4">
+                                        <p className="text-xs text-muted-foreground">The person you're calling, with country code.</p>
+                                        <div className="flex flex-col gap-3">
                                             <Input
                                                 value={agentCallData.customer_number}
                                                 onChange={(e) => setAgentCallData({ ...agentCallData, customer_number: e.target.value })}
                                                 placeholder="+919876543210"
                                                 className="bg-muted/30 border-border/50 h-11 font-mono flex-1"
+                                                aria-label="Phone number to call"
                                                 onKeyDown={(e) => e.key === "Enter" && handleAgentCall()}
                                             />
+                                            <div className="flex gap-3">
                                             <Button
                                                 onClick={handleAgentCall}
                                                 disabled={agentCallLoading || !agentCallData.customer_number.trim() || !agentCallData.trunk_id || !agentCallData.assistant_id}
-                                                className="h-11 px-8 gap-2 shrink-0 shadow-lg shadow-primary/20 min-w-[140px]"
+                                                className="h-11 px-8 gap-2 flex-1 sm:flex-none shadow-lg shadow-primary/20 sm:min-w-[140px]"
                                             >
                                                 {agentCallLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><PhoneCall className="h-4 w-4" /> Start call</>}
                                             </Button>
@@ -479,26 +491,32 @@ export default function MakeCallPage() {
                                                 label="View this call as an API request"
                                                 className="h-11 w-11 shrink-0 border border-border/50"
                                             />
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div className="border-t border-border/50 pt-5">
-                                        <MetadataEditor
-                                            rows={agentRows}
-                                            onRowsChange={setAgentRows}
-                                            rawJson={agentRawJson}
-                                            onRawJsonChange={setAgentRawJson}
-                                            useRaw={agentUseRaw}
-                                            onUseRawChange={setAgentUseRaw}
-                                            blurb={
-                                                promptLoading
-                                                    ? "Reading this assistant's prompt…"
-                                                    : agentRows.some(r => r.fromPrompt)
-                                                        ? "This assistant's prompt asks for these. Anything you leave empty renders as an empty string on the call."
-                                                        : "Sent with the call as metadata. Write {{name}} in the assistant's prompt and it shows up here as a row."
-                                            }
-                                        />
-                                    </div>
+                                    <Accordion type="single" collapsible className="border-t border-border/50">
+                                        <AccordionItem value="variables" className="border-b-0">
+                                            <AccordionTrigger className="text-sm font-medium normal-case tracking-normal text-foreground">Advanced · call variables</AccordionTrigger>
+                                            <AccordionContent className="pt-1">
+                                                <MetadataEditor
+                                                    rows={agentRows}
+                                                    onRowsChange={setAgentRows}
+                                                    rawJson={agentRawJson}
+                                                    onRawJsonChange={setAgentRawJson}
+                                                    useRaw={agentUseRaw}
+                                                    onUseRawChange={setAgentUseRaw}
+                                                    blurb={
+                                                        promptLoading
+                                                            ? "Reading this assistant's instructions…"
+                                                            : agentRows.some(r => r.fromPrompt)
+                                                                ? "The assistant's instructions ask for these details. Anything you leave empty is skipped on the call."
+                                                                : "Optional extras for this call. If the assistant's instructions mention {{name}}, fill it in here and it shows up as a row."
+                                                    }
+                                                />
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    </Accordion>
 
                                     {queue && (
                                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm">
@@ -532,19 +550,19 @@ export default function MakeCallPage() {
                         </TabsContent>
 
                         <TabsContent value="passthrough">
-                            <section className="glass rounded-2xl p-6 border border-border/50">
+                            <section className="glass rounded-xl p-6 border border-border/50">
                                 {trunksLoading ? (
                                     <div className="flex items-center gap-3 text-muted-foreground">
                                         <Loader2 className="h-4 w-4 animate-spin" />
-                                        <span className="text-sm">Loading passthrough trunks…</span>
+                                        <span className="text-sm">Loading phone lines…</span>
                                     </div>
                                 ) : passthroughTrunks.length === 0 ? (
                                     <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-amber-500">
                                         <AlertCircle className="h-5 w-5 shrink-0" />
                                         <div>
-                                            <p className="text-sm font-medium">No passthrough trunks found</p>
+                                            <p className="text-sm font-medium">No shared lines found</p>
                                             <p className="text-xs text-amber-500/70 mt-0.5">
-                                                Go to Phone Numbers and create a trunk with Passthrough Mode enabled.
+                                                Go to Phone Numbers and add a line with “Passthrough mode” turned on.
                                             </p>
                                         </div>
                                     </div>
@@ -553,11 +571,11 @@ export default function MakeCallPage() {
                                     <div className="flex flex-col sm:flex-row gap-4 items-end">
                                         <div className="flex-1 space-y-2 min-w-0">
                                             <Label className="text-sm font-medium flex items-center gap-2">
-                                                <Phone className="h-3.5 w-3.5 text-primary" /> Select Trunk
+                                                <Phone className="h-3.5 w-3.5 text-primary" /> Phone line
                                             </Label>
                                             <Select value={passthroughTrunkId} onValueChange={setPassthroughTrunkId}>
                                                 <SelectTrigger className="bg-muted/30 border-border/50 h-11">
-                                                    <SelectValue placeholder="Choose a passthrough trunk…" />
+                                                    <SelectValue placeholder="Choose a phone line…" />
                                                 </SelectTrigger>
                                                 <SelectContent>
                                                     {passthroughTrunks.map((t) => {
@@ -613,7 +631,7 @@ export default function MakeCallPage() {
                                         the record rather than filling anything. Trunk and number are the job. */}
                                     <Accordion type="single" collapsible className="border-t border-border/50">
                                         <AccordionItem value="tags" className="border-b-0">
-                                            <AccordionTrigger>Advanced · call tags</AccordionTrigger>
+                                            <AccordionTrigger className="text-sm font-medium normal-case tracking-normal text-foreground">Advanced · call tags</AccordionTrigger>
                                             <AccordionContent className="pt-1">
                                                 <MetadataEditor
                                                     rows={passthroughRows}
@@ -633,7 +651,7 @@ export default function MakeCallPage() {
                         </TabsContent>
 
                         <TabsContent value="meeting">
-                            <section className="glass rounded-2xl p-6 border border-border/50">
+                            <section className="glass rounded-xl p-6 border border-border/50">
                                 <MeetingCallTab
                                     assistants={assistants}
                                     assistantsLoading={assistantsLoading}
@@ -648,7 +666,7 @@ export default function MakeCallPage() {
             {/* LiveKit Call Overlay for Passthrough */}
             {isCallActive && roomToken && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="w-[calc(100vw-1.5rem)] sm:w-full max-w-sm bg-card border border-border rounded-3xl shadow-2xl overflow-hidden">
+                    <div className="w-[calc(100vw-1.5rem)] sm:w-full max-w-sm bg-card border border-border rounded-xl shadow-2xl overflow-hidden">
                         <LiveKitRoom
                             video={false}
                             audio={true}

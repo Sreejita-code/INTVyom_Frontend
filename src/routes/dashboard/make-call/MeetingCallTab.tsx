@@ -3,6 +3,7 @@ import { AlertCircle, Bot, Link2, Loader2, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ApiSnippetButton } from "@/components/common/ApiSnippet";
 import { MetadataEditor } from "@/components/common/MetadataEditor";
@@ -164,17 +165,17 @@ export function MeetingCallTab({ assistants, assistantsLoading, userId }: Meetin
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label className="text-sm font-medium flex items-center gap-2">
-            <Bot className="h-3.5 w-3.5 text-primary" /> Select Agent
+            <Bot className="h-3.5 w-3.5 text-primary" /> Choose Assistant
           </Label>
           <Select value={assistantId} onValueChange={setAssistantId}>
             <SelectTrigger disabled={assistantsLoading} className="bg-muted/30 border-border/50 h-11">
-              <SelectValue placeholder={assistantsLoading ? "Loading agents..." : "Choose an agent..."} />
+              <SelectValue placeholder={assistantsLoading ? "Loading assistants..." : "Choose an assistant..."} />
             </SelectTrigger>
             <SelectContent>
               {assistants.map((a) => (
                 <SelectItem key={a.assistant_id || a._id} value={a.assistant_id || a._id}>
                   <span className="flex items-center gap-2">
-                    <span className="truncate">{a.assistant_name || a.name || "Unnamed Agent"}</span>
+                    <span className="truncate">{a.assistant_name || a.name || "Unnamed assistant"}</span>
                     <span
                       className={cn(
                         "shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider",
@@ -207,7 +208,8 @@ export function MeetingCallTab({ assistants, assistantsLoading, userId }: Meetin
         <Label className="text-sm font-medium flex items-center gap-2">
           <Link2 className="h-3.5 w-3.5 text-primary" /> Google Meet link
         </Label>
-        <div className="flex flex-col sm:flex-row gap-4">
+        <p className="text-xs text-muted-foreground">Paste the full invite link from Google Meet.</p>
+        <div className="flex flex-col gap-3">
           <Input
             value={meetingUrl}
             onChange={(e) => setMeetingUrl(e.target.value)}
@@ -215,49 +217,54 @@ export function MeetingCallTab({ assistants, assistantsLoading, userId }: Meetin
             className="bg-muted/30 border-border/50 h-11 font-mono flex-1 min-w-0"
             onKeyDown={(e) => e.key === "Enter" && handleJoin()}
           />
-          <div className="flex gap-4">
-            <Button
-              onClick={handleJoin}
-              disabled={joining || !assistantId || !meetingUrl.trim()}
-              className="h-11 px-8 gap-2 shrink-0 shadow-lg shadow-primary/20 min-w-[140px]"
-            >
-              {joining ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  <Video className="h-4 w-4" /> Join meeting
-                </>
-              )}
-            </Button>
-            <ApiSnippetButton
-              buildSpec={meetingCallSpec}
-              label="View this meeting join as an API request"
-              className="h-11 w-11 shrink-0 border border-border/50"
-            />
+          <div className="flex gap-3">
+          <Button
+            onClick={handleJoin}
+            disabled={joining || !assistantId || !meetingUrl.trim()}
+            className="h-11 px-8 gap-2 flex-1 sm:flex-none shadow-lg shadow-primary/20 min-w-[140px]"
+          >
+            {joining ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <Video className="h-4 w-4" /> Join meeting
+              </>
+            )}
+          </Button>
+          <ApiSnippetButton
+            buildSpec={meetingCallSpec}
+            label="View this meeting join as an API request"
+            className="h-11 w-11 shrink-0 border border-border/50"
+          />
           </div>
         </div>
       </div>
 
-      <div className="border-t border-border/50 pt-5">
-        <MetadataEditor
-          rows={rows}
-          onRowsChange={setRows}
-          rawJson={rawJson}
-          onRawJsonChange={setRawJson}
-          useRaw={useRaw}
-          onUseRawChange={setUseRaw}
-          blurb={
-            promptLoading
-              ? "Reading this assistant's prompt…"
-              : rows.some((r) => r.fromPrompt)
-                ? "This assistant's prompt asks for these. Anything you leave empty renders as an empty string in the meeting."
-                : "Sent with the meeting call as metadata. Write {{name}} in the assistant's prompt and it shows up here as a row."
-          }
-        />
-      </div>
+      <Accordion type="single" collapsible className="border-t border-border/50">
+        <AccordionItem value="variables" className="border-b-0">
+          <AccordionTrigger className="text-sm font-medium normal-case tracking-normal text-foreground">Advanced · call variables</AccordionTrigger>
+          <AccordionContent className="pt-1">
+          <MetadataEditor
+            rows={rows}
+            onRowsChange={setRows}
+            rawJson={rawJson}
+            onRawJsonChange={setRawJson}
+            useRaw={useRaw}
+            onUseRawChange={setUseRaw}
+            blurb={
+              promptLoading
+                ? "Reading this assistant's instructions…"
+                : rows.some((r) => r.fromPrompt)
+                  ? "The assistant's instructions ask for these details. Anything you leave empty is skipped in the meeting."
+                  : "Optional extras for this meeting. If the assistant's instructions mention {{name}}, fill it in here and it shows up as a row."
+            }
+          />
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
       {result && (
-        <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm space-y-1.5">
+        <div className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3 text-sm space-y-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="text-muted-foreground">Room</span>
             <span className="truncate font-mono text-xs text-foreground" title={result.roomName}>

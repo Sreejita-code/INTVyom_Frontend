@@ -158,7 +158,7 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
             </SelectTrigger>
             <SelectContent className="max-w-[min(24rem,calc(100vw-2rem))]">
               <SelectItem value="openai">
-                <span className="flex flex-col gap-0.5 py-0.5">
+                <span className="flex flex-col gap-1 py-0.5">
                   <span className="text-sm">OpenAI</span>
                   <span data-tagline className="text-xs leading-5 text-muted-foreground">
                     {isCascade ? "Chat model driving the cascade." : "Realtime model, works in every mode."}
@@ -167,7 +167,7 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
               </SelectItem>
               {isRealtime ? (
                 <SelectItem value="gemini">
-                  <span className="flex flex-col gap-0.5 py-0.5">
+                  <span className="flex flex-col gap-1 py-0.5">
                     <span className="text-sm">Gemini</span>
                     <span data-tagline className="text-xs leading-5 text-muted-foreground">
                       Live API — hears, thinks and speaks in one stream. Available only in Realtime mode.
@@ -176,7 +176,7 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
                 </SelectItem>
               ) : (
                 <SelectItem value="gemini" disabled>
-                  <span className="flex flex-col gap-0.5 py-0.5 opacity-50">
+                  <span className="flex flex-col gap-1 py-0.5 opacity-50">
                     <span className="text-sm">Gemini</span>
                     <span data-tagline className="text-xs leading-5 text-muted-foreground">
                       Live API — hears, thinks and speaks in one stream. Only available in Realtime mode.
@@ -204,7 +204,7 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
               <SelectContent className="max-w-[min(24rem,calc(100vw-2rem))]">
                 {GEMINI_LIVE_MODELS.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
-                    <span className="flex flex-col gap-0.5 py-0.5">
+                    <span className="flex flex-col gap-1 py-0.5">
                       <span className="font-mono text-sm">{option.label}</span>
                       {option.hint && (
                         <span data-tagline className="text-xs leading-5 text-muted-foreground">
@@ -234,7 +234,7 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
               <SelectContent className="max-w-[min(24rem,calc(100vw-2rem))]">
                 {models.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
-                    <span className="flex flex-col gap-0.5 py-0.5">
+                    <span className="flex flex-col gap-1 py-0.5">
                       <span className="font-mono text-sm">{option.label}</span>
                       {option.hint && (
                         <span data-tagline className="text-xs leading-5 text-muted-foreground">
@@ -265,7 +265,7 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
               <SelectContent className="max-w-[min(24rem,calc(100vw-2rem))]">
                 {(isGemini ? GEMINI_LIVE_VOICES : OPENAI_REALTIME_VOICES).map((option) => (
                   <SelectItem key={option.value} value={option.value}>
-                    <span className="flex flex-col gap-0.5 py-0.5">
+                    <span className="flex flex-col gap-1 py-0.5">
                       <span className="text-sm">{option.label}</span>
                       {option.hint && (
                         <span data-tagline className="text-xs leading-5 text-muted-foreground">

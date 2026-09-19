@@ -12,7 +12,7 @@ import {
 } from "@/services/integration/integrationService";
 import { IntegrationData, ResyncData } from "@/types/integration";
 import { toast } from "sonner";
-import { Link2, Mic2, Eye, EyeOff, ShieldCheck, Loader2, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Link2, Mic2, Eye, EyeOff, ShieldCheck, Loader2, RefreshCw, CheckCircle2, AlertTriangle, Blocks } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const Integrations = () => {
@@ -30,6 +30,17 @@ const Integrations = () => {
         gemini: "Model",
         openai: "Model · Transcription",
         deepgram: "Transcription",
+    };
+
+    // CSS `capitalize` mangles camel-case brands ("Elevenlabs", "Openai"), so display names are explicit.
+    const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
+        cartesia: "Cartesia",
+        sarvam: "Sarvam",
+        elevenlabs: "ElevenLabs",
+        mistral: "Mistral",
+        gemini: "Gemini",
+        openai: "OpenAI",
+        deepgram: "Deepgram",
     };
     const [apiKey, setApiKey] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -148,12 +159,19 @@ const Integrations = () => {
             <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5 }}
+                transition={{ duration: 0.25 }}
             >
-                <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-2 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                    Integrations
-                </h1>
-                <p className="text-muted-foreground text-lg">Manage model and voice provider keys used by your assistants.</p>
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                        <Blocks className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-bold tracking-tight">
+                            Provider Keys
+                        </h1>
+                        <p className="text-sm text-muted-foreground">Keys for OpenAI, Gemini, ElevenLabs and other voice providers. Your assistants use these — they are different from Your API Keys.</p>
+                    </div>
+                </div>
             </motion.div>
 
             {/* Connected Section */}
@@ -166,12 +184,11 @@ const Integrations = () => {
                         exit={{ opacity: 0, scale: 0.95 }}
                         className="space-y-6"
                     >
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
                             <h2 className="text-xl font-bold flex items-center gap-2">
                                 <ShieldCheck className="w-5 h-5 text-primary" />
                                 Connected
                             </h2>
-                            <div className="h-[1px] flex-1 bg-border/50 mx-4" />
                         </div>
 
                         {/* Made grid tighter: 2, 3, or 4 columns based on screen size */}
@@ -179,7 +196,7 @@ const Integrations = () => {
                             {connectedServices.map((service) => (
                                 <Card
                                     key={service.service_name}
-                                    className="glass overflow-hidden group hover:border-primary/50 transition-all duration-300 shadow-sm border border-border/50"
+                                    className="glass overflow-hidden group hover:border-primary/50 transition-colors duration-200 shadow-sm border border-border/50"
                                 >
                                     <CardContent className="p-0">
                                         <div className="h-1.5 w-full bg-gradient-to-r from-primary to-primary/40" />
@@ -189,7 +206,7 @@ const Integrations = () => {
                                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 uppercase tracking-tighter">
                                                         {service.service_type}
                                                     </span>
-                                                    <h3 className="text-lg font-bold capitalize leading-tight">{service.service_name}</h3>
+                                                    <h3 className="text-lg font-bold leading-tight">{PROVIDER_DISPLAY_NAMES[service.service_name] ?? service.service_name}</h3>
                                                 </div>
                                                 <div className="p-1.5 bg-primary/5 rounded-lg group-hover:bg-primary/10 transition-colors w-10 h-10 flex items-center justify-center overflow-hidden border border-primary/20">
                                                     <img
@@ -198,7 +215,7 @@ const Integrations = () => {
                                                         className="max-w-full max-h-full object-contain"
                                                         onError={(e) => {
                                                             e.currentTarget.style.display = 'none';
-                                                            e.currentTarget.parentElement!.innerHTML = `<div class="text-xs font-bold uppercase">${service.service_name.charAt(0)}</div>`;
+                                                            e.currentTarget.parentElement!.innerHTML = `<div class="text-xl font-bold uppercase">${service.service_name.charAt(0)}</div>`;
                                                         }}
                                                     />
                                                 </div>
@@ -281,12 +298,11 @@ const Integrations = () => {
 
             {/* Providers Section */}
             <div className="space-y-6">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
                     <h2 className="text-xl font-bold flex items-center gap-2">
                         <Mic2 className="w-5 h-5 text-primary" />
                         Available Providers
                     </h2>
-                    <div className="h-[1px] flex-1 bg-border/50 mx-4" />
                 </div>
 
                 {/* Made grid tighter here as well */}
@@ -301,7 +317,7 @@ const Integrations = () => {
                         >
                             <button
                                 onClick={() => setSelectedProvider(selectedProvider === provider ? null : provider)}
-                                className={`w-full text-left transition-all duration-300 relative group overflow-hidden rounded-xl border ${selectedProvider === provider
+                                className={`w-full text-left transition-colors duration-200 relative group overflow-hidden rounded-xl border ${selectedProvider === provider
                                     ? "border-primary bg-primary/5 shadow-[0_0_15px_rgba(172,66,50,0.15)]"
                                     : "border-border hover:border-primary/50 bg-card"
                                     }`}
@@ -318,8 +334,8 @@ const Integrations = () => {
                                             }}
                                         />
                                     </div>
-                                    <CardTitle className="text-sm font-bold capitalize tracking-tight group-hover:text-primary transition-colors">
-                                        {provider}
+                                    <CardTitle className="text-sm font-bold tracking-tight group-hover:text-primary transition-colors">
+                                        {PROVIDER_DISPLAY_NAMES[provider] ?? provider}
                                     </CardTitle>
                                     <p className="mt-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                                         {PROVIDER_SLOTS[provider]}
@@ -345,7 +361,7 @@ const Integrations = () => {
                                                 <CardDescription className="text-xs">Paste your API key below.</CardDescription>
                                             </CardHeader>
                                             <CardContent className="space-y-4 p-4 pt-0">
-                                                <div className="space-y-1.5">
+                                                <div className="space-y-2">
                                                     <Label htmlFor={`apiKey-${provider}`} className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">API Key</Label>
                                                     <Input
                                                         id={`apiKey-${provider}`}

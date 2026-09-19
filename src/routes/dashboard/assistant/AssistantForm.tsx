@@ -67,7 +67,7 @@ function SettingsPanel({ title, blurb, children }: { title: string; blurb: strin
         <h3 className="text-[1.0625rem] font-semibold tracking-tight">{title}</h3>
         <p className="text-[0.8125rem] leading-6 text-muted-foreground">{blurb}</p>
       </div>
-      <div className="rounded-2xl border border-border/60 bg-card/60 px-5 py-1 sm:px-6">
+      <div className="rounded-xl border border-border/60 bg-card/60 px-5 py-1 sm:px-6">
         <div className="divide-y divide-border/40">{children}</div>
       </div>
     </section>
@@ -323,7 +323,7 @@ export function AssistantForm({
                       selected ? modeAccent(option.value).card : "border-border/60 bg-background/40 hover:bg-card/60",
                     )}
                   >
-                    <span className="flex min-w-0 items-center gap-2.5">
+                    <span className="flex min-w-0 items-center gap-3">
                       <RadioGroupItem id={`mode-${option.value}`} value={option.value} className="shrink-0" />
                       <span
                         className={cn(
@@ -433,7 +433,7 @@ export function AssistantForm({
             )}
 
             {isRealtimeMode ? (
-              <div className="rounded-2xl border border-border/60 bg-card/60 px-5 py-1 sm:px-6">
+              <div className="rounded-xl border border-border/60 bg-card/60 px-5 py-1 sm:px-6">
                 <div className="py-5 text-center text-muted-foreground">
                   <Volume2 className="mx-auto mb-2 h-6 w-6 opacity-50" />
                   <p className="text-sm">In Realtime mode, the assistant's model speaks its own audio, so this stage is not needed.</p>
@@ -590,7 +590,7 @@ export function AssistantForm({
                   </PopoverTrigger>
                   <PopoverContent className="w-56 p-1" align="start">
                     <ScrollArea className="h-56">
-                      <div className="grid gap-0.5 pr-2">
+                      <div className="grid gap-1 pr-2">
                         {LANGUAGE_CODES.map((code) => (
                           <label
                             key={code}
@@ -609,7 +609,7 @@ export function AssistantForm({
                 </Popover>
 
                 {selectedLanguages.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-2">
                     {selectedLanguages.map((code) => (
                       <Badge key={code} variant="secondary" className="gap-1 font-mono font-normal">
                         {code}

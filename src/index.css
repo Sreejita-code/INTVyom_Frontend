@@ -74,15 +74,6 @@
     box-shadow: 0 0 20px hsl(var(--primary) / 0.3), 0 0 40px hsl(var(--primary) / 0.1);
   }
 
-  .watermark {
-    color: hsl(var(--foreground) / 0.03);
-    font-size: clamp(3rem, 12vw, 8rem);
-    font-weight: 800;
-    letter-spacing: 0.1em;
-    user-select: none;
-    pointer-events: none;
-  }
-
   .glass {
     background: hsl(var(--card) / 0.6);
     backdrop-filter: blur(12px);

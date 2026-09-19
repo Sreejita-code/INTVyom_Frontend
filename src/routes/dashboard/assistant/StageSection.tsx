@@ -90,7 +90,7 @@ export function StageSection({
           <div className="grid min-w-0 gap-1">
             <h3
               className={cn(
-                "flex min-w-0 items-center gap-2.5 font-semibold tracking-tight",
+                "flex min-w-0 items-center gap-3 font-semibold tracking-tight",
                 nested ? "text-[0.9375rem] text-muted-foreground" : "text-[1.0625rem]",
               )}
             >
@@ -103,7 +103,7 @@ export function StageSection({
           </div>
 
           {summary.length > 0 && (
-            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               {summary.map((part, index) => (
                 // `title` keeps the full value reachable: a voice id is a 36-character UUID that
                 // would otherwise be the widest thing on the page.
@@ -133,7 +133,7 @@ export function StageSection({
 
         <div
           className={cn(
-            "min-w-0 rounded-2xl border border-border/60 bg-card/60 px-5 py-1 sm:px-6",
+            "min-w-0 rounded-xl border border-border/60 bg-card/60 px-5 py-1 sm:px-6",
             nested && "bg-card/40",
           )}
         >

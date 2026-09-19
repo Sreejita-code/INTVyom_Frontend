@@ -328,7 +328,7 @@ export default function AnalyticsPage() {
             <BarChart3 className="h-6 w-6 text-primary" />
             Analytics
           </h2>
-          <p className="text-sm text-muted-foreground mt-1">Monitor call performance and trends for your account.</p>
+          <p className="text-sm text-muted-foreground mt-1">Calls and minutes for your account. Billable minutes reads every call log, so it loads slowly on large accounts.</p>
         </div>
 
         {/*
@@ -428,7 +428,7 @@ export default function AnalyticsPage() {
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border/40 pt-3">
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/40 pt-3">
           <span className="mr-1 text-xs text-muted-foreground">Jump to</span>
           {DATE_PRESETS.map((preset) => (
             <Button
@@ -568,7 +568,7 @@ export default function AnalyticsPage() {
                 topPhoneData.map((row, index) => {
                   const width = phoneMaxCalls > 0 ? (row.callCount / phoneMaxCalls) * 100 : 0;
                   return (
-                    <div key={row.phoneNumber} className="space-y-1.5">
+                    <div key={row.phoneNumber} className="space-y-2">
                       <div className="flex items-center justify-between gap-3">
                         <span className="text-sm truncate">
                           {index + 1}. <span className="font-mono">{row.phoneNumber}</span>
