@@ -29,7 +29,7 @@ const PassthroughWebhookSample = () => (
     <JsonSample
         title="See what we POST to this URL"
         value={PASSTHROUGH_WEBHOOK_SAMPLE}
-        note="Fires on every terminal outcome, including busy, no_answer and timeout. No assistant runs on a forwarded call, so assistant_id is null, transcripts is empty and there is no usage block."
+        note="Fires when the call ends, on every outcome including busy, no_answer and timeout. No assistant runs on a passthrough call, so assistant_id is null, transcripts is empty and there is no usage block."
     />
 );
 
@@ -391,8 +391,8 @@ export default function PhoneNumberPage() {
                                                         <Webhook className="h-4 w-4" />
                                                     </div>
                                                     <div>
-                                                        <p className="text-sm font-medium">Direct forwarding, no assistant</p>
-                                                        <p className="text-xs text-muted-foreground">Send calls straight to your own web address instead of an assistant</p>
+                                                        <p className="text-sm font-medium">Human agent calls, no assistant</p>
+                                                        <p className="text-xs text-muted-foreground">A person in the browser talks to the phone caller directly. No assistant, no transcript. Cannot be changed after the trunk is created, and the trunk can then only place passthrough calls.</p>
                                                     </div>
                                                 </div>
                                                 <Switch
@@ -404,7 +404,7 @@ export default function PhoneNumberPage() {
                                             {modalForm.passthrough_mode && (
                                                 <div className="space-y-2 animate-in fade-in duration-200">
                                                     <Label htmlFor="passthrough_webhook_url" className="text-sm font-medium flex items-center gap-2">
-                                                        <Webhook className="h-4 w-4 text-primary" /> Your web address
+                                                        <Webhook className="h-4 w-4 text-primary" /> End-of-call notification URL
                                                     </Label>
                                                     <Input
                                                         id="passthrough_webhook_url"
@@ -413,7 +413,7 @@ export default function PhoneNumberPage() {
                                                         placeholder="https://your-server.com/webhook"
                                                         className="bg-muted/30 border-border/50 focus:border-primary font-mono text-xs"
                                                     />
-                                                    <p className="text-xs text-muted-foreground">Calls are forwarded here as web requests.</p>
+                                                    <p className="text-xs text-muted-foreground">We POST a call summary here once the call ends. Calls themselves are not sent to this address.</p>
                                                     <PassthroughWebhookSample />
                                                 </div>
                                             )}
@@ -614,7 +614,7 @@ export default function PhoneNumberPage() {
                                                 <div className="flex items-center justify-between">
                                                     <div className="space-y-1">
                                                         <p className="text-sm font-semibold">Passthrough Mode</p>
-                                                        <p className="text-xs text-muted-foreground">Forward inbound calls to external webhook</p>
+                                                        <p className="text-xs text-muted-foreground">A person in the browser talks to the phone caller directly, with no assistant</p>
                                                     </div>
                                                     <div className={cn(
                                                         "px-3 py-1 rounded-full text-xs font-bold border",
@@ -627,7 +627,7 @@ export default function PhoneNumberPage() {
                                                 </div>
                                                 {selectedTrunk.passthrough_mode && selectedTrunk.passthrough_webhook_url && (
                                                     <div className="space-y-1 pt-2 border-t border-border/50">
-                                                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Webhook URL</Label>
+                                                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">End-of-call notification URL</Label>
                                                         <div className="bg-muted/30 p-3 rounded-lg border border-border/50">
                                                             <p className="text-xs font-mono break-all text-primary">{selectedTrunk.passthrough_webhook_url}</p>
                                                         </div>

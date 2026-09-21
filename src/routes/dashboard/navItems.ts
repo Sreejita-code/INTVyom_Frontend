@@ -32,7 +32,7 @@ export const navItems: NavItem[] = [
   { label: "Inbound Rules", helper: "Look up caller details first (advanced)", keywords: "inbound context headers rules advanced", icon: Webhook, path: "/dashboard/inbound-context", section: "Phone" },
   { label: "Call Logs", helper: "Every call, recording and cost", keywords: "call logs history recordings cost", icon: List, path: "/dashboard/call-logs", section: "History" },
   { label: "Analytics", helper: "Minutes, usage and trends", keywords: "analytics metrics charts usage minutes", icon: BarChart3, path: "/dashboard/analytics", section: "History" },
-  { label: "Passthrough Calls", helper: "Calls with no assistant, like forwarding", keywords: "passthrough direct sip no assistant records", icon: Database, path: "/dashboard/passthrough-call-records", section: "History" },
+  { label: "Passthrough Calls", helper: "Calls where a person, not an assistant, spoke to the caller", keywords: "passthrough direct sip no assistant records", icon: Database, path: "/dashboard/passthrough-call-records", section: "History" },
   { label: "Your API Keys", helper: "Your ID and keys for your own code", keywords: "api key user id account id credential developer token livekit", icon: Terminal, path: "/dashboard/developer", section: "Developers" },
   { label: "Provider Keys", helper: "Keys for voice and model providers", keywords: "integration provider openai gemini elevenlabs cartesia sarvam deepgram mistral key", icon: Blocks, path: "/dashboard/integration", section: "Developers" },
 ];
