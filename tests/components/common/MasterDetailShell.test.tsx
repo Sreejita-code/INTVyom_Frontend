@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MasterDetailShell } from "@/components/common/MasterDetailShell";
 
 /**
@@ -42,5 +42,48 @@ describe("MasterDetailShell", () => {
     const listPane = screen.getByText("list pane").parentElement;
     expect(listPane).toHaveClass("lg:w-[350px]");
     expect(listPane).not.toHaveClass("lg:w-80");
+  });
+});
+
+describe("MasterDetailShell collapse", () => {
+  it("offers no collapse control unless a collapseKey is given", () => {
+    render(<MasterDetailShell mobileDetailOpen={false} list={<p>list pane</p>} detail={<p>detail pane</p>} />);
+
+    expect(screen.queryByRole("button", { name: /list/i })).not.toBeInTheDocument();
+  });
+
+  it("hides the list pane on desktop once collapsed, and offers a way back", () => {
+    render(
+      <MasterDetailShell
+        mobileDetailOpen={false}
+        collapseKey="test.assistants"
+        list={<p>list pane</p>}
+        detail={<p>detail pane</p>}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse list" }));
+
+    expect(screen.getByRole("button", { name: "Expand list" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Collapse list" })).not.toBeInTheDocument();
+    expect(screen.getByText("detail pane")).toBeInTheDocument();
+  });
+
+  it("remembers the collapsed pane across a remount", () => {
+    const shell = (
+      <MasterDetailShell
+        mobileDetailOpen={false}
+        collapseKey="test.remembered"
+        list={<p>list pane</p>}
+        detail={<p>detail pane</p>}
+      />
+    );
+
+    const { unmount } = render(shell);
+    fireEvent.click(screen.getByRole("button", { name: "Collapse list" }));
+    unmount();
+
+    render(shell);
+    expect(screen.getByRole("button", { name: "Expand list" })).toBeInTheDocument();
   });
 });

@@ -8,7 +8,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Select,
     SelectContent,
@@ -561,7 +560,7 @@ export default function MakeCallPage() {
                                         <AlertCircle className="h-5 w-5 shrink-0" />
                                         <div>
                                             <p className="text-sm font-medium">No shared lines found</p>
-                                            <p className="text-xs text-amber-500/70 mt-0.5">
+                                            <p className="text-xs text-amber-500/70 mt-1">
                                                 Go to Phone Numbers and add a line with “Passthrough mode” turned on.
                                             </p>
                                         </div>

@@ -3,7 +3,6 @@ import {
   AssistantBreakdownItem,
   DashboardMetrics,
   PhoneBreakdownItem,
-  PlatformBillableItem,
   PlatformBillableReport,
   ServiceBreakdownItem,
   TimeSeriesPoint,

@@ -97,7 +97,7 @@ export function PromptEditor({
                     className="max-w-full truncate rounded-md border border-border/60 bg-background/60 px-2 py-1 font-mono text-[11px] leading-none text-foreground/80"
                   >
                     {`{{${p.path}}}`}
-                    {p.optional && <span className="ml-1.5 text-muted-foreground">optional</span>}
+                    {p.optional && <span className="ml-2 text-muted-foreground">optional</span>}
                   </span>
                 ))}
               </div>

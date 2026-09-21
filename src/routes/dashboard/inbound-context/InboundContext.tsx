@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Webhook, Plus, Loader2, Trash2, ExternalLink, Globe, Shield, Activity, Search, Timer, ArrowLeft, AlertTriangle } from "lucide-react";
+import { Webhook, Plus, Loader2, Trash2, Globe, Shield, Search, Timer, ArrowLeft, AlertTriangle } from "lucide-react";
 import { CopyIdButton } from "@/components/common/CopyIdButton";
 import { EmptyState } from "@/components/common/EmptyState";
 import { MasterDetailShell } from "@/components/common/MasterDetailShell";
@@ -35,9 +35,9 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/toastError";
 import { HeaderEditor } from "./HeaderEditor";
+import { StrategyRow } from "./StrategyRow";
 import { HeaderRow, buildConfigPatch, buildHeaderPatch, rowsFromHeaders } from "./headerDiff";
 import { isInsecureUrl, validateTimeoutSeconds, validateWebhookUrl } from "./strategyValidation";
 
@@ -275,6 +275,7 @@ export default function InboundContextPage() {
     return (
         <MasterDetailShell
             mobileDetailOpen={mobileDetailOpen}
+            collapseKey="strategies"
             listClassName="lg:w-[350px]"
             detailClassName="bg-background overflow-hidden"
             list={
@@ -386,36 +387,12 @@ export default function InboundContextPage() {
                             </div>
                         ) : (
                             filteredStrategies.map((item) => (
-                                <div
+                                <StrategyRow
                                     key={item.strategy_id}
-                                    onClick={() => handleSelectStrategy(item)}
-                                    className={cn(
-                                        "group flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-colors duration-200 border",
-                                        selectedStrategy?.strategy_id === item.strategy_id
-                                            ? "bg-primary/5 border-primary/30 shadow-[0_0_20px_-5px_rgba(var(--primary),0.2)]"
-                                            : "bg-transparent border-transparent hover:bg-muted/50 hover:border-border/50"
-                                    )}
-                                >
-                                    <div className={cn(
-                                        "w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-transform group-hover:scale-110",
-                                        selectedStrategy?.strategy_id === item.strategy_id
-                                            ? "bg-primary text-primary-foreground"
-                                            : "bg-muted text-muted-foreground"
-                                    )}>
-                                        <Activity className="h-5 w-5" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <h4 className={cn(
-                                            "text-sm font-semibold truncate",
-                                            selectedStrategy?.strategy_id === item.strategy_id ? "text-primary" : "text-foreground"
-                                        )}>
-                                            {item.name}
-                                        </h4>
-                                        <p className="text-[10px] font-mono text-muted-foreground/60 mt-0.5 truncate flex items-center gap-1">
-                                            <Globe className="h-3 w-3" /> {item.strategy_config?.url || "No URL"}
-                                        </p>
-                                    </div>
-                                </div>
+                                    strategy={item}
+                                    selected={selectedStrategy?.strategy_id === item.strategy_id}
+                                    onSelect={() => handleSelectStrategy(item)}
+                                />
                             ))
                         )}
                     </div>

@@ -228,6 +228,7 @@ export default function PhoneNumberPage() {
     return (
         <MasterDetailShell
             mobileDetailOpen={mobileDetailOpen}
+            collapseKey="phone-numbers"
             detailClassName="bg-background overflow-hidden"
             list={
             <>
@@ -452,7 +453,7 @@ export default function PhoneNumberPage() {
                                         className={cn(
                                             "group flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-colors duration-200 border",
                                             (selectedTrunk?.external_trunk_id === itemId || selectedTrunk?._id === itemId)
-                                                ? "bg-primary/5 border-primary/30 shadow-[0_0_20px_-5px_rgba(var(--primary),0.2)]"
+                                                ? "bg-primary/10 border-primary/30"
                                                 : "bg-transparent border-transparent hover:bg-muted/50 hover:border-border/50"
                                         )}
                                     >
@@ -471,7 +472,7 @@ export default function PhoneNumberPage() {
                                             )}>
                                                 {item.trunk_name}
                                             </h4>
-                                            <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground/60 mt-0.5">
+                                            <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground/60 mt-1">
                                                 {item.trunk_type}
                                             </p>
                                         </div>

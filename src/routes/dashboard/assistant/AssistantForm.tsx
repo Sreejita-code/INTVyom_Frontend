@@ -37,7 +37,6 @@ import {
   applyTtsProvider,
   getProviderModeError,
   getModelModeError,
-  validateAndRepairLlmConfig
 } from "./assistantConfig";
 import { AudioChain } from "./AudioChain";
 import { FieldRow } from "./FieldRow";
@@ -71,20 +70,6 @@ function SettingsPanel({ title, blurb, children }: { title: string; blurb: strin
         <div className="divide-y divide-border/40">{children}</div>
       </div>
     </section>
-  );
-}
-
-/** Validation error display component */
-function ValidationError({ error }: { error: string }) {
-  if (!error) return null;
-  
-  return (
-    <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-      <div className="flex items-start gap-2">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-        <span>{error}</span>
-      </div>
-    </div>
   );
 }
 
@@ -261,7 +246,7 @@ export function AssistantForm({
             <ul className="mt-3 space-y-2">
               {Object.entries(validationErrors).map(([key, error]) => (
                 <li key={key} className="text-sm flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-destructive/70" />
+                  <AlertTriangle className="h-4 w-4 mt-1 flex-shrink-0 text-destructive/70" />
                   <span>
                     <span className="font-medium">{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:</span> {error}
                   </span>
@@ -845,10 +830,10 @@ export function AssistantForm({
                             </div>
                             <div>
                               <p className="text-sm font-semibold">{tool.tool_name}</p>
-                              <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+                              <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
                                 {tool.tool_description || "No description provided"}
                               </p>
-                              <div className="mt-1.5 flex items-center gap-2">
+                              <div className="mt-2 flex items-center gap-2">
                                 <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                                   {tool.tool_execution_type}
                                 </span>
@@ -861,7 +846,7 @@ export function AssistantForm({
                             className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
                             onClick={() => onToggleTool(toolId, false)}
                           >
-                            <Trash2 className="mr-1.5 h-4 w-4" />
+                            <Trash2 className="mr-2 h-4 w-4" />
                             Remove
                           </Button>
                         </div>

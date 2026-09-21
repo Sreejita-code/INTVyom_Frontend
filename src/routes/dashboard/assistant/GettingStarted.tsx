@@ -64,7 +64,7 @@ export function GettingStarted() {
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <h3 className="text-base font-semibold text-foreground">Get started in 5 steps</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-xs text-muted-foreground mt-1">
             From a new assistant to your first real call. Each step opens the right page.
           </p>
         </div>
@@ -73,7 +73,7 @@ export function GettingStarted() {
           size="icon"
           onClick={handleDismiss}
           aria-label="Dismiss getting started guide"
-          className="h-7 w-7 shrink-0 mt-0.5 text-muted-foreground hover:text-foreground"
+          className="h-7 w-7 shrink-0 mt-1 text-muted-foreground hover:text-foreground"
         >
           <X className="h-4 w-4" />
         </Button>
@@ -99,7 +99,7 @@ export function GettingStarted() {
             </span>
             <Link
               to={step.path}
-              className="shrink-0 self-start rounded-md px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10 transition-colors sm:self-start sm:mt-0.5"
+              className="shrink-0 self-start rounded-md px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10 transition-colors sm:self-start sm:mt-1"
             >
               {step.cta}
             </Link>

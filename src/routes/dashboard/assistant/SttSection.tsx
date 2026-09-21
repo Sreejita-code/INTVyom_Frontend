@@ -125,7 +125,7 @@ export function SttSection({
             {(modelError || languageError) && (
               <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive mb-4">
                 <div className="flex items-start gap-2">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <AlertTriangle className="mt-1 h-4 w-4 shrink-0" />
                   <div>
                     <span className="font-medium">Configuration Issues:</span>
                     <ul className="mt-1 ml-4 list-disc space-y-1">
@@ -150,7 +150,7 @@ export function SttSection({
       {(providerError || modelError || languageError) && (
         <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive mb-4">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <AlertTriangle className="mt-1 h-4 w-4 shrink-0" />
             <div>
               <span className="font-medium">Configuration Issues:</span>
               <ul className="mt-1 ml-4 list-disc space-y-1">

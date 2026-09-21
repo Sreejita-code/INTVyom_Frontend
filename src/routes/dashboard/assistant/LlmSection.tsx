@@ -1,6 +1,5 @@
 import { Brain, AlertTriangle } from "lucide-react";
 
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AssistantLlmConfig, AssistantMode } from "@/types/assistant";
 import { ConfigField } from "./ConfigField";
@@ -102,7 +101,7 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
             {knobErrors.length > 0 && (
               <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive mb-4">
                 <div className="flex items-start gap-2">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <AlertTriangle className="mt-1 h-4 w-4 shrink-0" />
                   <div>
                     <span className="font-medium">Configuration Issues:</span>
                     <ul className="mt-1 ml-4 list-disc space-y-1">
@@ -130,7 +129,7 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
       {(providerError || modelError) && (
         <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive mb-4 border border-destructive/20">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <AlertTriangle className="mt-1 h-4 w-4 shrink-0" />
             <div>
               <span className="font-medium">Configuration Issues:</span>
               <ul className="mt-1 ml-4 list-disc space-y-1">

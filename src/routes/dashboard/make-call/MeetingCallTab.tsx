@@ -151,10 +151,10 @@ export function MeetingCallTab({ assistants, assistantsLoading, userId }: Meetin
   return (
     <div className="space-y-5">
       <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-amber-500">
-        <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+        <AlertCircle className="h-5 w-5 shrink-0 mt-1" />
         <div>
           <p className="text-sm font-medium">The LiveKit connector service must be running</p>
-          <p className="text-xs text-amber-500/70 mt-0.5">
+          <p className="text-xs text-amber-500/70 mt-1">
             The bot is put into the meeting by the LiveKit connector service, and the assistant itself runs on
             the agent worker. If either one is down, this request still returns a room and dispatch IDs but
             nothing joins the meeting.

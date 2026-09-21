@@ -1,4 +1,4 @@
-import { Volume2, AlertTriangle } from "lucide-react";
+import { Volume2 } from "lucide-react";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AssistantDetail, TtsProvider } from "@/types/assistant";
@@ -6,7 +6,6 @@ import { FieldRow } from "./FieldRow";
 import { ProviderFields } from "./ProviderFields";
 import { StageSection, TRIGGER_ONE_LINE } from "./StageSection";
 import { TTS_PROVIDERS, findProvider, ttsInertReason } from "./providerCatalog";
-import { getProviderModeError } from "./assistantConfig";
 
 interface TtsSectionProps {
   ttsModel: TtsProvider;

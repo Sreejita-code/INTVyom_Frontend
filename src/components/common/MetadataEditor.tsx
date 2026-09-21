@@ -140,7 +140,7 @@ export function MetadataEditor({
             className="w-fit"
             onClick={() => onRowsChange([...rows, { key: "", value: "" }])}
           >
-            <Plus className="mr-1.5 h-4 w-4" />
+            <Plus className="mr-2 h-4 w-4" />
             Add variable
           </Button>
         </div>

@@ -22,8 +22,9 @@
     --muted: 220 25% 12%;
     --muted-foreground: 215 15% 55%;
 
-    --accent: 172 66% 50%;
-    --accent-foreground: 222 47% 6%;
+    /* The subtle hover/selected surface, not the brand colour — that is --primary. */
+    --accent: 220 25% 14%;
+    --accent-foreground: 210 20% 92%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 210 40% 98%;
@@ -56,6 +57,42 @@
 @layer base {
   * {
     @apply border-border;
+  }
+
+  /*
+   * Panes that scroll natively (the nav rail, the ⌘K list, any overflow-y-auto)
+   * were showing the platform scrollbar, stepper arrows and all, next to the
+   * Radix ScrollArea's slim thumb. One rule makes both read the same.
+   */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    background-clip: content-box;
+    border: 3px solid transparent;
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.6);
+  }
+
+  /* The platform stepper arrows have no counterpart in the Radix scrollbar. */
+  ::-webkit-scrollbar-button {
+    display: none;
   }
 
   body {

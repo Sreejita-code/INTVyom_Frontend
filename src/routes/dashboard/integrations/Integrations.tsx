@@ -264,7 +264,7 @@ const Integrations = () => {
                                                         )}
                                                         {rs?.status === "error" && (
                                                             <div className="flex items-start gap-2 text-xs text-destructive">
-                                                                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                                                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-1" />
                                                                 <span className="break-words min-w-0">Sync failed{rs.error ? `: ${rs.error}` : ""}</span>
                                                             </div>
                                                         )}
@@ -281,7 +281,7 @@ const Integrations = () => {
                                                             disabled={running}
                                                             onClick={() => handleResync(service.service_name)}
                                                         >
-                                                            <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${running ? "animate-spin" : ""}`} />
+                                                            <RefreshCw className={`h-3.5 w-3.5 mr-2 ${running ? "animate-spin" : ""}`} />
                                                             Re-sync
                                                         </Button>
                                                     </div>
@@ -318,7 +318,7 @@ const Integrations = () => {
                             <button
                                 onClick={() => setSelectedProvider(selectedProvider === provider ? null : provider)}
                                 className={`w-full text-left transition-colors duration-200 relative group overflow-hidden rounded-xl border ${selectedProvider === provider
-                                    ? "border-primary bg-primary/5 shadow-[0_0_15px_rgba(172,66,50,0.15)]"
+                                    ? "border-primary/30 bg-primary/10"
                                     : "border-border hover:border-primary/50 bg-card"
                                     }`}
                             >

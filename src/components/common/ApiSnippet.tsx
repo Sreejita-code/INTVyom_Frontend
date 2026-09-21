@@ -114,7 +114,7 @@ export const ApiSnippetButton = ({
           <div>
             <SheetTitle className="text-lg font-semibold">{spec.title}</SheetTitle>
             {spec.note ? (
-              <SheetDescription className="mt-1.5">{spec.note}</SheetDescription>
+              <SheetDescription className="mt-2">{spec.note}</SheetDescription>
             ) : null}
           </div>
           <div className="flex items-center gap-2 min-w-0">

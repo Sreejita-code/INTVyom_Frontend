@@ -138,6 +138,7 @@ export default function AudioLibrary() {
   return (
     <MasterDetailShell
       mobileDetailOpen={mobileDetailOpen}
+      collapseKey="audio-library"
       className="h-screen overflow-hidden"
       listClassName="animate-in fade-in duration-200 h-full"
       detailClassName="bg-background h-full"
@@ -184,7 +185,7 @@ export default function AudioLibrary() {
                   onClick={() => handleSelectAudio(item.audio_id)}
                   className={cn(
                     "group flex items-start gap-3 p-3 rounded-md cursor-pointer transition-colors duration-200 border",
-                    selectedId === item.audio_id ? "bg-accent/50 border-primary/50" : "bg-transparent border-transparent hover:bg-accent/30"
+                    selectedId === item.audio_id ? "bg-primary/10 border-primary/30" : "bg-transparent border-transparent hover:bg-accent/30"
                   )}
                 >
                   <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", selectedId === item.audio_id ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>

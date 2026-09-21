@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { useLocation } from "react-router-dom";
-import { Bot, Braces, Plus, Loader2, Save, Trash2, Phone, Mic, X, MessageSquare, PhoneCall, ArrowLeft, Search } from "lucide-react";
+import { Bot, Braces, Plus, Loader2, Save, Trash2, Mic, X, MessageSquare, ArrowLeft, Search } from "lucide-react";
 
 import { CopyIdButton } from "@/components/common/CopyIdButton";
 
@@ -26,7 +25,6 @@ import {
 } from "@/services/assistant/assistantService";
 import { callListToolsEndpoint, condenseListToolsResponse, callToggleToolAttachmentEndpoint } from "@/services/tool/toolService";
 import { callListAudiosEndpoint, condenseListAudiosResponse } from "@/services/audio/audioService";
-import { callListTrunksEndpoint, condenseListTrunksResponse } from "@/services/sip/sipService";
 import { callGetWebCallTokenEndpoint, condenseWebCallTokenResponse } from "@/services/webCall/webCallService";
 import { AssistantDetail, AssistantItem } from "@/types/assistant";
 import { ToolSummary } from "@/types/tool";
@@ -54,7 +52,6 @@ export default function AssistantPage() {
   const [chatLoading, setChatLoading] = useState(false);
 
   // --- State ---
-  const location = useLocation();
   const {
     filteredAssistants,
     listLoading,
@@ -81,8 +78,6 @@ export default function AssistantPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [trunks, setTrunks] = useState<any[]>([]);
-  const [trunksLoading, setTrunksLoading] = useState(false);
 
   // --- Audio Library State ---
   const [audioList, setAudioList] = useState<{ audio_id: string; audio_name: string; s3_url?: string }[]>([]);
@@ -98,21 +93,6 @@ export default function AssistantPage() {
   const [webCallLoading, setWebCallLoading] = useState<boolean>(false);
   
   const isFormDirty = useMemo(() => buildFormSnapshot(formData) !== initialFormSnapshot, [formData, initialFormSnapshot]);
-
-  const fetchTrunks = useCallback(async () => {
-    if (!user?.user_id) return;
-    setTrunksLoading(true);
-    try {
-      const { ok, json } = await callListTrunksEndpoint(user.user_id);
-      if (ok) {
-        setTrunks(condenseListTrunksResponse(json));
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setTrunksLoading(false);
-    }
-  }, [user?.user_id]);
 
   const fetchTools = useCallback(async () => {
     if (!user?.user_id) return;
@@ -135,10 +115,9 @@ export default function AssistantPage() {
   }, [user?.user_id]);
 
   useEffect(() => {
-    fetchTrunks();
     fetchTools();
     fetchAudios();
-  }, [fetchTrunks, fetchTools, fetchAudios]);
+  }, [fetchTools, fetchAudios]);
 
   // Test values for the prompt's {{placeholders}}, sent as `metadata` on Web Call and Chat. Held
   // here rather than in the form because they are not part of the assistant — they are what you
@@ -412,6 +391,7 @@ export default function AssistantPage() {
     <>
     <MasterDetailShell
       mobileDetailOpen={mobileDetailOpen}
+      collapseKey="assistants"
       className="h-screen overflow-hidden"
       listClassName="animate-in fade-in duration-200 h-full"
       detailClassName="bg-background h-full"
@@ -468,7 +448,7 @@ export default function AssistantPage() {
                         className={`
                           group flex items-start gap-3 p-3 rounded-md cursor-pointer transition-colors duration-200 border
                           ${selectedId === itemId
-                            ? "bg-accent/50 border-primary/50 shadow-[0_0_15px_-3px_rgba(var(--primary),0.3)]"
+                            ? "bg-primary/10 border-primary/30"
                             : "bg-transparent border-transparent hover:bg-accent/30 hover:border-border"
                           }
                         `}

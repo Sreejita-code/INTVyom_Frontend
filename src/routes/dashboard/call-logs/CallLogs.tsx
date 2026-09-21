@@ -63,7 +63,7 @@ export default function CallLogsPage() {
   // 50 rather than 10: the only search this page can offer is over the rows already loaded
   // (the upstream call-logs endpoint has no number or status filter), so the page has to be big
   // enough for that search to be worth using.
-  const [limit, setLimit] = useState(50);
+  const limit = 50;
   const [totalPages, setTotalPages] = useState(1);
   const [totalLogs, setTotalLogs] = useState(0);
   

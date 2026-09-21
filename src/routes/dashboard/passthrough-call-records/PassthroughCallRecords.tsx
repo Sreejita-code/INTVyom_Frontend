@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import {
     Loader2, Filter, Calendar as CalendarIcon,
-    Search, PhoneOff, Clock, ChevronLeft, ChevronRight, Download, Play
+    Search, PhoneOff, Clock, ChevronLeft, ChevronRight, Play
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

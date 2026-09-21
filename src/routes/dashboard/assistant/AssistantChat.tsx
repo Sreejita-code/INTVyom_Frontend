@@ -159,7 +159,7 @@ export const ChatInner: React.FC<{ assistantName: string; onClose: () => void }>
             disabled={!inputText.trim()}
             className="w-11 h-11 rounded-xl flex items-center justify-center text-primary-foreground bg-primary transition-colors hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Send className="h-4 w-4 ml-0.5" />
+            <Send className="h-4 w-4 ml-1" />
           </button>
         </form>
 

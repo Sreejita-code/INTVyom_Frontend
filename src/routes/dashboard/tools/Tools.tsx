@@ -51,7 +51,6 @@ export default function ToolsPage() {
   const [headersList, setHeadersList] = useState<{ key: string; value: string }[]>([]);
   const [staticValue, setStaticValue] = useState("");
   const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [toolSearch, setToolSearch] = useState("");
@@ -128,7 +127,6 @@ export default function ToolsPage() {
   const handleDeleteTool = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!user?.user_id || !window.confirm("Delete this tool?")) return;
-    setDeletingId(id);
     try {
       await callDeleteToolEndpoint({ userId: user.user_id, toolId: id });
       toast({ title: "Tool Deleted" });
@@ -141,7 +139,6 @@ export default function ToolsPage() {
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
-      setDeletingId(null);
     }
   };
 
@@ -233,6 +230,7 @@ export default function ToolsPage() {
   return (
     <MasterDetailShell
       mobileDetailOpen={mobileDetailOpen}
+      collapseKey="tools"
       list={
         <>
         <div className="p-4 border-b border-border space-y-3">
@@ -273,7 +271,7 @@ export default function ToolsPage() {
                   key={item.tool_id}
                   onClick={() => handleSelectTool(item.tool_id)}
                   className={`group flex items-center gap-3 p-3 rounded-md cursor-pointer border ${
-                    selectedId === item.tool_id ? "bg-accent/50 border-primary/50" : "hover:bg-accent/30 border-transparent"
+                    selectedId === item.tool_id ? "bg-primary/10 border-primary/30" : "hover:bg-accent/30 border-transparent"
                   }`}
                 >
                   <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0">

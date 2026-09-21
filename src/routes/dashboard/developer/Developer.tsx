@@ -29,7 +29,7 @@ const SecretRow = ({ label, value, secret }: SecretRowProps) => {
 
   return (
     <div>
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
+      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
         {label}
       </p>
       <div className="flex items-center justify-between gap-4">
