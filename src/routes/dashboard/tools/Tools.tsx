@@ -27,6 +27,8 @@ import {
 } from "@/services/tool/toolService";
 import { ToolDetail, ToolParameter } from "@/types/tool";
 import { useToast } from "@/hooks/use-toast";
+import { JsonSample } from "@/components/common/JsonSample";
+import { toolWebhookSample } from "./toolWebhookSample";
 
 const emptyForm: ToolDetail = {
   tool_name: "",
@@ -412,6 +414,11 @@ export default function ToolsPage() {
                           <Plus className="h-3 w-3 mr-1" /> Add Header
                         </Button>
                       </div>
+                      <JsonSample
+                        title="See what we POST to this URL"
+                        value={toolWebhookSample(formData.tool_parameters)}
+                        note="Exactly the arguments the model generated — the parameters below and nothing else. Return JSON and the model receives it as structured data; return plain text and it receives the raw text."
+                      />
                     </div>
                   ) : (
                     <div className="grid gap-2 mt-4 animate-in fade-in duration-200">

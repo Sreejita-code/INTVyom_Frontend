@@ -21,6 +21,17 @@ import {
   condenseTrunkDetailsResponse,
 } from "@/services/sip/sipService";
 import { TrunkDetail, TrunkItem } from "@/types/sip";
+import { JsonSample } from "@/components/common/JsonSample";
+import { PASSTHROUGH_WEBHOOK_SAMPLE } from "@/lib/webhookSamples";
+
+/** Shown next to the URL in the create modal and again on a saved trunk. */
+const PassthroughWebhookSample = () => (
+    <JsonSample
+        title="See what we POST to this URL"
+        value={PASSTHROUGH_WEBHOOK_SAMPLE}
+        note="Fires on every terminal outcome, including busy, no_answer and timeout. No assistant runs on a forwarded call, so assistant_id is null, transcripts is empty and there is no usage block."
+    />
+);
 
 export default function PhoneNumberPage() {
     const user = getStoredUser();
@@ -403,6 +414,7 @@ export default function PhoneNumberPage() {
                                                         className="bg-muted/30 border-border/50 focus:border-primary font-mono text-xs"
                                                     />
                                                     <p className="text-xs text-muted-foreground">Calls are forwarded here as web requests.</p>
+                                                    <PassthroughWebhookSample />
                                                 </div>
                                             )}
                                         </div>
@@ -619,6 +631,7 @@ export default function PhoneNumberPage() {
                                                         <div className="bg-muted/30 p-3 rounded-lg border border-border/50">
                                                             <p className="text-xs font-mono break-all text-primary">{selectedTrunk.passthrough_webhook_url}</p>
                                                         </div>
+                                                        <PassthroughWebhookSample />
                                                     </div>
                                                 )}
                                             </div>

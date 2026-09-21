@@ -36,12 +36,39 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toastError } from "@/lib/toastError";
+import { JsonSample } from "@/components/common/JsonSample";
 import { HeaderEditor } from "./HeaderEditor";
 import { StrategyRow } from "./StrategyRow";
+import { CONTEXT_STRATEGY_REQUEST_SAMPLE, CONTEXT_STRATEGY_RESPONSE_SAMPLE } from "./contextStrategySamples";
 import { HeaderRow, buildConfigPatch, buildHeaderPatch, rowsFromHeaders } from "./headerDiff";
 import { isInsecureUrl, validateTimeoutSeconds, validateWebhookUrl } from "./strategyValidation";
 
 const DEFAULT_TIMEOUT = "2";
+
+/** The same two blocks appear in the create modal and in the detail pane — one definition. */
+const WebhookContract = () => (
+    <div className="space-y-2">
+        <JsonSample
+            title="See what we POST to your endpoint"
+            value={CONTEXT_STRATEGY_REQUEST_SAMPLE}
+            note="Sent once per call, from the agent worker, just before the prompt is rendered. There are no retries, and your configured headers go out with it."
+        />
+        <JsonSample
+            title="See what your endpoint must return"
+            value={CONTEXT_STRATEGY_RESPONSE_SAMPLE}
+            note={
+                <>
+                    Return any top-level JSON object. Its shape is the placeholder path, so this sample gives you{" "}
+                    <code className="font-mono">{"{{customer_name}}"}</code> and{" "}
+                    <code className="font-mono">{"{{plan}}"}</code>; nesting a value gives you{" "}
+                    <code className="font-mono">{"{{customer.name}}"}</code>. Anything else — a list, a timeout, bad JSON —
+                    never drops the call, it just leaves those placeholders empty. The caller waits in silence
+                    for the whole timeout first, though, so keep the endpoint fast and the timeout low.
+                </>
+            }
+        />
+    </div>
+);
 
 const formatTimestamp = (value?: string) => {
     if (!value) return null;
@@ -347,6 +374,8 @@ export default function InboundContextPage() {
                                     </div>
 
                                     <HeaderEditor rows={modalHeaderRows} onChange={setModalHeaderRows} />
+
+                                    <WebhookContract />
                                 </div>
 
                                 <div className="p-6 border-t border-border flex justify-end gap-3 bg-muted/10">
@@ -540,6 +569,8 @@ export default function InboundContextPage() {
                                         <div className="h-px w-full bg-border/50" />
 
                                         <HeaderEditor rows={updateHeaderRows} onChange={setUpdateHeaderRows} />
+
+                                        <WebhookContract />
                                     </div>
                                 </section>
                             </div>

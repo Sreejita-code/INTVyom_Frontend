@@ -1,0 +1,115 @@
+/**
+ * Example bodies the backend POSTs to a user-supplied webhook URL.
+ *
+ * Transcribed from the API docs (`api/calls/webhook.md`, `api/calls/passthrough.md`) so the
+ * form that asks for the URL can also show what will arrive at it. Data only — nothing here
+ * is read at runtime, and a field added by the backend has to be added here by hand.
+ *
+ * The numbers are internally consistent on purpose — a developer sizing token math against a
+ * sample should not have to notice that the docs page's own example does not add up.
+ */
+
+export const END_CALL_WEBHOOK_SAMPLE = {
+  success: true,
+  message: "Call details fetched successfully",
+  data: {
+    room_name: "550e8400-e29b-41d4-a716-446655440000_abc123",
+    queue_id: "8b7df5ea0fdc497ea4f44bd31954a387",
+    assistant_id: "550e8400-e29b-41d4-a716-446655440000",
+    assistant_name: "Support Agent",
+    is_passthrough: false,
+    to_number: "+15550200000",
+    call_status: "completed",
+    call_status_reason: null,
+    sip_status_code: null,
+    sip_status_text: null,
+    answered_at: "2024-01-15T10:00:02.000Z",
+    agent_ready_at: "2024-01-15T10:00:03.500Z",
+    call_end_reason: "natural",
+    recording_path: "https://your-bucket.s3.us-east-1.amazonaws.com/recordings/call_abc123.ogg",
+    transcripts: [
+      { speaker: "agent", text: "Hello John, how can I help you today?", timestamp: "2024-01-15T10:00:01.000Z" },
+      { speaker: "user", text: "I need help with my order.", timestamp: "2024-01-15T10:00:05.000Z" },
+    ],
+    started_at: "2024-01-15T10:00:00.000Z",
+    ended_at: "2024-01-15T10:05:30.000Z",
+    call_duration_minutes: 5.5,
+    billable_duration_minutes: 6,
+    created_by_email: "user@example.com",
+    call_type: "outbound",
+    call_service: "exotel",
+    platform_number: "08044319240",
+    meeting_url: null,
+    meeting_connector_status: null,
+    meeting_connector_status_reason: null,
+    meeting_connector_ready_at: null,
+    meeting_connector_ended_at: null,
+    usage: {
+      mode: "cascade",
+      call_duration_minutes: 5.5,
+      call_service: "exotel",
+      tts_provider: "cartesia",
+      llm_realtime_provider: null,
+      llm_model: "gpt-4.1-mini",
+      llm_input_tokens: 9250,
+      llm_output_tokens: 1230,
+      llm_input_audio_tokens: 0,
+      llm_input_text_tokens: 9250,
+      llm_input_image_tokens: 0,
+      llm_output_audio_tokens: 0,
+      llm_output_text_tokens: 1230,
+      llm_total_tokens: 10480,
+      llm_input_cached_tokens: 512,
+      llm_input_cached_audio_tokens: 0,
+      llm_input_cached_text_tokens: 512,
+      llm_input_cached_image_tokens: 0,
+      llm_input_cache_creation_tokens: 0,
+      llm_session_duration: 0,
+      tts_characters_count: 485,
+      tts_audio_duration: 32.5,
+      tts_input_tokens: 0,
+      tts_output_tokens: 0,
+      stt_provider: "sarvam",
+      stt_model: "saaras:v3",
+      stt_audio_duration: 41.75,
+      stt_input_tokens: 0,
+      stt_input_audio_tokens: 0,
+      stt_input_text_tokens: 0,
+      stt_output_tokens: 0,
+      model_usage: [
+        { type: "llm_usage", provider: "openai", model: "gpt-4.1-mini", input_tokens: 9250, output_tokens: 1230 },
+      ],
+      usage_schema_version: 3,
+      sdk_version: "1.7.1",
+      usage_finalized: true,
+    },
+  },
+};
+
+/** Same envelope, but nothing ran an assistant: no ids, no transcript, no `usage` key at all. */
+export const PASSTHROUGH_WEBHOOK_SAMPLE = {
+  success: true,
+  message: "Call details fetched successfully",
+  data: {
+    room_name: "passthrough_abc123def456",
+    queue_id: "8b7df5ea0fdc497ea4f44bd31954a387",
+    assistant_id: null,
+    assistant_name: null,
+    is_passthrough: true,
+    to_number: "+15550200000",
+    call_status: "completed",
+    call_status_reason: null,
+    sip_status_code: null,
+    sip_status_text: null,
+    answered_at: "2024-01-15T10:00:05.000Z",
+    recording_path: "https://your-bucket.s3.amazonaws.com/recordings/passthrough_abc123.ogg",
+    transcripts: [],
+    started_at: "2024-01-15T10:00:00.000Z",
+    ended_at: "2024-01-15T10:05:30.000Z",
+    call_duration_minutes: 5.42,
+    billable_duration_minutes: 6,
+    call_type: "outbound",
+    call_service: "twilio",
+    platform_number: "+15550100000",
+  },
+};

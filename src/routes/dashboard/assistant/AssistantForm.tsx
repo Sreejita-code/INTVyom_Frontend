@@ -17,10 +17,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { JsonSample } from "@/components/common/JsonSample";
 import { AssistantDetail, AssistantMode, SttProvider, TtsProvider } from "@/types/assistant";
 import { ToolSummary } from "@/types/tool";
 import { cn } from "@/lib/utils";
 import { MODES, modeAccent } from "@/lib/assistantModes";
+import { END_CALL_WEBHOOK_SAMPLE } from "@/lib/webhookSamples";
 import { emptyForm } from "./constants";
 import { 
   LANGUAGE_CODES, 
@@ -704,6 +706,18 @@ export function AssistantForm({
                 spellCheck={false}
                 className="min-h-[3.5rem] resize-y break-all font-mono text-sm"
               />
+            }
+          />
+
+          <JsonSample
+            title="See what we POST to this URL"
+            value={END_CALL_WEBHOOK_SAMPLE}
+            note={
+              <>
+                Sent once when the call reaches a terminal state. Answer <code className="font-mono">200</code> first and
+                do your own processing afterwards — a slow reply holds the call's teardown open. Delivery is retried, so
+                key on <code className="font-mono">data.room_name</code> and ignore a payload you have already stored.
+              </>
             }
           />
 
