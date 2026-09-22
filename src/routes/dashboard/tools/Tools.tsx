@@ -27,7 +27,9 @@ import {
 } from "@/services/tool/toolService";
 import { ToolDetail, ToolParameter } from "@/types/tool";
 import { useToast } from "@/hooks/use-toast";
+import { toastError } from "@/lib/toastError";
 import { JsonSample } from "@/components/common/JsonSample";
+import { parseStaticReturn, staticReturnText } from "./staticReturn";
 import { toolWebhookSample } from "./toolWebhookSample";
 
 const emptyForm: ToolDetail = {
@@ -62,10 +64,10 @@ export default function ToolsPage() {
   );
 
   const fetchList = useCallback(async () => {
-    if (!user?.user_id) return;
+    if (!user?.api_key) return;
     setListLoading(true);
     try {
-      const { ok, json } = await callListToolsEndpoint(user.user_id);
+      const { ok, json } = await callListToolsEndpoint();
       if (ok) {
         setTools(condenseListToolsResponse(json));
       }
@@ -74,7 +76,7 @@ export default function ToolsPage() {
     } finally {
       setListLoading(false);
     }
-  }, [user?.user_id, toast]);
+  }, [user?.api_key, toast]);
 
   useEffect(() => {
     fetchList();
@@ -90,14 +92,14 @@ export default function ToolsPage() {
   };
 
   const handleSelectTool = async (id: string) => {
-    if (!user?.user_id) return;
+    if (!user?.api_key) return;
     setSelectedId(id);
     setMode("edit");
     setMobileDetailOpen(true);
     setDetailLoading(true);
 
     try {
-      const { ok, json } = await callGetToolDetailsEndpoint({ userId: user.user_id, toolId: id });
+      const { ok, json } = await callGetToolDetailsEndpoint({ toolId: id });
       if (ok && json && typeof json === "object" && (json as Record<string, unknown>).data) {
         const d = (json as Record<string, unknown>).data as Record<string, unknown>;
         setFormData({
@@ -116,8 +118,10 @@ export default function ToolsPage() {
           const h = (d.tool_execution_config as Record<string, unknown>)?.headers || {};
           setHeadersList(Object.keys(h).map((k) => ({ key: k, value: h[k] as string })));
         } else {
-          setStaticValue((d.tool_execution_config as Record<string, unknown>)?.value as string || "");
+          setStaticValue(staticReturnText((d.tool_execution_config as Record<string, unknown>)?.value));
         }
+      } else {
+        toast(toastError(json, "Error loading details"));
       }
     } catch (error) {
       toast({ variant: "destructive", title: "Error loading details" });
@@ -128,9 +132,9 @@ export default function ToolsPage() {
 
   const handleDeleteTool = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!user?.user_id || !window.confirm("Delete this tool?")) return;
+    if (!user?.api_key || !window.confirm("Delete this tool?")) return;
     try {
-      await callDeleteToolEndpoint({ userId: user.user_id, toolId: id });
+      await callDeleteToolEndpoint({ toolId: id });
       toast({ title: "Tool Deleted" });
       if (selectedId === id) {
         setMode("empty");
@@ -145,7 +149,7 @@ export default function ToolsPage() {
   };
 
   const handleSubmit = async () => {
-    if (!user?.user_id) return;
+    if (!user?.api_key) return;
     setSaving(true);
 
     try {
@@ -162,7 +166,12 @@ export default function ToolsPage() {
           headers: headersObj,
         };
       } else {
-        finalConfig = { value: staticValue };
+        const parsed = parseStaticReturn(staticValue);
+        if ("error" in parsed) {
+          toast({ variant: "destructive", title: "Return value is not valid JSON", description: parsed.error });
+          return;
+        }
+        finalConfig = { value: parsed.value };
       }
 
       // Cleanup parameters
@@ -180,7 +189,6 @@ export default function ToolsPage() {
       });
 
       const payload = {
-        user_id: user.user_id,
         tool_name: formData.tool_name,
         tool_description: formData.tool_description,
         tool_execution_type: formData.tool_execution_type,
@@ -424,7 +432,7 @@ export default function ToolsPage() {
                     <div className="grid gap-2 mt-4 animate-in fade-in duration-200">
                       <Label>Return Value *</Label>
                       <Textarea
-                        placeholder="The string or JSON you want to return to the assistant"
+                        placeholder='Plain text, or JSON such as {"status": "confirmed"}'
                         value={staticValue}
                         onChange={(e) => setStaticValue(e.target.value)}
                         className="font-mono"

@@ -175,7 +175,8 @@ module exports:
   (`src/types/`), so pages never read response envelopes directly.
 
 Authenticated services call `authedFetch` (see **Authentication** below) rather than `fetch`
-directly. Pages import service functions only — no inline `fetch` calls live in `src/routes/`.
+directly, and read bodies with `readJson` (`src/lib/readJson.ts`), which turns a non-JSON error page
+into `{ error }` instead of throwing. Pages import service functions only — no inline `fetch` calls live in `src/routes/`.
 Browser storage access (`getStoredUser`, `storeUser`, `clearUser`) lives in
 `src/services/storage/storageService.ts`.
 
@@ -196,10 +197,13 @@ Identity is the **API key** issued at signup and returned by `POST /api/auth/log
   `fetch`. It attaches the stored key and, on a `401`, clears the session and redirects to `/auth`.
 - `login` and `signup` use plain `fetch` — they are how the key is obtained, and their `401` means
   "wrong password", not "session expired".
-- `user_id` is still sent in some request bodies and query strings during the transition, but the
-  backend ignores it: the bearer key is what identifies the caller.
-- The API never returns provider keys (`api_key` inside a TTS/STT config) or SIP trunk credentials.
-  The editor strips provider keys, and the Phone Number page shows only the non-secret trunk fields.
+- No request sends `user_id`; the backend ignores it. The stored `user_id` is kept only as an account
+  reference on the Developer page.
+- A signup that returns `api_key: null` (upstream key issuance failed) does not start a session.
+- The API never returns TTS/STT provider keys or SIP trunk credentials, and the Phone Number page
+  shows only the non-secret trunk fields it does return. `GET /api/integration/get` still returns the
+  full provider key; `condenseIntegrationResponse` keeps only a `***1234` preview, so the full key is
+  never rendered. Backend follow-ups are tracked in `plan/backend-requests.md`.
 
 ## Features / Pages
 

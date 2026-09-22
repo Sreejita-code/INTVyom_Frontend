@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   RequestSpec,
-  USER_ID_PLACEHOLDER,
   buildRequestUrl,
   renderCurl,
   renderNode,
@@ -19,7 +18,6 @@ const postSpec: RequestSpec = {
   method: "POST",
   path: "/api/call/outbound",
   body: {
-    user_id: "$VYOM_USER_ID",
     assistant_id: "asst_1",
     metadata: { name: "John", vip: true, note: null, tags: ["a"] },
   },
@@ -30,7 +28,7 @@ const getSpec: RequestSpec = {
   title: "List call logs",
   method: "GET",
   path: "/api/assistant/call-logs/asst_1",
-  query: { user_id: "$VYOM_USER_ID", page: 1, limit: 20, start_date: undefined },
+  query: { page: 1, limit: 20, start_date: undefined },
 };
 
 describe("buildRequestUrl", () => {
@@ -42,7 +40,7 @@ describe("buildRequestUrl", () => {
 
   it("appends defined query params only, encoded", () => {
     expect(buildRequestUrl(getSpec, options)).toBe(
-      "https://api.example.com/api/assistant/call-logs/asst_1?user_id=%24VYOM_USER_ID&page=1&limit=20",
+      "https://api.example.com/api/assistant/call-logs/asst_1?page=1&limit=20",
     );
   });
 });
@@ -86,7 +84,7 @@ describe("renderPython", () => {
   it("passes query params instead of a body for a GET", () => {
     const snippet = renderPython(getSpec, options);
     expect(snippet).toContain("requests.get(");
-    expect(snippet).toContain('params={"user_id": "$VYOM_USER_ID", "page": 1, "limit": 20}');
+    expect(snippet).toContain('params={"page": 1, "limit": 20}');
     expect(snippet).not.toContain("json=");
   });
 
@@ -121,13 +119,6 @@ describe("renderNode", () => {
   });
 });
 
-describe("placeholder identifiers", () => {
-  it("renders whatever user_id the caller passed, so masking stays the caller's choice", () => {
-    expect(renderCurl(postSpec, options)).toContain("$VYOM_USER_ID");
-    expect(renderPython(getSpec, options)).toContain("$VYOM_USER_ID");
-  });
-});
-
 describe("authorization header", () => {
   const authed = { baseUrl: "https://api.example.com", apiKey: "key-1" };
 
@@ -156,7 +147,6 @@ describe("generated snippets parse", () => {
   const spec: RequestSpec = {
     ...postSpec,
     body: {
-      user_id: USER_ID_PLACEHOLDER,
       assistant_prompt: "You're \"Sarah\" from Acme; say hi.\nLine two.",
       metadata: { vip: true, note: null, tags: ["a", "b"] },
     },

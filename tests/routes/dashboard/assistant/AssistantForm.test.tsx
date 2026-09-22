@@ -169,3 +169,33 @@ describe("AssistantForm prompt variables", () => {
     expect(screen.queryByText("{{call.caller_number}}")).not.toBeInTheDocument();
   });
 });
+
+describe("AssistantForm end-call webhook tuning", () => {
+  const timeout = () => screen.getByRole("spinbutton", { name: /timeout in seconds/i });
+  const attempts = () => screen.getByRole("spinbutton", { name: /attempts/i });
+
+  it("stays disabled until there is a webhook URL to tune", () => {
+    renderForm({ assistant_end_call_url: "" });
+
+    expect(timeout()).toBeDisabled();
+    expect(attempts()).toBeDisabled();
+  });
+
+  it("says what a blank field falls back to", () => {
+    renderForm({ assistant_end_call_url: "https://example.com/hook" });
+
+    expect(timeout()).toHaveAttribute("placeholder", "Default: 30");
+    expect(attempts()).toHaveAttribute("placeholder", "Default: 3");
+  });
+
+  it("flags an out-of-range value next to the field", () => {
+    renderForm({
+      assistant_end_call_url: "https://example.com/hook",
+      assistant_end_call_webhook: { timeout_seconds: 999, attempts: 3 },
+    });
+
+    expect(timeout()).toHaveAttribute("aria-invalid", "true");
+    expect(attempts()).not.toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("alert")).toHaveTextContent(/timeout.*1.*120/i);
+  });
+});

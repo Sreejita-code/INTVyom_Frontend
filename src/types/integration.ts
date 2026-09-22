@@ -1,7 +1,8 @@
 export interface IntegrationData {
   service_type: string;
   service_name: string;
-  api_key: string;
+  /** `***` plus the last four characters. The full key is never kept in the browser. */
+  api_key_preview: string;
 }
 
 export interface ResyncData {

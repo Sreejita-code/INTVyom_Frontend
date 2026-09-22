@@ -1,11 +1,12 @@
 import { ServiceResponse } from "@/types/http";
 import { authedFetch } from "@/services/auth/authedFetch";
+import { readJson } from "@/lib/readJson";
 
 const INBOUND_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/inbound`;
 
-export async function callListInboundMappingsEndpoint(userId: string): Promise<unknown> {
-  const res = await authedFetch(`${INBOUND_BASE}/list?user_id=${userId}`);
-  return res.json();
+export async function callListInboundMappingsEndpoint(): Promise<unknown> {
+  const res = await authedFetch(`${INBOUND_BASE}/list`);
+  return readJson(res);
 }
 
 export const condenseListInboundMappingsResponse = (json: unknown): unknown[] => {
@@ -20,7 +21,7 @@ export async function callAssignInboundEndpoint(payload: unknown): Promise<Servi
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  return { ok: res.ok, json: await res.json() };
+  return { ok: res.ok, json: await readJson(res) };
 }
 
 export async function callUpdateInboundMappingEndpoint(
@@ -32,25 +33,23 @@ export async function callUpdateInboundMappingEndpoint(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  return { ok: res.ok, json: await res.json() };
+  return { ok: res.ok, json: await readJson(res) };
 }
 
 export async function callDetachInboundEndpoint(args: {
-  userId: string;
   inboundId: string;
 }): Promise<ServiceResponse<unknown>> {
-  const res = await authedFetch(`${INBOUND_BASE}/detach/${args.inboundId}?user_id=${args.userId}`, {
+  const res = await authedFetch(`${INBOUND_BASE}/detach/${args.inboundId}`, {
     method: "POST",
   });
-  return { ok: res.ok, json: await res.json() };
+  return { ok: res.ok, json: await readJson(res) };
 }
 
 export async function callDeleteInboundMappingEndpoint(args: {
-  userId: string;
   inboundId: string;
 }): Promise<ServiceResponse<unknown>> {
-  const res = await authedFetch(`${INBOUND_BASE}/delete/${args.inboundId}?user_id=${args.userId}`, {
+  const res = await authedFetch(`${INBOUND_BASE}/delete/${args.inboundId}`, {
     method: "DELETE",
   });
-  return { ok: res.ok, json: await res.json() };
+  return { ok: res.ok, json: await readJson(res) };
 }

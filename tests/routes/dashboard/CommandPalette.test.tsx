@@ -13,7 +13,7 @@ describe("CommandPalette", () => {
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText("Assistants")).toBeInTheDocument();
-    expect(screen.getByText("Your API Keys")).toBeInTheDocument();
+    expect(screen.getByText("Your API key")).toBeInTheDocument();
     expect(screen.getByText("Passthrough Calls")).toBeInTheDocument();
     expect(screen.getByText("IDs and keys guide")).toBeInTheDocument();
   });

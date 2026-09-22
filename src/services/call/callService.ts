@@ -1,10 +1,10 @@
 import { ServiceResponse } from "@/types/http";
 import { authedFetch } from "@/services/auth/authedFetch";
+import { readJson } from "@/lib/readJson";
 
 const CALL_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/call`;
 
 export async function callOutboundEndpoint(payload: {
-  user_id: string;
   assistant_id: string;
   trunk_id: string;
   to_number: string;
@@ -16,16 +16,13 @@ export async function callOutboundEndpoint(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  return { ok: res.ok, json: await res.json() };
+  return { ok: res.ok, json: await readJson(res) };
 }
 
 /** Dispatch progress for a queued outbound call: pending → dispatching → dispatched, or failed. */
-export async function callQueueStatusEndpoint(
-  queueId: string,
-  userId: string,
-): Promise<ServiceResponse<unknown>> {
-  const res = await authedFetch(`${CALL_BASE}/queue/${encodeURIComponent(queueId)}?user_id=${encodeURIComponent(userId)}`);
-  return { ok: res.ok, json: await res.json() };
+export async function callQueueStatusEndpoint(queueId: string): Promise<ServiceResponse<unknown>> {
+  const res = await authedFetch(`${CALL_BASE}/queue/${encodeURIComponent(queueId)}`);
+  return { ok: res.ok, json: await readJson(res) };
 }
 
 /** First string found at any of these paths. The backend nests queue fields inconsistently. */

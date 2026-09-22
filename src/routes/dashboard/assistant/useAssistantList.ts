@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   callListAssistantsEndpoint,
   condenseListAssistantsResponse,
@@ -7,25 +7,29 @@ import { AssistantItem } from "@/types/assistant";
 import { useToast } from "@/hooks/use-toast";
 
 const LIMIT = 15;
+const SEARCH_DEBOUNCE_MS = 300;
 
 /**
- * Paginated assistant list with infinite scroll and client-side name filtering.
+ * Paginated assistant list with infinite scroll. The name search runs on the backend, so it finds
+ * assistants on pages that have not been loaded yet.
  *
  * Attach `lastElementRef` to the final rendered row — it observes that row and
  * pulls the next page when it scrolls into view. `refresh` resets to page 1,
  * which is what create/delete should call after a successful mutation.
  */
-export function useAssistantList(userId: string | undefined) {
+export function useAssistantList(signedIn: boolean) {
   const { toast } = useToast();
 
   const [assistants, setAssistants] = useState<AssistantItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [assistantName, setAssistantName] = useState("");
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
   const observer = useRef<IntersectionObserver | null>(null);
+  const latestRequest = useRef(0);
   const lastElementRef = useCallback(
     (node: HTMLDivElement | null) => {
       if (listLoading || isLoadingMore) return;
@@ -44,7 +48,7 @@ export function useAssistantList(userId: string | undefined) {
 
   const fetchList = useCallback(
     async (pageNum: number) => {
-      if (!userId) {
+      if (!signedIn) {
         setListLoading(false);
         return;
       }
@@ -52,8 +56,16 @@ export function useAssistantList(userId: string | undefined) {
       if (pageNum === 1) setListLoading(true);
       else setIsLoadingMore(true);
 
+      const requestId = ++latestRequest.current;
+      const isStale = () => requestId !== latestRequest.current;
+
       try {
-        const { ok, json } = await callListAssistantsEndpoint({ userId, page: pageNum, limit: LIMIT });
+        const { ok, json } = await callListAssistantsEndpoint({
+          page: pageNum,
+          limit: LIMIT,
+          ...(assistantName ? { assistantName } : {}),
+        });
+        if (isStale()) return;
 
         if (!ok) {
           const errMsg =
@@ -78,32 +90,36 @@ export function useAssistantList(userId: string | undefined) {
         console.error(error);
         toast({ variant: "destructive", title: "Failed to load assistants" });
       } finally {
-        setListLoading(false);
-        setIsLoadingMore(false);
+        if (!isStale()) {
+          setListLoading(false);
+          setIsLoadingMore(false);
+        }
       }
     },
-    [userId, toast],
+    [signedIn, assistantName, toast],
   );
 
   useEffect(() => {
     fetchList(page);
   }, [fetchList, page]);
 
+  useEffect(() => {
+    const id = setTimeout(() => {
+      const next = searchQuery.trim();
+      if (next === assistantName) return;
+      setPage(1);
+      setAssistantName(next);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(id);
+  }, [searchQuery, assistantName]);
+
   const refresh = useCallback(async () => {
     setPage(1);
     await fetchList(1);
   }, [fetchList]);
 
-  const filteredAssistants = useMemo(
-    () =>
-      assistants.filter((assistant) =>
-        assistant.assistant_name.toLowerCase().includes(searchQuery.toLowerCase()),
-      ),
-    [assistants, searchQuery],
-  );
-
   return {
-    filteredAssistants,
+    filteredAssistants: assistants,
     listLoading,
     isLoadingMore,
     page,

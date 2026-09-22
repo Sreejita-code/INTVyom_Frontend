@@ -20,6 +20,7 @@ import {
   TimeSeriesPoint,
 } from "@/types/analytics";
 import {
+  callDownloadPlatformBillableEndpoint,
   getCallsByAssistant,
   getCallsByPhoneNumber,
   getCallsByService,
@@ -33,6 +34,7 @@ import {
   condenseListAssistantsResponse,
 } from "@/services/assistant/assistantService";
 import { getStoredUser } from "@/services/storage/storageService";
+import { toastError } from "@/lib/toastError";
 import { cn } from "@/lib/utils";
 
 type GranularityOption = "day" | "week" | "month";
@@ -117,16 +119,15 @@ export default function AnalyticsPage() {
   });
 
   const baseFilters = useMemo<AnalyticsFilters | null>(() => {
-    if (!user?.user_id || !startDate || !endDate) return null;
+    if (!user?.api_key || !startDate || !endDate) return null;
 
     return {
-      userId: user.user_id,
       startDate,
       endDate,
       granularity,
       assistantId: selectedAssistant === "all" ? undefined : selectedAssistant,
     };
-  }, [user?.user_id, startDate, endDate, granularity, selectedAssistant]);
+  }, [user?.api_key, startDate, endDate, granularity, selectedAssistant]);
 
   const setSectionLoading = useCallback((section: keyof typeof loading, value: boolean) => {
     setLoading((prev) => ({ ...prev, [section]: value }));
@@ -171,9 +172,9 @@ export default function AnalyticsPage() {
   }, [rankedServiceData]);
 
   const fetchAssistants = useCallback(async () => {
-    if (!user?.user_id) return;
+    if (!user?.api_key) return;
     try {
-      const { ok, json } = await callListAssistantsEndpoint({ userId: user.user_id });
+      const { ok, json } = await callListAssistantsEndpoint({});
 
       if (!ok) {
         throw new Error(
@@ -196,7 +197,7 @@ export default function AnalyticsPage() {
         description: "Assistant filter options are unavailable right now.",
       });
     }
-  }, [user?.user_id, toast]);
+  }, [user?.api_key, toast]);
 
   const fetchAllAnalytics = useCallback(async () => {
     if (!baseFilters) return;
@@ -294,15 +295,20 @@ export default function AnalyticsPage() {
     return DATE_PRESETS.some((p) => p.days === days) ? days : null;
   }, [startDate, endDate]);
 
-  const handleDownloadBillable = useCallback(() => {
-    if (!user?.user_id || !startDate || !endDate) return;
-    const query = new URLSearchParams({
-      user_id: user.user_id,
-      start_date: startDate.toISOString(),
-      end_date: endDate.toISOString(),
-    });
-    window.open(`${import.meta.env.VITE_BACKEND_URL}/api/assistant/platform-billable-minutes/download?${query.toString()}`, "_blank");
-  }, [user?.user_id, startDate, endDate]);
+  const handleDownloadBillable = useCallback(async () => {
+    if (!startDate || !endDate) return;
+    try {
+      const blob = await callDownloadPlatformBillableEndpoint({ startDate, endDate });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "platform_billable_minutes.xlsx";
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast(toastError({ error: (error as Error).message }, "Failed to download billable minutes"));
+    }
+  }, [startDate, endDate, toast]);
 
   useEffect(() => {
     fetchAssistants();
@@ -312,7 +318,7 @@ export default function AnalyticsPage() {
     fetchAllAnalytics();
   }, [fetchAllAnalytics]);
 
-  if (!user?.user_id) {
+  if (!user?.api_key) {
     return (
       <div className="page-shell flex items-center justify-center text-muted-foreground">
         Please sign in to view analytics.

@@ -110,13 +110,13 @@ export default function InboundContextPage() {
 
     // FIX: Removed internal selectedStrategy logic and dependencies to completely stop the infinite loop
     const fetchList = useCallback(async () => {
-        if (!user?.user_id) {
+        if (!user?.api_key) {
             setListLoading(false);
             return [] as StrategyItem[];
         }
         setListLoading(true);
         try {
-            const json = await callListStrategiesEndpoint(user.user_id);
+            const json = await callListStrategiesEndpoint();
             const list = condenseListStrategiesResponse(json);
             setStrategies(list);
             return list;
@@ -127,7 +127,7 @@ export default function InboundContextPage() {
         } finally {
             setListLoading(false);
         }
-    }, [user?.user_id, toast]); // <-- Safely removed selectedStrategy
+    }, [user?.api_key, toast]); // <-- Safely removed selectedStrategy
 
     useEffect(() => {
         fetchList();
@@ -158,7 +158,7 @@ export default function InboundContextPage() {
     }, [strategies, searchQuery]);
 
     const handleCreate = async () => {
-        if (!user?.user_id) return;
+        if (!user?.api_key) return;
         if (!modalForm.name.trim()) {
             toast({ variant: "destructive", title: "Validation Error", description: "Strategy name is required" });
             return;
@@ -181,7 +181,6 @@ export default function InboundContextPage() {
         setIsCreating(true);
         try {
             const payload = {
-                user_id: user.user_id,
                 name: modalForm.name.trim(),
                 type: "webhook",
                 strategy_config: {
@@ -210,7 +209,7 @@ export default function InboundContextPage() {
     };
 
     const handleUpdate = async () => {
-        if (!selectedStrategy || !user?.user_id) return;
+        if (!selectedStrategy || !user?.api_key) return;
         if (!updateForm.name.trim()) {
             toast({ variant: "destructive", title: "Validation Error", description: "Strategy name is required" });
             return;
@@ -247,7 +246,6 @@ export default function InboundContextPage() {
         setIsUpdating(true);
         try {
             const payload = {
-                user_id: user.user_id,
                 ...(nameChanged && { name: updateForm.name.trim() }),
                 ...(configPatch && { strategy_config: configPatch }),
             };
@@ -274,12 +272,11 @@ export default function InboundContextPage() {
     };
 
     const handleDelete = async () => {
-        if (!selectedStrategy || !user?.user_id) return;
+        if (!selectedStrategy || !user?.api_key) return;
 
         setIsDeleting(true);
         try {
             const { ok, json } = await callDeleteStrategyEndpoint({
-                userId: user.user_id,
                 strategyId: selectedStrategy.strategy_id,
             });
 

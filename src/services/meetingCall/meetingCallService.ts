@@ -1,6 +1,7 @@
 import { MeetingJoinResult } from "@/types/meetingCall";
 import { ServiceResponse } from "@/types/http";
 import { authedFetch } from "@/services/auth/authedFetch";
+import { readJson } from "@/lib/readJson";
 
 const MEETING_CALL_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/meeting-call`;
 
@@ -11,7 +12,6 @@ const MEETING_CALL_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/meeting-call`
  * actually appear in the meeting — this endpoint only dispatches them.
  */
 export async function callJoinMeetingEndpoint(payload: {
-  user_id: string;
   assistant_id: string;
   meeting_url: string;
   /** Defaults to `google_meet` on the backend; the only platform documented today. */
@@ -26,7 +26,7 @@ export async function callJoinMeetingEndpoint(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  return { ok: res.ok, json: await res.json() };
+  return { ok: res.ok, json: await readJson(res) };
 }
 
 const str = (node: Record<string, unknown>, key: string): string =>

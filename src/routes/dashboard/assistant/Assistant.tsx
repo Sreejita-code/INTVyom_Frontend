@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { Bot, Braces, Plus, Loader2, Save, Trash2, Mic, X, MessageSquare, ArrowLeft, Search } from "lucide-react";
+import { Bot, Braces, Clock, Plus, Loader2, Save, Trash2, Mic, X, MessageSquare, ArrowLeft, Search } from "lucide-react";
 
 import { CopyIdButton } from "@/components/common/CopyIdButton";
 
@@ -21,6 +21,7 @@ import {
   callDeleteAssistantEndpoint,
   callGetAssistantDetailsEndpoint,
   callUpdateAssistantEndpoint,
+  callValidateAssistantEndpoint,
   condenseAssistantDetailsResponse,
 } from "@/services/assistant/assistantService";
 import { callListToolsEndpoint, condenseListToolsResponse, callToggleToolAttachmentEndpoint } from "@/services/tool/toolService";
@@ -36,7 +37,8 @@ import { ChatInner } from "./AssistantChat";
 import { AssistantForm } from "./AssistantForm";
 import { useAssistantList } from "./useAssistantList";
 import { buildFormSnapshot, emptyForm } from "./constants";
-import { buildAssistantPayload, hydrateForm } from "./assistantConfig";
+import { buildAssistantPayload, endCallWebhookError, hydrateForm } from "./assistantConfig";
+import { BillableMinutesLookup } from "./BillableMinutesLookup";
 
 // --- LiveKit Imports ---
 import { LiveKitRoom, RoomAudioRenderer, VoiceAssistantControlBar } from "@livekit/components-react";
@@ -61,7 +63,7 @@ export default function AssistantPage() {
     setSearchQuery,
     lastElementRef,
     refresh: refreshList,
-  } = useAssistantList(user?.user_id);
+  } = useAssistantList(Boolean(user?.api_key));
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<"create" | "edit" | "empty">("empty");
@@ -95,24 +97,24 @@ export default function AssistantPage() {
   const isFormDirty = useMemo(() => buildFormSnapshot(formData) !== initialFormSnapshot, [formData, initialFormSnapshot]);
 
   const fetchTools = useCallback(async () => {
-    if (!user?.user_id) return;
+    if (!user?.api_key) return;
     try {
-      const { ok, json } = await callListToolsEndpoint(user.user_id);
+      const { ok, json } = await callListToolsEndpoint();
       if (ok) setAllTools(condenseListToolsResponse(json));
     } catch (error) {
       console.error(error);
     }
-  }, [user?.user_id]);
+  }, [user?.api_key]);
 
   const fetchAudios = useCallback(async () => {
-    if (!user?.user_id) return;
+    if (!user?.api_key) return;
     try {
-      const { ok, json } = await callListAudiosEndpoint({ userId: user.user_id, page: 1, limit: 100 });
+      const { ok, json } = await callListAudiosEndpoint({ page: 1, limit: 100 });
       if (ok) setAudioList(condenseListAudiosResponse(json));
     } catch (error) {
       console.error(error);
     }
-  }, [user?.user_id]);
+  }, [user?.api_key]);
 
   useEffect(() => {
     fetchTools();
@@ -138,11 +140,10 @@ export default function AssistantPage() {
   const testMetadata = metadataFrom(testRows, testRawJson, testUseRaw);
 
   const handleStartChat = async () => {
-    if (!user?.user_id || !selectedId) return;
+    if (!user?.api_key || !selectedId) return;
     setChatLoading(true);
     try {
       const json = await callGetWebCallTokenEndpoint({
-        userId: user.user_id,
         assistantId: selectedId,
         textOnly: true,
         metadata: testMetadata,
@@ -168,12 +169,11 @@ export default function AssistantPage() {
 
   // --- Web Call Actions ---
   const handleStartWebCall = async () => {
-    if (!user?.user_id || !selectedId) return;
+    if (!user?.api_key || !selectedId) return;
     setWebCallLoading(true);
     
     try {
       const json = await callGetWebCallTokenEndpoint({
-        userId: user.user_id,
         assistantId: selectedId,
         metadata: testMetadata,
       });
@@ -206,8 +206,8 @@ export default function AssistantPage() {
   };
 
   const handleSelectAssistant = async (id: string) => {
-    if (!user?.user_id) {
-      toast({ variant: "destructive", title: "Authentication Error", description: "User ID not found." });
+    if (!user?.api_key) {
+      toast({ variant: "destructive", title: "Not signed in", description: "Sign in again to open this assistant." });
       return;
     }
 
@@ -217,7 +217,7 @@ export default function AssistantPage() {
     setDetailLoading(true);
 
     try {
-      const { ok, json } = await callGetAssistantDetailsEndpoint({ userId: user.user_id, assistantId: id });
+      const { ok, json } = await callGetAssistantDetailsEndpoint({ assistantId: id });
       const d = condenseAssistantDetailsResponse(json) as Record<string, any> | null;
 
       if (!ok || !d) {
@@ -243,13 +243,13 @@ export default function AssistantPage() {
   const handleDeleteAssistant = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation(); 
 
-    if (!user?.user_id) return;
+    if (!user?.api_key) return;
     if (!window.confirm("Are you sure you want to delete this assistant? This action cannot be undone.")) return;
 
     setDeletingId(id);
 
     try {
-      await callDeleteAssistantEndpoint({ userId: user.user_id, assistantId: id });
+      await callDeleteAssistantEndpoint({ assistantId: id });
 
       toast({ title: "Assistant Deleted", description: "The assistant has been successfully removed." });
 
@@ -269,7 +269,7 @@ export default function AssistantPage() {
   };
 
   const handleSubmit = async () => {
-    if (!user?.user_id) return;
+    if (!user?.api_key) return;
 
     const name = formData.assistant_name.trim();
     const description = formData.assistant_description.trim();
@@ -295,12 +295,32 @@ export default function AssistantPage() {
       return;
     }
 
+    const webhookError = formData.assistant_end_call_url?.trim()
+      ? endCallWebhookError(formData.assistant_end_call_webhook)
+      : null;
+    if (webhookError) {
+      toast({ variant: "destructive", title: "Check the webhook delivery tuning", description: webhookError });
+      return;
+    }
+
     setSaving(true);
 
     try {
       const hasTools = (formData.assistant_end_call_enabled ?? false) || attachedToolIds.length > 0;
       const creating = mode === "create";
-      const payload = { user_id: user.user_id, ...buildAssistantPayload(formData, hasTools, { creating }) };
+      const payload = buildAssistantPayload(formData, hasTools, { creating });
+
+      // A dry run first, so a mode/provider mismatch comes back with the backend's reason and a
+      // suggestion. If the check itself cannot run, the save still goes ahead and is validated there.
+      const check = await callValidateAssistantEndpoint(payload).catch(() => null);
+      if (check && !check.valid) {
+        toast({
+          variant: "destructive",
+          title: "The backend would reject this configuration",
+          description: [check.message, ...check.suggestions].filter(Boolean).join(" "),
+        });
+        return;
+      }
 
       let json: unknown;
       if (creating) {
@@ -333,7 +353,7 @@ export default function AssistantPage() {
   // --- Developer snippets ---
   // Built from the same values the handlers above send, so the snippet cannot drift from the
   // request the page actually makes.
-  const saveAssistantSpec = (userId: string): RequestSpec => {
+  const saveAssistantSpec = (): RequestSpec => {
     const hasTools = (formData.assistant_end_call_enabled ?? false) || attachedToolIds.length > 0;
     // Same branch handleSubmit takes, so the snippet cannot show create while the app patches.
     const creating = mode === "create";
@@ -345,11 +365,11 @@ export default function AssistantPage() {
         : "Only the fields you send are merged; an explicit null clears one.",
       method: creating ? "POST" : "PATCH",
       path: creating ? "/api/assistant/create" : `/api/assistant/update/${selectedId}`,
-      body: { user_id: userId, ...buildAssistantPayload(formData, hasTools, { creating }) },
+      body: buildAssistantPayload(formData, hasTools, { creating }),
     };
   };
 
-  const webCallSpec = (userId: string): RequestSpec => {
+  const webCallSpec = (): RequestSpec => {
     const note =
       "Returns a LiveKit room token for the browser. Send text_only: true for a text chat instead of voice. Keys in metadata fill the prompt's {{placeholders}}.";
     const invalid = rawMetadataIsInvalid(testRawJson, testUseRaw);
@@ -360,7 +380,6 @@ export default function AssistantPage() {
       method: "POST",
       path: "/api/web-call/get-token",
       body: {
-        user_id: userId,
         assistant_id: selectedId || "<assistant_id>",
         ...(testMetadata ? { metadata: testMetadata } : {}),
       },
@@ -368,7 +387,7 @@ export default function AssistantPage() {
   };
 
   const handleToggleTool = async (toolId: string, attach: boolean) => {
-    if (!user?.user_id || !selectedId) return;
+    if (!user?.api_key || !selectedId) return;
 
     const originalIds = [...attachedToolIds];
 
@@ -376,7 +395,7 @@ export default function AssistantPage() {
     else setAttachedToolIds(prev => prev.filter(id => id !== toolId));
 
     try {
-      await callToggleToolAttachmentEndpoint({ userId: user.user_id, assistantId: selectedId, toolIds: [toolId], attach });
+      await callToggleToolAttachmentEndpoint({ assistantId: selectedId, toolIds: [toolId], attach });
       toast({ title: attach ? "Tool Attached" : "Tool Detached", description: `Successfully ${attach ? 'attached' : 'detached'} the tool.` });
     } catch (error: any) {
       setAttachedToolIds(originalIds);
@@ -582,6 +601,19 @@ export default function AssistantPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 shrink-0 md:ml-4">
+                  {mode === "edit" && selectedId && (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="ghost" className="text-muted-foreground">
+                          <Clock className="mr-2 h-4 w-4" />
+                          Minutes
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))]">
+                        <BillableMinutesLookup assistantId={selectedId} />
+                      </PopoverContent>
+                    </Popover>
+                  )}
                   {/* Test values for the prompt's {{placeholders}}. Only offered when the prompt has
                       any — otherwise there is nothing to fill and the button is noise. */}
                   {mode === "edit" && selectedId && testRows.length > 0 && (

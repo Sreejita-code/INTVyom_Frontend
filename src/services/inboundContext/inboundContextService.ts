@@ -1,14 +1,15 @@
 import { StrategyItem } from "@/types/inboundContext";
 import { ServiceResponse } from "@/types/http";
 import { authedFetch } from "@/services/auth/authedFetch";
+import { readJson } from "@/lib/readJson";
 
 const INBOUND_CONTEXT_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/inbound-context-strategy`;
 
-export async function callListStrategiesEndpoint(userId: string): Promise<unknown> {
-  const res = await authedFetch(`${INBOUND_CONTEXT_BASE}/list?user_id=${userId}`);
+export async function callListStrategiesEndpoint(): Promise<unknown> {
+  const res = await authedFetch(`${INBOUND_CONTEXT_BASE}/list`);
   // An error body condenses to [], which silently reads as "you have no strategies".
   if (!res.ok) throw new Error(`Failed to list strategies (${res.status})`);
-  return res.json();
+  return readJson(res);
 }
 
 export const condenseListStrategiesResponse = (json: unknown): StrategyItem[] => {
@@ -38,7 +39,7 @@ export async function callCreateStrategyEndpoint(payload: unknown): Promise<Serv
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  return { ok: res.ok, json: await res.json() };
+  return { ok: res.ok, json: await readJson(res) };
 }
 
 export async function callUpdateStrategyEndpoint(
@@ -50,15 +51,14 @@ export async function callUpdateStrategyEndpoint(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  return { ok: res.ok, json: await res.json() };
+  return { ok: res.ok, json: await readJson(res) };
 }
 
 export async function callDeleteStrategyEndpoint(args: {
-  userId: string;
   strategyId: string;
 }): Promise<ServiceResponse<unknown>> {
-  const res = await authedFetch(`${INBOUND_CONTEXT_BASE}/delete/${args.strategyId}?user_id=${args.userId}`, {
+  const res = await authedFetch(`${INBOUND_CONTEXT_BASE}/delete/${args.strategyId}`, {
     method: "DELETE",
   });
-  return { ok: res.ok, json: await res.json() };
+  return { ok: res.ok, json: await readJson(res) };
 }

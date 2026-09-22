@@ -81,7 +81,8 @@ export interface AssistantSttConfig {
   mode?: string;
   // deepgram
   enable_diarization?: boolean;
-  keyterm?: string;
+  /** One term, or a list; the backend accepts either. */
+  keyterm?: string | string[];
   // elevenlabs
   language_code?: string;
   no_verbatim?: boolean;
@@ -90,6 +91,15 @@ export interface AssistantSttConfig {
   prompt?: string;
   noise_reduction_type?: string;
   use_realtime?: boolean;
+}
+
+/**
+ * Delivery tuning for the end-call webhook. Upstream merges this object key by key, so a null (or
+ * omitted) value means "fall back to the server default" — 30s timeout, 3 attempts.
+ */
+export interface EndCallWebhookTuning {
+  timeout_seconds?: number | null;
+  attempts?: number | null;
 }
 
 export interface AssistantDetail {
@@ -121,14 +131,7 @@ export interface AssistantDetail {
   assistant_end_call_trigger_phrase?: string;
   assistant_end_call_agent_message?: string;
   assistant_end_call_url?: string;
-  /**
-   * Delivery tuning for the end-call webhook. Upstream merges this object key by key, so a null (or
-   * omitted) value means "fall back to the server default" — 30s timeout, 3 attempts.
-   */
-  assistant_end_call_webhook?: {
-    timeout_seconds?: number | null;
-    attempts?: number | null;
-  };
+  assistant_end_call_webhook?: EndCallWebhookTuning;
   assistant_greeting_audio?: {
     enabled: boolean;
     audio_id: string;

@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildAnalyticsQueryParams,
+  callDownloadPlatformBillableEndpoint,
   condenseAssistantBreakdownResponse,
   condenseDashboardMetricsResponse,
   condensePhoneBreakdownResponse,
@@ -9,12 +10,12 @@ import {
   condenseTimeSeriesResponse,
   getDefaultAnalyticsDateRange,
 } from "@/services/analytics/analyticsService";
+import { clearUser, storeUser } from "@/services/storage/storageService";
 
 describe("analytics utils", () => {
   it("builds query params with required and optional values", () => {
     const query = buildAnalyticsQueryParams(
       {
-        userId: "u1",
         startDate: new Date("2026-03-01T00:00:00.000Z"),
         endDate: new Date("2026-03-31T23:59:59.000Z"),
         granularity: "day",
@@ -23,7 +24,7 @@ describe("analytics utils", () => {
       { includeGranularity: true, includeAssistantId: true }
     );
 
-    expect(query.get("user_id")).toBe("u1");
+    expect(query.has("user_id")).toBe(false);
     expect(query.get("start_date")).toBe("2026-03-01T00:00:00.000Z");
     expect(query.get("end_date")).toBe("2026-03-31T23:59:59.000Z");
     expect(query.get("granularity")).toBe("day");
@@ -142,5 +143,45 @@ describe("analytics utils", () => {
     });
 
     expect(normalized.avgDurationMinutes).toBe(0);
+  });
+});
+
+describe("platform billable minutes download", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    storeUser({ user_id: "u1", user_name: "A", api_key: "key-123" });
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    clearUser();
+    vi.unstubAllGlobals();
+  });
+
+  const range = {
+    startDate: new Date("2026-09-01T00:00:00.000Z"),
+    endDate: new Date("2026-09-22T23:59:59.000Z"),
+  };
+
+  it("requests the spreadsheet with the bearer key and the date window", async () => {
+    fetchMock.mockResolvedValue(new Response("xlsx", { status: 200 }));
+
+    const blob = await callDownloadPlatformBillableEndpoint(range);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    const query = new URL(String(url)).searchParams;
+    expect(String(url)).toContain("/api/assistant/platform-billable-minutes/download?");
+    expect(query.get("start_date")).toBe("2026-09-01T00:00:00.000Z");
+    expect(query.get("end_date")).toBe("2026-09-22T23:59:59.000Z");
+    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer key-123");
+    expect(blob.size).toBe(4);
+  });
+
+  it("throws the backend's error message on failure", async () => {
+    fetchMock.mockResolvedValue(Response.json({ error: "Invalid date range" }, { status: 400 }));
+
+    await expect(callDownloadPlatformBillableEndpoint(range)).rejects.toThrow("Invalid date range");
   });
 });

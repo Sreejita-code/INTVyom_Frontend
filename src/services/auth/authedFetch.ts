@@ -8,33 +8,22 @@
  */
 import { clearUser, getStoredUser } from "@/services/storage/storageService";
 
-export function getStoredApiKey(): string | null {
-  const key = getStoredUser()?.api_key;
-  return typeof key === "string" && key.length > 0 ? key : null;
-}
-
-const withAuthHeader = (init: RequestInit | undefined, key: string | null): Headers => {
-  const headers = new Headers(init?.headers);
-  // Never overwrite an explicit header; the caller may be targeting an unauthenticated route.
-  if (key && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${key}`);
-  return headers;
-};
-
 let redirecting = false;
 
 /** An invalid or expired key: drop the session and send the user back to the login screen. */
 function handleUnauthorized() {
-  if (typeof window === "undefined") return;
   clearUser();
-  if (redirecting) return;
-  // Already on the login screen — redirecting again would loop.
-  if (window.location.pathname === "/auth") return;
+  if (redirecting || window.location.pathname === "/auth") return;
   redirecting = true;
   window.location.assign("/auth");
 }
 
 export async function authedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const res = await fetch(input, { ...init, headers: withAuthHeader(init, getStoredApiKey()) });
+  const headers = new Headers(init?.headers);
+  const key = getStoredUser()?.api_key;
+  if (key) headers.set("Authorization", `Bearer ${key}`);
+
+  const res = await fetch(input, { ...init, headers });
   if (res.status === 401) handleUnauthorized();
   return res;
 }

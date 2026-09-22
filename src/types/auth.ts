@@ -19,16 +19,3 @@ export interface AuthSignupPayload extends AuthLoginPayload {
   org_name: string;
   user_email: string;
 }
-
-/** The `user` object `POST /api/auth/login` and `/signup` return. */
-export interface AuthResponseUser {
-  id: string;
-  user_name: string;
-  user_email?: string;
-  api_key?: string | null;
-}
-
-export interface AuthResponse {
-  message?: string;
-  user: AuthResponseUser;
-}

@@ -174,23 +174,26 @@ export const OPENAI_REALTIME_MODELS: FieldOption[] = [
 /**
  * Gemini Live models for Realtime mode. Mirrors the backend's `GEMINI_LIVE_MODELS`.
  * `gemini-live-2.5-flash-native-audio` is the Vertex AI id and is rejected upstream, so it is
- * deliberately absent. `gemini-3.8-live` is the default.
+ * deliberately absent.
  */
+export const GEMINI_DEFAULT_MODEL = "gemini-3.8-live";
+export const GEMINI_DEFAULT_VOICE = "Puck";
+
 export const GEMINI_LIVE_MODELS: FieldOption[] = [
   {
-    value: "gemini-3.8-live",
-    label: "gemini-3.8-live",
-    hint: "Default. Recommended — supports farewells and silence reprompts.",
+    value: GEMINI_DEFAULT_MODEL,
+    label: GEMINI_DEFAULT_MODEL,
+    hint: "Default. Low latency, and every feature works: greeting, farewell, silence reprompts.",
   },
   {
     value: "gemini-3.8-live-extended-thinking",
     label: "gemini-3.8-live-extended-thinking",
-    hint: "Deliberates longer before speaking.",
+    hint: "Reasons before it speaks, so the first word is slower. For complex multi-step agents.",
   },
   {
     value: "gemini-3.1-flash-live-preview",
     label: "gemini-3.1-flash-live-preview",
-    hint: "Preview model — ignores farewells & silence reprompts after 1st turn.",
+    hint: "Preview model.",
   },
   {
     value: "gemini-2.5-flash-native-audio-preview-12-2025",
@@ -198,6 +201,9 @@ export const GEMINI_LIVE_MODELS: FieldOption[] = [
     hint: "Previous generation.",
   },
 ];
+
+export const isGeminiModel = (model?: string): boolean =>
+  GEMINI_LIVE_MODELS.some((m) => m.value === model);
 
 /**
  * The 30 Gemini Live voice roster names — the installed plugin's closed set, mirrored from the
@@ -415,7 +421,7 @@ export const STT_PROVIDERS: ProviderSpec[] = [
         control: "select",
         fallback: "saaras:v3",
         options: [
-          { value: "saaras:v3", label: "saaras:v3", hint: "Default. The only model that reads transcription mode." },
+          { value: "saaras:v3", label: "saaras:v3", hint: "Default." },
           { value: "saaras:v4", label: "saaras:v4", hint: "Newer model. Saaras v2.5 and Saarika v2.5 were sunset by Sarvam." },
         ],
         help: "Which Saras model transcribes the caller.",
@@ -445,7 +451,6 @@ export const STT_PROVIDERS: ProviderSpec[] = [
           { value: "translit", label: "translit", hint: "Romanized: \"mera phone number hai 9840950950\"." },
         ],
         help: "The shape of the transcript your webhooks and call logs receive. It does not change what the assistant understands, only how the text is written down.",
-        warn: "Read on saaras:v3 only. Other Saras models reject it outright, so it is dropped before the call rather than sent — they transcribe on their own default style.",
       },
     ],
   },
@@ -520,7 +525,7 @@ export const STT_PROVIDERS: ProviderSpec[] = [
         control: "text",
         placeholder: "e.g. invoice",
         help: "Biases recognition toward a term the model keeps getting wrong — a product name, a surname.",
-        warn: "Read on nova-3 and flux only. A legacy nova-2 assistant ignores it.",
+        warn: "Read on nova-3 and flux only.",
         advanced: true,
       },
     ],
@@ -651,13 +656,7 @@ export const sttInertReason = (
   const fallback = findProvider(STT_PROVIDERS, provider)?.fields.find((f) => f.key === "model")?.fallback;
   const model = String(config.model ?? fallback ?? "");
 
-  if (provider === "sarvam" && key === "mode" && model !== "saaras:v3") {
-    return `Only saaras:v3 reads transcription style. ${model} rejects it, so it is dropped before the call.`;
-  }
   if (provider === "deepgram") {
-    if (key === "keyterm" && model === "nova-2") {
-      return "nova-2 uses a different keyword mechanism and ignores this.";
-    }
     if (key === "enable_diarization" && model.startsWith("flux")) {
       return "Flux models drop speaker labels — switch to a nova model to use them.";
     }
@@ -673,6 +672,14 @@ export const sttInertReason = (
   return undefined;
 };
 
+/** The model ids a transcriber accepts, read from its catalog entry so the two cannot drift. */
+const sttModelIds = (provider: string): string[] =>
+  findProvider(STT_PROVIDERS, provider)?.fields.find((f) => f.key === "model")?.options?.map((o) => o.value) ?? [];
+
+/** Deepgram takes any BCP-47 tag (`en-US`, `sw-KE`); OpenAI takes a bare ISO 639-1 code (`en`). */
+const BCP47_CODE = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})+$|^[a-z]{2}$/;
+const ISO_639_1_CODE = /^[a-z]{2}$/;
+
 /**
  * Gets validation error for STT provider/model compatibility
  */
@@ -683,7 +690,7 @@ export const getSttModelError = (
 ): string | null => {
   // Validate Sarvam model/language compatibility
   if (provider === "sarvam") {
-    const validModels = ["saaras:v3", "saaras:v4"];
+    const validModels = sttModelIds(provider);
     if (!validModels.includes(model)) {
       return `Invalid Sarvam model "${model}". Valid models: ${validModels.join(", ")}.`;
     }
@@ -700,16 +707,12 @@ export const getSttModelError = (
     if (!validModes.includes(mode)) {
       return `Invalid Sarvam transcription mode "${mode}". Valid modes: ${validModes.join(", ")}.`;
     }
-    
-    // Mode restrictions per model
-    if (model !== "saaras:v3" && mode !== "codemix") {
-      return `Sarvam model "${model}" only supports "codemix" transcription mode.`;
-    }
+
   }
   
   // Validate Cartesia model/language compatibility
   if (provider === "cartesia") {
-    const validModels = ["ink-whisper", "ink-2"];
+    const validModels = sttModelIds(provider);
     if (!validModels.includes(model)) {
       return `Invalid Cartesia model "${model}". Valid models: ${validModels.join(", ")}.`;
     }
@@ -726,20 +729,20 @@ export const getSttModelError = (
   
   // Validate Deepgram model compatibility
   if (provider === "deepgram") {
-    const validModels = ["nova-3", "nova-3-general", "nova-3-multilingual", "flux-general-en", "flux-general-multi"];
+    const validModels = sttModelIds(provider);
     if (!validModels.includes(model)) {
       return `Invalid Deepgram model "${model}". Valid models: ${validModels.join(", ")}.`;
     }
     
     const language = config.language as string;
-    if (language && language !== "multi" && !BCP47_LANGUAGES.includes(language as any)) {
+    if (language && language !== "multi" && !BCP47_CODE.test(language)) {
       return `Invalid Deepgram language code "${language}". Use BCP-47 codes or "multi" for auto-detect.`;
     }
   }
   
   // Validate ElevenLabs model/language compatibility
   if (provider === "elevenlabs") {
-    const validModels = ["scribe_v2_realtime", "scribe_v2", "scribe_v1"];
+    const validModels = sttModelIds(provider);
     if (!validModels.includes(model)) {
       return `Invalid ElevenLabs model "${model}". Valid models: ${validModels.join(", ")}.`;
     }
@@ -752,13 +755,13 @@ export const getSttModelError = (
   
   // Validate OpenAI model compatibility
   if (provider === "openai") {
-    const validModels = ["gpt-4o-mini-transcribe", "gpt-4o-transcribe", "whisper-1"];
+    const validModels = sttModelIds(provider);
     if (!validModels.includes(model)) {
       return `Invalid OpenAI model "${model}". Valid models: ${validModels.join(", ")}.`;
     }
     
     const language = config.language as string;
-    if (language && !OPENAI_STT_LANGUAGES.includes(language as any)) {
+    if (language && !ISO_639_1_CODE.test(language)) {
       return `Invalid OpenAI language code "${language}". Use ISO 639-1 codes.`;
     }
   }
@@ -767,8 +770,9 @@ export const getSttModelError = (
 };
 
 // --- TTS ----------------------------------------------------------------------------------
-// No model-dependent dead knobs here yet: the one provider with a model select (ElevenLabs) reads
-// every field on every model. If that changes, this is where a `ttsInertReason` goes.
+
+/** ElevenLabs models with no speed control; a stored `speed` is dropped before the call. */
+export const ELEVENLABS_MODELS_WITHOUT_SPEED = ["eleven_v3", "eleven_v3_conversational"];
 
 export const SARVAM_BULBUL_V3_SPEAKERS = [
   "aayan", "aditya", "advait", "amelia", "amit", "ashutosh", "dev", "ishita",
@@ -784,7 +788,7 @@ export const ttsInertReason = (
 ): string | undefined => {
   if (provider === "elevenlabs" && key === "speed") {
     const model = String(config.model ?? "eleven_v3");
-    if (model === "eleven_v3" || model === "eleven_v3_conversational") {
+    if (ELEVENLABS_MODELS_WITHOUT_SPEED.includes(model)) {
       return `${model} has no speed control. Switch to eleven_multilingual_v2, eleven_turbo_v2_5, or eleven_flash_v2_5 to adjust speed.`;
     }
   }

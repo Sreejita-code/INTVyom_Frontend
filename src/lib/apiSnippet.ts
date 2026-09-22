@@ -1,8 +1,8 @@
 /**
  * Renders a backend request as a copyable snippet in cURL, Python, or Node.
  *
- * Pure by design: the base URL is passed in, never read from `import.meta.env` here, and the
- * caller decides whether `user_id` carries the real identifier or a `$VYOM_USER_ID` placeholder.
+ * Pure by design: the base URL and the key are passed in, never read from `import.meta.env` or
+ * storage here, so the caller decides whether the real key or `$VYOM_API_KEY` is printed.
  */
 
 export type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
@@ -24,15 +24,9 @@ export interface RequestSpec {
 
 export interface SnippetOptions {
   baseUrl: string;
-  /**
-   * The key printed in the `Authorization: Bearer` header. Omit it for an unauthenticated request;
-   * pass `API_KEY_PLACEHOLDER` (or the real key) otherwise.
-   */
+  /** Printed as `Authorization: Bearer <apiKey>`; omitted for an unauthenticated request. */
   apiKey?: string;
 }
-
-/** The placeholder every snippet shows in place of the signed-in user's identifier. */
-export const USER_ID_PLACEHOLDER = "$VYOM_USER_ID";
 
 /** The placeholder every snippet shows in place of the signed-in user's API key. */
 export const API_KEY_PLACEHOLDER = "$VYOM_API_KEY";
@@ -71,10 +65,23 @@ const indentRest = (text: string, pad: string) => text.split("\n").join(`\n${pad
 /** `'` cannot appear inside a single-quoted shell string; close, escape, reopen. */
 const shellQuote = (text: string) => `'${text.replace(/'/g, "'\\''")}'`;
 
+/** The request headers as `[name, value]` pairs, shared by every renderer. */
+function headerEntries(spec: RequestSpec, options: SnippetOptions): [string, string][] {
+  const entries: [string, string][] = [];
+  if (hasBody(spec)) entries.push(["Content-Type", "application/json"]);
+  if (options.apiKey) entries.push(["Authorization", `Bearer ${options.apiKey}`]);
+  return entries;
+}
+
+/** The headers as a JSON-style object literal, or `null` when the request carries none. */
+function headerObject(spec: RequestSpec, options: SnippetOptions, pad: string): string | null {
+  const entries = headerEntries(spec, options).map(([name, value]) => `"${name}": "${value}"`);
+  return entries.length > 0 ? `{${pad}${entries.join(", ")}${pad}}` : null;
+}
+
 export function renderCurl(spec: RequestSpec, options: SnippetOptions): string {
   const lines = [`curl -X ${spec.method} "${buildRequestUrl(spec, options)}"`];
-  if (hasBody(spec)) lines.push(`  -H "Content-Type: application/json"`);
-  if (options.apiKey) lines.push(`  -H "Authorization: Bearer ${options.apiKey}"`);
+  for (const [name, value] of headerEntries(spec, options)) lines.push(`  -H "${name}: ${value}"`);
   if (hasBody(spec)) lines.push(`  -d ${shellQuote(jsonBody(spec))}`);
   return lines.join(" \\\n");
 }
@@ -113,14 +120,6 @@ function pythonParams(spec: RequestSpec): string | null {
   return `{${body}}`;
 }
 
-/** The `headers=` dict for `requests`, or `null` when the request carries none. */
-function pythonHeaders(spec: RequestSpec, options: SnippetOptions): string | null {
-  const entries: string[] = [];
-  if (hasBody(spec)) entries.push(`"Content-Type": "application/json"`);
-  if (options.apiKey) entries.push(`"Authorization": "Bearer ${options.apiKey}"`);
-  return entries.length > 0 ? `{${entries.join(", ")}}` : null;
-}
-
 export function renderPython(spec: RequestSpec, options: SnippetOptions): string {
   const call = spec.method.toLowerCase();
   const params = pythonParams(spec);
@@ -129,7 +128,7 @@ export function renderPython(spec: RequestSpec, options: SnippetOptions): string
   const url = params ? `${originOf(options)}${spec.path}` : buildRequestUrl(spec, options);
   const args = [`    "${url}"`];
   if (params) args.push(`    params=${params}`);
-  const headers = pythonHeaders(spec, options);
+  const headers = headerObject(spec, options, "");
   if (headers) args.push(`    headers=${headers}`);
   if (hasBody(spec)) {
     args.push(`    json=${pythonLiteral(wireBody(spec), "    ")}`);
@@ -145,17 +144,9 @@ export function renderPython(spec: RequestSpec, options: SnippetOptions): string
   ].join("\n");
 }
 
-/** The `headers` object literal for `fetch`, or `null` when the request carries none. */
-function nodeHeaders(spec: RequestSpec, options: SnippetOptions): string | null {
-  const entries: string[] = [];
-  if (hasBody(spec)) entries.push(`"Content-Type": "application/json"`);
-  if (options.apiKey) entries.push(`"Authorization": "Bearer ${options.apiKey}"`);
-  return entries.length > 0 ? `{ ${entries.join(", ")} }` : null;
-}
-
 export function renderNode(spec: RequestSpec, options: SnippetOptions): string {
   const init = [`  method: "${spec.method}"`];
-  const headers = nodeHeaders(spec, options);
+  const headers = headerObject(spec, options, " ");
   if (headers) init.push(`  headers: ${headers}`);
   if (hasBody(spec)) {
     init.push(`  body: JSON.stringify(${indentRest(jsonBody(spec), "  ")})`);

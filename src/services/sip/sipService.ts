@@ -1,12 +1,13 @@
 import { TrunkItem } from "@/types/sip";
 import { ServiceResponse } from "@/types/http";
 import { authedFetch } from "@/services/auth/authedFetch";
+import { readJson } from "@/lib/readJson";
 
 const SIP_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/sip`;
 
-export async function callListTrunksEndpoint(userId: string): Promise<ServiceResponse<unknown>> {
-  const res = await authedFetch(`${SIP_BASE}/list?user_id=${userId}`);
-  return { ok: res.ok, json: await res.json() };
+export async function callListTrunksEndpoint(): Promise<ServiceResponse<unknown>> {
+  const res = await authedFetch(`${SIP_BASE}/list`);
+  return { ok: res.ok, json: await readJson(res) };
 }
 
 export const condenseListTrunksResponse = (json: unknown): TrunkItem[] => {
@@ -17,12 +18,11 @@ export const condenseListTrunksResponse = (json: unknown): TrunkItem[] => {
 };
 
 export async function callGetTrunkDetailsEndpoint(args: {
-  userId: string;
   trunkId: string;
 }): Promise<unknown> {
-  const res = await authedFetch(`${SIP_BASE}/details/${args.trunkId}?user_id=${args.userId}`);
+  const res = await authedFetch(`${SIP_BASE}/details/${args.trunkId}`);
   if (!res.ok) throw new Error("Details route not found or failed");
-  return res.json();
+  return readJson(res);
 }
 
 export const condenseTrunkDetailsResponse = (json: unknown): unknown => {
@@ -37,17 +37,12 @@ export async function callCreateOutboundTrunkEndpoint(payload: unknown): Promise
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  return { ok: res.ok, json: await res.json() };
+  return { ok: res.ok, json: await readJson(res) };
 }
 
 export async function callDeleteTrunkEndpoint(args: {
-  userId: string;
   trunkId: string;
 }): Promise<ServiceResponse<unknown>> {
-  const res = await authedFetch(`${SIP_BASE}/delete/${args.trunkId}`, {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ user_id: args.userId }),
-  });
-  return { ok: res.ok, json: await res.json() };
+  const res = await authedFetch(`${SIP_BASE}/delete/${args.trunkId}`, { method: "DELETE" });
+  return { ok: res.ok, json: await readJson(res) };
 }

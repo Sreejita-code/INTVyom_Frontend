@@ -30,3 +30,6 @@ dist-ssr
 
 # Driver screenshots (.agents/skills/run-intvyom-frontend)
 .artifacts
+
+# TypeScript incremental build state
+*.tsbuildinfo

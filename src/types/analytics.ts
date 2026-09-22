@@ -1,7 +1,6 @@
 export type AnalyticsGranularity = "hour" | "day" | "week" | "month";
 
 export interface AnalyticsFilters {
-  userId: string;
   startDate: Date;
   endDate: Date;
   assistantId?: string;

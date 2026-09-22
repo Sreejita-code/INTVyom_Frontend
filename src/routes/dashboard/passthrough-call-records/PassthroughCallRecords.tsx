@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { endOfDay, startOfDay } from "date-fns";
 import {
     Loader2, Filter, Calendar as CalendarIcon,
     Search, PhoneOff, Clock, ChevronLeft, ChevronRight, Play
@@ -93,6 +94,15 @@ function CallMetadataCell({ metadata }: { metadata: unknown }) {
     );
 }
 
+interface RecordFilters {
+    filterNumber: string;
+    filterStatus: string;
+    startDate?: Date;
+    endDate?: Date;
+}
+
+const NO_FILTERS: RecordFilters = { filterNumber: "", filterStatus: "all" };
+
 export default function PassthroughCallRecordsPage() {
     const [selectedRecording, setSelectedRecording] = useState<string | null>(null);
     const user = getStoredUser();
@@ -104,60 +114,54 @@ export default function PassthroughCallRecordsPage() {
     const [filterStatus, setFilterStatus] = useState("all");
     const [startDate, setStartDate] = useState<Date>();
     const [endDate, setEndDate] = useState<Date>();
-    const [offset, setOffset] = useState(0);
-    const [limit] = useState(10);
-    const [hasMore, setHasMore] = useState(false);
+    const [page, setPage] = useState(1);
+    const [applied, setApplied] = useState<RecordFilters>(NO_FILTERS);
+    const limit = 10;
     const [totalRecords, setTotalRecords] = useState(0);
 
-    const fetchRecords = useCallback(async (resetOffset = false) => {
-        if (!user?.user_id) return;
-        const currentOffset = resetOffset ? 0 : offset;
-        if (resetOffset) setOffset(0);
+    const fetchRecords = useCallback(async (targetPage: number, filters: RecordFilters = applied) => {
+        if (!user?.api_key) return;
 
         setLoading(true);
         try {
-            const params = new URLSearchParams({
-                user_id: user.user_id,
-                limit: limit.toString(),
-                offset: currentOffset.toString(),
+            const json = await callCallRecordsEndpoint({
+                page: targetPage,
+                limit,
+                toNumber: filters.filterNumber.trim() || undefined,
+                callStatus: filters.filterStatus !== "all" ? filters.filterStatus : undefined,
+                startDate: filters.startDate && startOfDay(filters.startDate),
+                endDate: filters.endDate && endOfDay(filters.endDate),
             });
-            if (filterNumber.trim()) params.set("to_number", filterNumber.trim());
-            if (filterStatus && filterStatus !== "all") params.set("call_status", filterStatus);
-            if (startDate) {
-                const d = new Date(startDate); d.setHours(0, 0, 0, 0);
-                params.set("start_date", d.toISOString());
-            }
-            if (endDate) {
-                const d = new Date(endDate); d.setHours(23, 59, 59, 999);
-                params.set("end_date", d.toISOString());
-            }
-
-            const json = await callCallRecordsEndpoint(params);
             const { records, total } = condenseCallRecordsResponse(json);
             setRecords(records);
             setTotalRecords(total);
-            setHasMore(currentOffset + limit < total);
-        } catch (e: any) {
-            toast({ variant: "destructive", title: "Error", description: e.message });
+            setPage(targetPage);
+        } catch (e) {
+            toast({ variant: "destructive", title: "Error", description: (e as Error).message });
             setRecords([]);
         } finally {
             setLoading(false);
         }
-    }, [user?.user_id, offset, limit, filterNumber, filterStatus, startDate, endDate, toast]);
+    }, [user?.api_key, applied, toast]);
 
-    useEffect(() => { fetchRecords(); }, []);
+    useEffect(() => { fetchRecords(1); }, []);
 
-    const handleApplyFilters = () => fetchRecords(true);
+    const handleApplyFilters = () => {
+        const filters = { filterNumber, filterStatus, startDate, endDate };
+        setApplied(filters);
+        fetchRecords(1, filters);
+    };
 
     const handleClear = () => {
         setFilterNumber("");
         setFilterStatus("all");
         setStartDate(undefined);
         setEndDate(undefined);
-        setTimeout(() => fetchRecords(true), 0);
+        setApplied(NO_FILTERS);
+        fetchRecords(1, NO_FILTERS);
     };
 
-    const page = Math.floor(offset / limit) + 1;
+    const offset = (page - 1) * limit;
     const totalPages = Math.ceil(totalRecords / limit) || 1;
 
     return (
@@ -345,16 +349,16 @@ export default function PassthroughCallRecordsPage() {
                             <div className="flex items-center gap-2">
                                 <Button
                                     variant="outline" size="sm"
-                                    onClick={() => setOffset(o => Math.max(0, o - limit))}
-                                    disabled={offset === 0 || loading}
+                                    onClick={() => fetchRecords(page - 1)}
+                                    disabled={page === 1 || loading}
                                 >
                                     <ChevronLeft className="h-4 w-4" />
                                 </Button>
                                 <span className="text-sm font-medium px-2">Page {page} of {totalPages}</span>
                                 <Button
                                     variant="outline" size="sm"
-                                    onClick={() => setOffset(o => o + limit)}
-                                    disabled={!hasMore || loading}
+                                    onClick={() => fetchRecords(page + 1)}
+                                    disabled={page >= totalPages || loading}
                                 >
                                     <ChevronRight className="h-4 w-4" />
                                 </Button>

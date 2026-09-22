@@ -12,10 +12,11 @@ const mockAnalytics = {
   getCallsByTime: vi.fn(),
   getCallsByService: vi.fn(),
   getPlatformBillableMinutes: vi.fn(),
+  callDownloadPlatformBillableEndpoint: vi.fn(),
 };
 
 vi.mock("@/services/storage/storageService", () => ({
-  getStoredUser: () => ({ user_id: "user-1", user_name: "Demo User" }),
+  getStoredUser: () => ({ user_id: "user-1", user_name: "Demo User", api_key: "key-1" }),
 }));
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -33,6 +34,8 @@ vi.mock("@/services/analytics/analyticsService", () => ({
   getCallsByTime: (...args: unknown[]) => mockAnalytics.getCallsByTime(...args),
   getCallsByService: (...args: unknown[]) => mockAnalytics.getCallsByService(...args),
   getPlatformBillableMinutes: (...args: unknown[]) => mockAnalytics.getPlatformBillableMinutes(...args),
+  callDownloadPlatformBillableEndpoint: (...args: unknown[]) =>
+    mockAnalytics.callDownloadPlatformBillableEndpoint(...args),
 }));
 
 describe("Analytics page", () => {
@@ -170,5 +173,41 @@ describe("Analytics page", () => {
     await waitFor(() => {
       expect(mockAnalytics.getDashboardMetrics).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it("downloads the billable spreadsheet through the authenticated service", async () => {
+    const blob = new Blob(["xlsx"]);
+    mockAnalytics.callDownloadPlatformBillableEndpoint.mockResolvedValue(blob);
+    const createObjectURL = vi.fn().mockReturnValue("blob:sheet");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL, revokeObjectURL }));
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const open = vi.spyOn(window, "open");
+
+    render(<AnalyticsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /download excel/i }));
+
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    expect(mockAnalytics.callDownloadPlatformBillableEndpoint).toHaveBeenCalledWith({
+      startDate: new Date("2026-02-27T00:00:00.000Z"),
+      endDate: new Date("2026-03-29T12:00:00.000Z"),
+    });
+    expect(createObjectURL).toHaveBeenCalledWith(blob);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:sheet");
+    expect(open).not.toHaveBeenCalled();
+    click.mockRestore();
+  });
+
+  it("shows the backend error when the download fails", async () => {
+    mockAnalytics.callDownloadPlatformBillableEndpoint.mockRejectedValue(new Error("Invalid date range"));
+
+    render(<AnalyticsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: /download excel/i }));
+
+    await waitFor(() =>
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ variant: "destructive", description: "Invalid date range" }),
+      ),
+    );
   });
 });

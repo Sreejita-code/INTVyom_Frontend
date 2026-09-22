@@ -10,7 +10,7 @@ vi.mock("@/services/storage/storageService", () => ({
   },
 }));
 
-import { authedFetch, getStoredApiKey } from "@/services/auth/authedFetch";
+import { authedFetch } from "@/services/auth/authedFetch";
 
 const storedUser = (overrides: Record<string, unknown> = {}) =>
   JSON.stringify({ user_id: "u1", user_name: "A", api_key: "key-123", ...overrides });
@@ -41,13 +41,6 @@ describe("authedFetch", () => {
     expect(headersOf(fetchMock.mock.calls[0]).get("Authorization")).toBe("Bearer key-123");
   });
 
-  it("keeps a caller's explicit Authorization header", async () => {
-    fetchMock.mockResolvedValue({ status: 200, ok: true });
-
-    await authedFetch("http://backend/api/x", { headers: { Authorization: "Bearer other" } });
-
-    expect(headersOf(fetchMock.mock.calls[0]).get("Authorization")).toBe("Bearer other");
-  });
 
   it("sends no header when the account has no key", async () => {
     store.current = storedUser({ api_key: null });
@@ -74,10 +67,5 @@ describe("authedFetch", () => {
     await authedFetch("http://backend/api/auth/login");
 
     expect(assign).not.toHaveBeenCalled();
-  });
-
-  it("getStoredApiKey is null when the key is absent", () => {
-    store.current = storedUser({ api_key: undefined });
-    expect(getStoredApiKey()).toBeNull();
   });
 });

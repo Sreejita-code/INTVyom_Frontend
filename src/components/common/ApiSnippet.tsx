@@ -22,18 +22,14 @@ import {
   SNIPPET_LANGUAGES,
   SNIPPET_LANGUAGE_LABELS,
   SnippetLanguage,
-  USER_ID_PLACEHOLDER,
   buildRequestUrl,
   renderSnippet,
 } from "@/lib/apiSnippet";
 import { getStoredUser } from "@/services/storage/storageService";
 
 interface ApiSnippetButtonProps extends Pick<ButtonProps, "variant" | "size" | "className"> {
-  /**
-   * Builds the request from the values currently on screen. Receives the identifier to print as
-   * `user_id` — either the placeholder or, once the user reveals it, their real one.
-   */
-  buildSpec: (userId: string) => RequestSpec;
+  /** Builds the request from the values currently on screen. */
+  buildSpec: () => RequestSpec;
   /** Tooltip and accessible name for the trigger. */
   label?: string;
   children?: ReactNode;
@@ -67,9 +63,7 @@ export const ApiSnippetButton = ({
 
   // Only built while the sheet is open: the builders do real work (assistant payloads run the
   // provider validation), so calling one on every keystroke of a form would be wasteful and noisy.
-  const spec = open
-    ? buildSpec(revealSecrets && user?.user_id ? user.user_id : USER_ID_PLACEHOLDER)
-    : null;
+  const spec = open ? buildSpec() : null;
 
   const options = {
     baseUrl: backendUrl(),
@@ -186,19 +180,29 @@ export const ApiSnippetButton = ({
         <div className="border-t border-border p-4 md:p-6 space-y-2">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-sm text-foreground">Show my real credentials</p>
+              <p className="text-sm text-foreground">Show my real API key</p>
               <p className="text-xs text-muted-foreground break-words">
-                Off, the snippet prints <code className="font-mono">{API_KEY_PLACEHOLDER}</code> in
-                the <code className="font-mono">Authorization</code> header and{" "}
-                <code className="font-mono">{USER_ID_PLACEHOLDER}</code> in the body. Your API key is
-                a credential — keep it out of anything you share.
+                {!user?.api_key ? (
+                  "No API key is stored for this session, so the snippet keeps the placeholder."
+                ) : revealSecrets ? (
+                  <span className="text-destructive">
+                    The snippet now contains your real API key. Anyone who sees it can act as you — do
+                    not paste it anywhere shared.
+                  </span>
+                ) : (
+                  <>
+                    Off, the <code className="font-mono">Authorization</code> header prints{" "}
+                    <code className="font-mono">{API_KEY_PLACEHOLDER}</code>. Set that variable in your
+                    shell, or turn this on to copy a runnable request.
+                  </>
+                )}
               </p>
             </div>
             <Switch
               checked={revealSecrets}
               onCheckedChange={setRevealSecrets}
-              disabled={!user?.api_key && !user?.user_id}
-              aria-label="Show my real credentials"
+              disabled={!user?.api_key}
+              aria-label="Show my real API key"
             />
           </div>
         </div>

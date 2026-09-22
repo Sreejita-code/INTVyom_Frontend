@@ -118,6 +118,8 @@ const CallControls: React.FC<CallControlsProps> = ({ isMuted, setIsMuted, onHang
     );
 };
 
+const QUEUE_POLL_MAX_FAILURES = 5;
+
 export default function MakeCallPage() {
     const user = getStoredUser();
     const { toast } = useToast();
@@ -174,10 +176,10 @@ export default function MakeCallPage() {
 
     useEffect(() => {
         const fetchTrunks = async () => {
-            if (!user?.user_id) return;
+            if (!user?.api_key) return;
             setTrunksLoading(true);
             try {
-                const { ok, json } = await callListTrunksEndpoint(user.user_id);
+                const { ok, json } = await callListTrunksEndpoint();
                 if (ok) {
                     setAllTrunks(condenseListTrunksResponse(json));
                 }
@@ -189,10 +191,10 @@ export default function MakeCallPage() {
         };
 
         const fetchAssistants = async () => {
-            if (!user?.user_id) return;
+            if (!user?.api_key) return;
             setAssistantsLoading(true);
             try {
-                const { ok, json } = await callListAssistantsEndpoint({ userId: user.user_id, limit: 100 });
+                const { ok, json } = await callListAssistantsEndpoint({ limit: 100 });
                 if (ok) {
                     setAssistants(condenseListAssistantsResponse(json));
                 }
@@ -205,7 +207,7 @@ export default function MakeCallPage() {
 
         fetchTrunks();
         fetchAssistants();
-    }, [user?.user_id, toast]);
+    }, [user?.api_key, toast]);
 
     useEffect(() => {
         if (!isCallActive) return;
@@ -217,7 +219,7 @@ export default function MakeCallPage() {
     // Read the selected assistant's prompt so the variables it asks for become rows to fill.
     useEffect(() => {
         const assistantId = agentCallData.assistant_id;
-        if (!user?.user_id || !assistantId) {
+        if (!user?.api_key || !assistantId) {
             setAgentRows(rows => rows.filter(row => !row.fromPrompt));
             return;
         }
@@ -226,7 +228,7 @@ export default function MakeCallPage() {
         setPromptLoading(true);
         (async () => {
             try {
-                const { ok, json } = await callGetAssistantDetailsEndpoint({ userId: user.user_id, assistantId });
+                const { ok, json } = await callGetAssistantDetailsEndpoint({ assistantId });
                 if (cancelled || !ok) return;
                 const detail = condenseAssistantDetailsResponse(json) as Record<string, any> | null;
                 const placeholders = extractPlaceholders(detail?.assistant_prompt, detail?.assistant_start_instruction);
@@ -239,28 +241,32 @@ export default function MakeCallPage() {
         })();
 
         return () => { cancelled = true; };
-    }, [agentCallData.assistant_id, user?.user_id]);
+    }, [agentCallData.assistant_id, user?.api_key]);
 
     // Poll dispatch progress until the queue item leaves the pending/dispatching states.
     useEffect(() => {
-        if (!queue || !user?.user_id) return;
-        if (queue.status === "dispatched" || queue.status === "failed") return;
+        if (!queue || !user?.api_key) return;
+        if (queue.status === "dispatched" || queue.status === "failed" || queue.status === "unknown") return;
 
+        // A few transient failures are fine; after that, stop and say the status is unknown.
+        let failures = 0;
         const id = setInterval(async () => {
+            let status = "";
             try {
-                const { ok, json } = await callQueueStatusEndpoint(queue.id, user.user_id);
-                const status = ok ? condenseQueueStatus(json) : "";
-                if (status) setQueue(prev => (prev && prev.id === queue.id ? { ...prev, status } : prev));
+                const { ok, json } = await callQueueStatusEndpoint(queue.id);
+                status = ok ? condenseQueueStatus(json) : "";
             } catch {
-                // Transient failures are fine — the next tick retries.
+                status = "";
             }
+            if (!status && ++failures >= QUEUE_POLL_MAX_FAILURES) status = "unknown";
+            if (status) setQueue(prev => (prev && prev.id === queue.id ? { ...prev, status } : prev));
         }, 3000);
 
         return () => clearInterval(id);
-    }, [queue, user?.user_id]);
+    }, [queue, user?.api_key]);
 
     const handleAgentCall = async () => {
-        if (!user?.user_id) return;
+        if (!user?.api_key) return;
         if (!agentCallData.customer_number || !agentCallData.assistant_id || !agentCallData.trunk_id) {
             toast({ variant: "destructive", title: "Missing Fields", description: "Please fill all fields" });
             return;
@@ -273,7 +279,6 @@ export default function MakeCallPage() {
         setAgentCallLoading(true);
         try {
             const { ok, json } = await callOutboundEndpoint({
-                user_id: user.user_id,
                 assistant_id: agentCallData.assistant_id,
                 trunk_id: agentCallData.trunk_id,
                 to_number: agentCallData.customer_number,
@@ -297,7 +302,7 @@ export default function MakeCallPage() {
     const PLACEHOLDER_METADATA_NOTE =
         "Keys in `metadata` fill the {{placeholders}} in the assistant's prompt and start instruction. Nest a value and you reference it with a dot.";
 
-    const agentCallSpec = (userId: string): RequestSpec => {
+    const agentCallSpec = (): RequestSpec => {
         const metadata = metadataFrom(agentRows, agentRawJson, agentUseRaw);
         const invalid = rawMetadataIsInvalid(agentRawJson, agentUseRaw);
         return {
@@ -307,7 +312,6 @@ export default function MakeCallPage() {
             method: "POST",
             path: "/api/call/outbound",
             body: {
-                user_id: userId,
                 assistant_id: agentCallData.assistant_id || "<assistant_id>",
                 trunk_id: agentCallData.trunk_id || "<trunk_id>",
                 to_number: agentCallData.customer_number || "+919876543210",
@@ -316,7 +320,7 @@ export default function MakeCallPage() {
         };
     };
 
-    const passthroughCallSpec = (userId: string): RequestSpec => {
+    const passthroughCallSpec = (): RequestSpec => {
         const metadata = metadataFrom(passthroughRows, passthroughRawJson, passthroughUseRaw);
         const invalid = rawMetadataIsInvalid(passthroughRawJson, passthroughUseRaw);
         const note = "A passthrough call has no assistant — `metadata` only tags the call record.";
@@ -327,7 +331,6 @@ export default function MakeCallPage() {
             method: "POST",
             path: "/api/passthrough-call/passthrough-outbound",
             body: {
-                user_id: userId,
                 trunk_id: passthroughTrunkId || "<trunk_id>",
                 to_number: passthroughNumber.trim() || "+919876543210",
                 ...(metadata ? { metadata } : {}),
@@ -357,7 +360,6 @@ export default function MakeCallPage() {
         setPassthroughCalling(true);
         try {
             const json = await callPassthroughOutboundEndpoint({
-                user_id: user?.user_id,
                 trunk_id: passthroughTrunkId,
                 to_number: dialedNumber,
                 ...(metadata ? { metadata } : {}),
@@ -540,7 +542,9 @@ export default function MakeCallPage() {
                                                     ? "Handed off to the provider. The outcome lands in Call Logs."
                                                     : queue.status === "failed"
                                                         ? "The queue gave up after retrying."
-                                                        : "Waiting for dispatcher capacity."}
+                                                        : queue.status === "unknown"
+                                                            ? "Could not read the dispatch status. Check Call Logs for the outcome."
+                                                            : "Waiting for dispatcher capacity."}
                                             </span>
                                         </div>
                                     )}
@@ -654,7 +658,7 @@ export default function MakeCallPage() {
                                 <MeetingCallTab
                                     assistants={assistants}
                                     assistantsLoading={assistantsLoading}
-                                    userId={user?.user_id}
+                                    signedIn={Boolean(user?.api_key)}
                                 />
                             </section>
                         </TabsContent>

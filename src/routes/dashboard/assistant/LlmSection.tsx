@@ -9,6 +9,7 @@ import {
   CASCADE_LLM_FIELDS,
   OPENAI_CASCADE_MODELS,
   OPENAI_REALTIME_MODELS,
+  GEMINI_DEFAULT_MODEL,
   GEMINI_LIVE_MODELS,
   GEMINI_LIVE_VOICES,
   OPENAI_REALTIME_VOICES,
@@ -40,7 +41,7 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
   const defaultModel = isCascade
     ? "gpt-4.1"
     : isGemini
-      ? "gemini-3.8-live"
+      ? GEMINI_DEFAULT_MODEL
       : "gpt-realtime-1.5";
   const model = llmConfig?.model?.trim() || defaultModel;
   const reasoning = isReasoningModel(model);
@@ -87,7 +88,7 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
       title={isCascade ? "Text model" : "Realtime model"}
       blurb={
         isRealtime
-          ? "Hears the caller, decides the reply, and speaks it — all in one model. There is no separate transcriber or voice to configure."
+          ? "Hears the caller, decides the reply, and speaks it — all in one model, in the voice you pick below. There is no separate transcriber or speech provider."
           : isCascade
             ? "Reads the transcript and writes the reply as text. It never hears the caller's audio, so anything the transcriber misses is gone."
             : "Hears the caller's audio directly and writes the reply as text, which the voice stage below speaks."

@@ -35,10 +35,10 @@ const PLACEHOLDER_METADATA_NOTE =
 interface MeetingCallTabProps {
   assistants: AssistantItem[];
   assistantsLoading: boolean;
-  userId: string | undefined;
+  signedIn: boolean;
 }
 
-export function MeetingCallTab({ assistants, assistantsLoading, userId }: MeetingCallTabProps) {
+export function MeetingCallTab({ assistants, assistantsLoading, signedIn }: MeetingCallTabProps) {
   const { toast } = useToast();
 
   const [assistantId, setAssistantId] = useState("");
@@ -54,7 +54,7 @@ export function MeetingCallTab({ assistants, assistantsLoading, userId }: Meetin
 
   // Same prompt read as the agent-call tab in MakeCall.tsx — two copies, no abstraction.
   useEffect(() => {
-    if (!userId || !assistantId) {
+    if (!signedIn || !assistantId) {
       setRows((prev) => prev.filter((row) => !row.fromPrompt));
       return;
     }
@@ -63,7 +63,7 @@ export function MeetingCallTab({ assistants, assistantsLoading, userId }: Meetin
     setPromptLoading(true);
     (async () => {
       try {
-        const { ok, json } = await callGetAssistantDetailsEndpoint({ userId, assistantId });
+        const { ok, json } = await callGetAssistantDetailsEndpoint({ assistantId });
         if (cancelled || !ok) return;
         const detail = condenseAssistantDetailsResponse(json) as Record<string, string> | null;
         const placeholders = extractPlaceholders(detail?.assistant_prompt, detail?.assistant_start_instruction);
@@ -78,9 +78,9 @@ export function MeetingCallTab({ assistants, assistantsLoading, userId }: Meetin
     return () => {
       cancelled = true;
     };
-  }, [assistantId, userId]);
+  }, [assistantId, signedIn]);
 
-  const meetingCallSpec = (specUserId: string): RequestSpec => {
+  const meetingCallSpec = (): RequestSpec => {
     const metadata = metadataFrom(rows, rawJson, useRaw);
     const invalid = rawMetadataIsInvalid(rawJson, useRaw);
     return {
@@ -93,7 +93,6 @@ export function MeetingCallTab({ assistants, assistantsLoading, userId }: Meetin
       method: "POST",
       path: "/api/meeting-call/join",
       body: {
-        user_id: specUserId,
         assistant_id: assistantId || "<assistant_id>",
         meeting_url: meetingUrl.trim() || "https://meet.google.com/abc-defg-hij",
         platform: PLATFORM,
@@ -104,7 +103,7 @@ export function MeetingCallTab({ assistants, assistantsLoading, userId }: Meetin
   };
 
   const handleJoin = async () => {
-    if (!userId) return;
+    if (!signedIn) return;
     if (!assistantId) {
       toast({ variant: "destructive", title: "Select an agent" });
       return;
@@ -123,7 +122,6 @@ export function MeetingCallTab({ assistants, assistantsLoading, userId }: Meetin
     setJoining(true);
     try {
       const { ok, json } = await callJoinMeetingEndpoint({
-        user_id: userId,
         assistant_id: assistantId,
         meeting_url: meetingUrl.trim(),
         platform: PLATFORM,

@@ -83,9 +83,9 @@ export default function CallLogsPage() {
 
   // 1. Fetch Assistants for the Dropdown
   const fetchAssistants = useCallback(async () => {
-    if (!user?.user_id) return;
+    if (!user?.api_key) return;
     try {
-      const { ok, json } = await callListAssistantsEndpoint({ userId: user.user_id });
+      const { ok, json } = await callListAssistantsEndpoint({});
       if (ok) {
         // Keep `assistant_mode` — dropping it made every chip in the picker read "pipeline".
         setAssistants(condenseListAssistantsResponse(json).map((item) => ({
@@ -97,7 +97,7 @@ export default function CallLogsPage() {
     } catch (error) {
       console.error("Failed to fetch assistants", error);
     }
-  }, [user?.user_id]);
+  }, [user?.api_key]);
 
   useEffect(() => {
     fetchAssistants();
@@ -105,12 +105,11 @@ export default function CallLogsPage() {
 
   // 2. Fetch Logs
   const fetchLogs = useCallback(async () => {
-    if (!user?.user_id || !selectedAssistant) return;
+    if (!user?.api_key || !selectedAssistant) return;
     
     setLoading(true);
     try {
       const json = await callGetAssistantCallLogsEndpoint({
-        userId: user.user_id,
         assistantId: selectedAssistant,
         page,
         limit,
@@ -130,7 +129,7 @@ export default function CallLogsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user?.user_id, selectedAssistant, page, limit, sortBy, sortOrder, startDate, endDate, toast]);
+  }, [user?.api_key, selectedAssistant, page, limit, sortBy, sortOrder, startDate, endDate, toast]);
 
   // Fetch logs when relevant state changes
   useEffect(() => {
@@ -143,14 +142,13 @@ export default function CallLogsPage() {
   }, [selectedAssistant, page, limit, sortBy, sortOrder]);
 
   // Manual search trigger for date filters
-  const callLogsSpec = (userId: string): RequestSpec => ({
+  const callLogsSpec = (): RequestSpec => ({
     id: "assistant.callLogs",
     title: "List an assistant's call logs",
     note: "Paged, newest first by default. Transcripts and per-call usage come back with each row.",
     method: "GET",
     path: `/api/assistant/call-logs/${selectedAssistant || "<assistant_id>"}`,
     query: buildAssistantCallLogsQuery({
-      userId,
       assistantId: selectedAssistant,
       page,
       limit,

@@ -11,10 +11,13 @@
  * stored provider cannot run is a 400, so the form fixes the combination at the moment the
  * user changes it rather than letting the save fail.
  */
-import { AssistantDetail, AssistantLlmConfig, AssistantMode, SttProvider, TtsProvider } from "@/types/assistant";
-import { emptyForm } from "./constants";
+import { AssistantDetail, AssistantLlmConfig, AssistantMode, EndCallWebhookTuning, SttProvider, TtsProvider } from "@/types/assistant";
+import { END_CALL_WEBHOOK_FIELDS, emptyForm } from "./constants";
 import {
   CASCADE_LLM_FIELDS,
+  ELEVENLABS_MODELS_WITHOUT_SPEED,
+  GEMINI_DEFAULT_MODEL,
+  GEMINI_DEFAULT_VOICE,
   OPENAI_CASCADE_MODELS,
   OPENAI_REALTIME_MODELS,
   PIPELINE_STT_MODELS,
@@ -22,6 +25,8 @@ import {
   TTS_PROVIDERS,
   defaultConfigFor,
   findProvider,
+  isGeminiModel,
+  isGeminiVoice,
   llmInertReason,
   sttInertReason,
 } from "./providerCatalog";
@@ -171,7 +176,12 @@ const pruneStt = (
   return out;
 };
 
-import { isGeminiVoice } from "./providerCatalog";
+/** A Gemini model or voice the catalog no longer offers is swapped for the default. */
+const repairGeminiLlm = (llm: AssistantLlmConfig): AssistantLlmConfig => ({
+  ...llm,
+  model: isGeminiModel(llm.model) ? llm.model : GEMINI_DEFAULT_MODEL,
+  voice: llm.voice && isGeminiVoice(llm.voice) ? llm.voice : GEMINI_DEFAULT_VOICE,
+});
 
 /** Model IDs are per-mode and the two families are disjoint, so a mode change re-picks one. */
 const repairLlmForMode = (llm: AssistantLlmConfig | undefined, mode: AssistantMode): AssistantLlmConfig => {
@@ -181,13 +191,7 @@ const repairLlmForMode = (llm: AssistantLlmConfig | undefined, mode: AssistantMo
 
   const provider = next.provider || "openai";
   if (provider === "gemini") {
-    if (!next.model || !["gemini-3.8-live", "gemini-3.8-live-extended-thinking", "gemini-3.1-flash-live-preview", "gemini-2.5-flash-native-audio-preview-12-2025"].includes(next.model)) {
-      next.model = "gemini-3.8-live";
-    }
-    if (!next.voice || !isGeminiVoice(next.voice)) {
-      next.voice = "Puck";
-    }
-    return next;
+    return repairGeminiLlm(next);
   }
 
   const allowed = mode === "cascade" ? CASCADE_MODEL_IDS : REALTIME_MODEL_IDS;
@@ -248,6 +252,34 @@ export const applyTtsProvider = (form: AssistantDetail, provider: TtsProvider): 
 /**
  * Fetched assistant → form state.
  */
+/** Both tuning keys, each a number or `null` (server default). */
+export const normalizeEndCallWebhook = (
+  webhook: EndCallWebhookTuning | undefined,
+): Required<EndCallWebhookTuning> => ({
+  timeout_seconds: webhook?.timeout_seconds ?? null,
+  attempts: webhook?.attempts ?? null,
+});
+
+/** Per-field problems with the webhook tuning, matching the backend's integer ranges. */
+export const endCallWebhookErrors = (
+  webhook: EndCallWebhookTuning | undefined,
+): Partial<Record<keyof EndCallWebhookTuning, string>> => {
+  const errors: Partial<Record<keyof EndCallWebhookTuning, string>> = {};
+  for (const { key, name, min, max } of END_CALL_WEBHOOK_FIELDS) {
+    const value = webhook?.[key];
+    if (value == null) continue;
+    if (!Number.isInteger(value)) errors[key] = `${name} must be a whole number.`;
+    else if (value < min || value > max) errors[key] = `${name} must be between ${min} and ${max}.`;
+  }
+  return errors;
+};
+
+export const endCallWebhookError = (webhook: EndCallWebhookTuning | undefined): string | null =>
+  Object.values(endCallWebhookErrors(webhook))[0] ?? null;
+
+const hydrateLlm = (llm: AssistantLlmConfig): AssistantLlmConfig =>
+  llm.provider === "gemini" ? repairGeminiLlm(llm) : llm;
+
 export const hydrateForm = (detail: any): AssistantDetail => {
   const mode: AssistantMode = detail.assistant_mode ?? "pipeline";
   const sttModel: SttProvider = detail.assistant_stt_model ?? "sarvam";
@@ -262,7 +294,7 @@ export const hydrateForm = (detail: any): AssistantDetail => {
     assistant_prompt: detail.assistant_prompt ?? "",
     assistant_start_instruction: detail.assistant_start_instruction ?? "",
     assistant_mode: mode,
-    assistant_llm_config: clean(detail.assistant_llm_config) as AssistantLlmConfig,
+    assistant_llm_config: hydrateLlm(clean(detail.assistant_llm_config) as AssistantLlmConfig),
     assistant_stt_model: sttModel,
     assistant_stt_config: clean(detail.assistant_stt_config),
     assistant_tts_model: ttsModel,
@@ -271,10 +303,7 @@ export const hydrateForm = (detail: any): AssistantDetail => {
       ...emptyForm.assistant_interaction_config,
       ...(detail.assistant_interaction_config ?? {}),
     },
-    assistant_end_call_webhook: {
-      timeout_seconds: detail.assistant_end_call_webhook?.timeout_seconds ?? null,
-      attempts: detail.assistant_end_call_webhook?.attempts ?? null,
-    },
+    assistant_end_call_webhook: normalizeEndCallWebhook(detail.assistant_end_call_webhook),
     assistant_greeting_audio: {
       enabled: detail.assistant_greeting_audio?.enabled ?? false,
       audio_id: detail.assistant_greeting_audio?.audio_id ?? "",
@@ -293,7 +322,7 @@ const pruneTts = (
   const source = clean(config);
   if (provider === "elevenlabs" && source.voice_settings) {
     const model = String(source.model ?? "eleven_v3");
-    if (model === "eleven_v3") {
+    if (ELEVENLABS_MODELS_WITHOUT_SPEED.includes(model)) {
       const vs = { ...(source.voice_settings as Record<string, unknown>) };
       delete vs.speed;
       if (Object.keys(vs).length > 0) {
@@ -415,12 +444,11 @@ export const buildAssistantPayload = (
   // Upstream merges the webhook object key by key; `null` means "server default". On update the
   // nulls are sent so a cleared field really clears. On create there is nothing to clear, so an
   // untuned webhook is omitted rather than sent as `{}`.
-  const webhook = form.assistant_end_call_webhook;
-  if (creating === false || webhook?.timeout_seconds != null || webhook?.attempts != null) {
-    payload.assistant_end_call_webhook = {
-      timeout_seconds: webhook?.timeout_seconds ?? null,
-      attempts: webhook?.attempts ?? null,
-    };
+  const webhook = normalizeEndCallWebhook(
+    form.assistant_end_call_url?.trim() ? form.assistant_end_call_webhook : undefined,
+  );
+  if (creating === false || webhook.timeout_seconds != null || webhook.attempts != null) {
+    payload.assistant_end_call_webhook = webhook;
   }
 
   if (!isRealtime) {

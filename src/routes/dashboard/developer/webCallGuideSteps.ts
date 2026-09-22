@@ -58,7 +58,6 @@ async function getToken() {
       Authorization: "Bearer $VYOM_API_KEY",
     },
     body: JSON.stringify({
-      user_id: "$VYOM_USER_ID",
       assistant_id: "<assistant_id>",
       metadata: { customer: { name: "John Doe" } },
     }),
@@ -159,7 +158,6 @@ async function getChatToken() {
       Authorization: "Bearer $VYOM_API_KEY",
     },
     body: JSON.stringify({
-      user_id: "$VYOM_USER_ID",
       assistant_id: "<assistant_id>",
       text_only: true,
       metadata: { customer: { name: "John Doe" } },
@@ -259,7 +257,6 @@ const res = await fetch(BACKEND_URL + "/api/web-call/get-token", {
     Authorization: "Bearer $VYOM_API_KEY",
   },
   body: JSON.stringify({
-    user_id: "$VYOM_USER_ID",
     assistant_id: "<assistant_id>",
     metadata: { customer: { name: "John Doe" } },
   }),

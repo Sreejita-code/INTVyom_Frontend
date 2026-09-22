@@ -18,6 +18,7 @@ import {
 import { AudioItem } from "@/types/audio";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { toastError } from "@/lib/toastError";
 
 export default function AudioLibrary() {
   const user = getStoredUser();
@@ -46,22 +47,21 @@ export default function AudioLibrary() {
   const selectedAudio = audios.find(a => a.audio_id === selectedId);
 
   const fetchAudios = useCallback(async () => {
-    if (!user?.user_id) return;
+    if (!user?.api_key) return;
     setListLoading(true);
     try {
-      const { ok, json } = await callListAudiosEndpoint({ userId: user.user_id, page: 1, limit: 50 });
-      const node = json as { data?: { audios?: AudioItem[] }; message?: string };
-      if (ok && node.data?.audios) {
+      const { ok, json } = await callListAudiosEndpoint({ page: 1, limit: 50 });
+      if (ok) {
         setAudios(condenseListAudiosResponse(json));
       } else {
-        toast({ variant: "destructive", title: "Error", description: node.message || "Failed to load audio files." });
+        toast(toastError(json, "Failed to load audio files."));
       }
     } catch (error) {
       toast({ variant: "destructive", title: "Failed to load audios" });
     } finally {
       setListLoading(false);
     }
-  }, [user?.user_id, toast]);
+  }, [user?.api_key, toast]);
 
   useEffect(() => {
     fetchAudios();
@@ -84,11 +84,11 @@ export default function AudioLibrary() {
 
   const handleDeleteAudio = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!user?.user_id || !window.confirm("Are you sure you want to delete this audio?")) return;
+    if (!user?.api_key || !window.confirm("Are you sure you want to delete this audio?")) return;
 
     setDeletingId(id);
     try {
-      const { ok, json } = await callDeleteAudioEndpoint({ userId: user.user_id, audioId: id });
+      const { ok, json } = await callDeleteAudioEndpoint({ audioId: id });
       
       if (!ok) throw new Error((json as { message?: string })?.message || "Failed to delete");
       
@@ -108,16 +108,16 @@ export default function AudioLibrary() {
 
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user?.user_id) return;
+    if (!user?.api_key) return;
     if (!uploadFile) return toast({ variant: "destructive", title: "Missing File", description: "Please select an audio file to upload." });
     if (!uploadName) return toast({ variant: "destructive", title: "Missing Name", description: "Please enter a name for the audio." });
+    if (!uploadTranscript.trim()) return toast({ variant: "destructive", title: "Missing Transcript", description: "Type what the audio says. The backend requires it." });
 
     setUploading(true);
     const formData = new FormData();
-    formData.append("user_id", user.user_id);
     formData.append("file", uploadFile);
     formData.append("audio_name", uploadName);
-    if (uploadTranscript) formData.append("transcript", uploadTranscript);
+    formData.append("transcript", uploadTranscript.trim());
 
     try {
       const { ok, json } = await callUploadAudioEndpoint(formData);
@@ -250,8 +250,8 @@ export default function AudioLibrary() {
                       <Input value={uploadName} onChange={(e) => setUploadName(e.target.value)} placeholder="e.g. Welcome Greeting" />
                     </div>
                     <div className="grid gap-2">
-                      <Label>Transcript (Optional)</Label>
-                      <Textarea value={uploadTranscript} onChange={(e) => setUploadTranscript(e.target.value)} placeholder="Type the spoken text here..." className="min-h-[100px]" />
+                      <Label htmlFor="audio-transcript">Transcript</Label>
+                      <Textarea id="audio-transcript" required value={uploadTranscript} onChange={(e) => setUploadTranscript(e.target.value)} placeholder="Type the spoken text here..." className="min-h-[100px]" />
                     </div>
                     <Button type="submit" disabled={uploading} className="w-full">
                       {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Upload className="h-4 w-4 mr-2" />}

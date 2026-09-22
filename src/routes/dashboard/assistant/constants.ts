@@ -1,4 +1,5 @@
-import { AssistantDetail } from "@/types/assistant";
+import { AssistantDetail, EndCallWebhookTuning } from "@/types/assistant";
+import { GEMINI_DEFAULT_MODEL, GEMINI_DEFAULT_VOICE } from "./providerCatalog";
 
 export const emptyForm: AssistantDetail = {
   assistant_name: "",
@@ -6,9 +7,9 @@ export const emptyForm: AssistantDetail = {
   assistant_prompt: "",
   assistant_mode: "realtime",
   assistant_llm_config: {
-    provider: "openai",
-    model: "",
-    voice: "",
+    provider: "gemini",
+    model: GEMINI_DEFAULT_MODEL,
+    voice: GEMINI_DEFAULT_VOICE,
   },
   assistant_tts_model: "cartesia",
   assistant_tts_config: {
@@ -75,3 +76,16 @@ export const buildFormSnapshot = (form: AssistantDetail) => {
   const { assistant_id, ...editable } = form;
   return stableStringify(editable);
 };
+
+/** The end-call webhook tuning fields, with the backend's integer ranges and server defaults. */
+export const END_CALL_WEBHOOK_FIELDS: {
+  key: keyof EndCallWebhookTuning;
+  label: string;
+  name: string;
+  min: number;
+  max: number;
+  fallback: number;
+}[] = [
+  { key: "timeout_seconds", label: "Timeout in seconds (1–120)", name: "Timeout", min: 1, max: 120, fallback: 30 },
+  { key: "attempts", label: "Attempts (1–5)", name: "Attempts", min: 1, max: 5, fallback: 3 },
+];

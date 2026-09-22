@@ -5,6 +5,8 @@ import {
   GEMINI_LIVE_VOICES,
   STT_PROVIDERS,
   TTS_PROVIDERS,
+  getSttModelError,
+  sttInertReason,
 } from "@/routes/dashboard/assistant/providerCatalog";
 
 /**
@@ -65,5 +67,27 @@ describe("STT model mirrors", () => {
 describe("ElevenLabs TTS models", () => {
   it("includes eleven_v3_conversational", () => {
     expect(optionValues(TTS_PROVIDERS, "elevenlabs", "model")).toContain("eleven_v3_conversational");
+  });
+});
+
+describe("STT validation matches the backend's current rules", () => {
+  it("lets saaras:v4 use every transcription style, like saaras:v3", () => {
+    expect(getSttModelError("sarvam", "saaras:v4", { mode: "translate" })).toBeNull();
+    expect(sttInertReason("sarvam", "mode", { model: "saaras:v4" })).toBeUndefined();
+  });
+
+  it("accepts any BCP-47 language on Deepgram, and still rejects other standards", () => {
+    expect(getSttModelError("deepgram", "nova-3", { language: "sw-KE" })).toBeNull();
+    expect(getSttModelError("deepgram", "nova-3", { language: "hin" })).toMatch(/BCP-47/);
+  });
+
+  it("accepts any ISO 639-1 language on OpenAI, and still rejects a region-tagged code", () => {
+    expect(getSttModelError("openai", "gpt-4o-mini-transcribe", { language: "sw" })).toBeNull();
+    expect(getSttModelError("openai", "gpt-4o-mini-transcribe", { language: "hi-IN" })).toMatch(/ISO 639-1/);
+  });
+
+  it("rejects models that are not in the catalog", () => {
+    expect(getSttModelError("deepgram", "nova-2")).toMatch(/Invalid Deepgram model/);
+    expect(getSttModelError("sarvam", "saarika:v2.5")).toMatch(/Invalid Sarvam model/);
   });
 });

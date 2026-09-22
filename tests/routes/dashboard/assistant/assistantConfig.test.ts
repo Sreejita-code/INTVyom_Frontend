@@ -4,6 +4,7 @@ import {
   applyModeChange,
   applySttProvider,
   buildAssistantPayload,
+  endCallWebhookError,
   hydrateForm,
 } from "@/routes/dashboard/assistant/assistantConfig";
 import { emptyForm } from "@/routes/dashboard/assistant/constants";
@@ -186,15 +187,6 @@ describe("buildAssistantPayload", () => {
   });
 
   it("drops transcriber knobs the chosen model ignores", () => {
-    const deepgram = buildAssistantPayload(
-      form({
-        assistant_mode: "cascade",
-        assistant_stt_model: "deepgram",
-        assistant_stt_config: { model: "nova-2", language: "en-IN", keyterm: "invoice", enable_diarization: true },
-      }),
-    ).assistant_stt_config;
-    expect(deepgram).toEqual({ model: "nova-2", language: "en-IN", enable_diarization: true });
-
     const flux = buildAssistantPayload(
       form({
         assistant_mode: "cascade",
@@ -213,15 +205,15 @@ describe("buildAssistantPayload", () => {
     ).assistant_stt_config;
     expect(openai).toEqual({ model: "gpt-4o-transcribe", detect_language: true });
 
-    // Sarvam's own warning says transcription style is dropped before the call on v2.5. Now it is.
+    // Both current Sarvam models read the transcription style, so it is kept.
     const sarvam = buildAssistantPayload(
       form({
         assistant_mode: "cascade",
         assistant_stt_model: "sarvam",
-        assistant_stt_config: { model: "saaras:v2.5", language: "hi-IN", mode: "codemix" },
+        assistant_stt_config: { model: "saaras:v4", language: "hi-IN", mode: "translit" },
       }),
     ).assistant_stt_config;
-    expect(sarvam).toEqual({ model: "saaras:v2.5", language: "hi-IN" });
+    expect(sarvam).toEqual({ model: "saaras:v4", language: "hi-IN", mode: "translit" });
   });
 
   it("repairs an unrunnable combination rather than sending it", () => {
@@ -365,7 +357,7 @@ describe("buildAssistantPayload on create", () => {
 describe("end-call webhook delivery tuning", () => {
   it("sends the tuning on an update", () => {
     const payload = buildAssistantPayload(
-      form({ assistant_mode: "pipeline", assistant_end_call_webhook: { timeout_seconds: 60, attempts: 4 } }),
+      form({ assistant_mode: "pipeline", assistant_end_call_url: "https://example.com/hook", assistant_end_call_webhook: { timeout_seconds: 60, attempts: 4 } }),
       false,
       { creating: false },
     );
@@ -387,7 +379,7 @@ describe("end-call webhook delivery tuning", () => {
 
   it("keeps only the tuned value on create", () => {
     const payload = buildAssistantPayload(
-      form({ assistant_mode: "pipeline", assistant_end_call_webhook: { timeout_seconds: 90, attempts: null } }),
+      form({ assistant_mode: "pipeline", assistant_end_call_url: "https://example.com/hook", assistant_end_call_webhook: { timeout_seconds: 90, attempts: null } }),
       false,
       { creating: true },
     );
@@ -435,5 +427,98 @@ describe("hydrateForm", () => {
     });
 
     expect(hydrated.assistant_end_call_webhook).toEqual({ timeout_seconds: null, attempts: 5 });
+  });
+});
+
+describe("endCallWebhookError", () => {
+  it("accepts blank tuning, which means the server defaults", () => {
+    expect(endCallWebhookError({ timeout_seconds: null, attempts: null })).toBeNull();
+    expect(endCallWebhookError(undefined)).toBeNull();
+  });
+
+  it("accepts whole numbers inside the documented ranges", () => {
+    expect(endCallWebhookError({ timeout_seconds: 1, attempts: 1 })).toBeNull();
+    expect(endCallWebhookError({ timeout_seconds: 120, attempts: 5 })).toBeNull();
+  });
+
+  it("rejects a timeout outside 1–120 seconds or with a fraction", () => {
+    expect(endCallWebhookError({ timeout_seconds: 0, attempts: null })).toMatch(/timeout.*1.*120/i);
+    expect(endCallWebhookError({ timeout_seconds: 121, attempts: null })).toMatch(/timeout/i);
+    expect(endCallWebhookError({ timeout_seconds: 2.5, attempts: null })).toMatch(/whole number/i);
+  });
+
+  it("rejects attempts outside 1–5", () => {
+    expect(endCallWebhookError({ timeout_seconds: null, attempts: 0 })).toMatch(/attempts.*1.*5/i);
+    expect(endCallWebhookError({ timeout_seconds: null, attempts: 6 })).toMatch(/attempts/i);
+  });
+});
+
+describe("hydrateForm with a retired Gemini model or voice", () => {
+  it("swaps a model and voice the catalog no longer offers for the defaults", () => {
+    const hydrated = hydrateForm({
+      assistant_mode: "realtime",
+      assistant_llm_config: { provider: "gemini", model: "gemini-live-2.5-flash-native-audio", voice: "Orion" },
+    });
+
+    expect(hydrated.assistant_llm_config).toMatchObject({ provider: "gemini", model: "gemini-3.8-live", voice: "Puck" });
+  });
+
+  it("keeps a Gemini model and voice that are still offered", () => {
+    const hydrated = hydrateForm({
+      assistant_mode: "realtime",
+      assistant_llm_config: { provider: "gemini", model: "gemini-3.1-flash-live-preview", voice: "Kore" },
+    });
+
+    expect(hydrated.assistant_llm_config).toMatchObject({ model: "gemini-3.1-flash-live-preview", voice: "Kore" });
+  });
+
+  it("leaves an OpenAI config exactly as stored", () => {
+    const hydrated = hydrateForm({
+      assistant_mode: "realtime",
+      assistant_llm_config: { provider: "openai", model: "gpt-realtime-mini", voice: "marin" },
+    });
+
+    expect(hydrated.assistant_llm_config).toEqual({ provider: "openai", model: "gpt-realtime-mini", voice: "marin" });
+  });
+});
+
+describe("buildAssistantPayload ElevenLabs speed", () => {
+  const withModel = (model: string) =>
+    buildAssistantPayload(
+      form({
+        assistant_mode: "pipeline",
+        assistant_tts_model: "elevenlabs",
+        assistant_tts_config: { voice_id: "v1", model, voice_settings: { speed: 1.2, stability: 0.5 } },
+      }),
+    ).assistant_tts_config;
+
+  it("drops speed for both v3 models, which have no speed control", () => {
+    expect(withModel("eleven_v3").voice_settings).toEqual({ stability: 0.5 });
+    expect(withModel("eleven_v3_conversational").voice_settings).toEqual({ stability: 0.5 });
+  });
+
+  it("keeps speed for a model that reads it", () => {
+    expect(withModel("eleven_turbo_v2_5").voice_settings).toEqual({ speed: 1.2, stability: 0.5 });
+  });
+});
+
+describe("a new assistant", () => {
+  it("starts as a realtime Gemini assistant with the backend's defaults", () => {
+    const payload = buildAssistantPayload(form(), false, { creating: true });
+
+    expect(payload.assistant_mode).toBe("realtime");
+    expect(payload.assistant_llm_config).toMatchObject({ provider: "gemini", model: "gemini-3.8-live", voice: "Puck" });
+  });
+});
+
+describe("buildAssistantPayload webhook tuning without a webhook URL", () => {
+  const leftover = { assistant_end_call_url: "", assistant_end_call_webhook: { timeout_seconds: 500, attempts: 9 } };
+
+  it("clears tuning left over from a removed URL on update", () => {
+    expect(buildAssistantPayload(form(leftover)).assistant_end_call_webhook).toEqual({ timeout_seconds: null, attempts: null });
+  });
+
+  it("omits it on create", () => {
+    expect(buildAssistantPayload(form(leftover), false, { creating: true })).not.toHaveProperty("assistant_end_call_webhook");
   });
 });

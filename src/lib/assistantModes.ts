@@ -23,7 +23,7 @@ export const MODES: ModeSpec[] = [
   {
     value: "realtime",
     title: "Realtime",
-    what: "One model hears, thinks and speaks. No separate transcriber or voice.",
+    what: "One model hears, thinks and speaks, in its own voice. No separate transcriber or speech provider.",
     pickWhen: "You want the lowest latency and the fewest things to tune.",
     vendors: "Gemini or OpenAI",
   },

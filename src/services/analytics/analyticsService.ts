@@ -8,6 +8,7 @@ import {
   TimeSeriesPoint,
 } from "@/types/analytics";
 import { authedFetch } from "@/services/auth/authedFetch";
+import { readJson } from "@/lib/readJson";
 
 const ANALYTICS_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/analytics`;
 
@@ -95,7 +96,6 @@ export const buildAnalyticsQueryParams = (
   options: { includeGranularity?: boolean; includeAssistantId?: boolean } = {}
 ) => {
   const query = new URLSearchParams({
-    user_id: filters.userId,
     start_date: filters.startDate.toISOString(),
     end_date: filters.endDate.toISOString(),
   });
@@ -124,7 +124,7 @@ export const getDefaultAnalyticsDateRange = (now = new Date()) => {
 
 const requestAnalytics = async (path: string, query: URLSearchParams) => {
   const response = await authedFetch(`${ANALYTICS_BASE}${path}?${query.toString()}`);
-  const json = await response.json();
+  const json = await readJson(response);
 
   if (!response.ok) {
     const message =
@@ -306,21 +306,38 @@ export async function callCallsByServiceEndpoint(filters: AnalyticsFilters): Pro
 }
 
 export async function callPlatformBillableMinutesEndpoint(filters: AnalyticsFilters): Promise<unknown> {
-  const query = new URLSearchParams({
-    user_id: filters.userId,
-  });
+  const query = new URLSearchParams();
   if (filters.startDate) query.set("start_date", filters.startDate.toISOString());
   if (filters.endDate) query.set("end_date", filters.endDate.toISOString());
 
   const url = `${import.meta.env.VITE_BACKEND_URL}/api/assistant/platform-billable-minutes?${query.toString()}`;
   const response = await authedFetch(url);
-  const json = await response.json();
+  const json = await readJson(response);
 
   if (!response.ok) {
     throw new Error(json.error || json.message || "Failed to load billable minutes");
   }
 
   return json;
+}
+
+export async function callDownloadPlatformBillableEndpoint(range: {
+  startDate: Date;
+  endDate: Date;
+}): Promise<Blob> {
+  const query = new URLSearchParams({
+    start_date: range.startDate.toISOString(),
+    end_date: range.endDate.toISOString(),
+  });
+  const url = `${import.meta.env.VITE_BACKEND_URL}/api/assistant/platform-billable-minutes/download?${query.toString()}`;
+  const response = await authedFetch(url);
+
+  if (!response.ok) {
+    const json = await readJson(response);
+    throw new Error(json.error || "Failed to download billable minutes");
+  }
+
+  return response.blob();
 }
 
 export async function getDashboardMetrics(filters: AnalyticsFilters): Promise<DashboardMetrics> {

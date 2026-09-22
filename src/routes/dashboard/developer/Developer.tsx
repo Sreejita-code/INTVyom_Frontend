@@ -1,11 +1,12 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, KeyRound, Link2, MonitorPlay, Terminal } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Link2, LogIn, MonitorPlay, Terminal } from "lucide-react";
 
 import { ApiSnippetButton } from "@/components/common/ApiSnippet";
 import { Button } from "@/components/ui/button";
 import { CopyIdButton } from "@/components/common/CopyIdButton";
-import { getStoredUser } from "@/services/storage/storageService";
+import { clearUser, getStoredUser } from "@/services/storage/storageService";
 import { developerActions } from "./developerActions";
 import { WebCallClientGuide } from "./WebCallClientGuide";
 
@@ -54,6 +55,12 @@ const SecretRow = ({ label, value, secret }: SecretRowProps) => {
 
 const Developer = () => {
   const user = getStoredUser();
+  const navigate = useNavigate();
+
+  const signInAgain = () => {
+    clearUser();
+    navigate("/auth");
+  };
 
   return (
     <div className="page-shell overflow-auto">
@@ -69,9 +76,9 @@ const Developer = () => {
               <Terminal className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-foreground">Your API Keys</h2>
+              <h2 className="text-xl font-semibold text-foreground">Your API key</h2>
               <p className="text-sm text-muted-foreground">
-                Copy the IDs and keys your code needs. Each box says what it is and where you use it.
+                Copy what your code needs to call the API. Each box says what it is and where you use it.
               </p>
             </div>
           </div>
@@ -81,15 +88,11 @@ const Developer = () => {
             <ul className="grid gap-2 sm:grid-cols-2 text-xs">
               <li className="rounded-md border border-border/60 bg-muted/20 p-3">
                 <span className="status-chip status-chip-info">API key</span>
-                <p className="mt-2 text-muted-foreground">Who you are. Send as <code className="font-mono">Authorization: Bearer &lt;api_key&gt;</code> on every API request. Find yours below.</p>
+                <p className="mt-2 text-muted-foreground">Who you are. Send as <code className="font-mono">Authorization: Bearer &lt;api_key&gt;</code> on every API request; it also signs the room tokens a browser call joins with. Find yours below.</p>
               </li>
               <li className="rounded-md border border-border/60 bg-muted/20 p-3">
                 <span className="status-chip status-chip-neutral">Assistant ID</span>
                 <p className="mt-2 text-muted-foreground">Which assistant runs. One per assistant — copy it from the Assistants page.</p>
-              </li>
-              <li className="rounded-md border border-border/60 bg-muted/20 p-3">
-                <span className="status-chip status-chip-neutral">LiveKit key</span>
-                <p className="mt-2 text-muted-foreground">The same value as your API key. It also signs the room tokens a browser call connects with.</p>
               </li>
               <li className="rounded-md border border-border/60 bg-muted/20 p-3">
                 <span className="status-chip status-chip-warning">Provider key</span>
@@ -102,12 +105,12 @@ const Developer = () => {
             <div className="flex items-center gap-2">
               <Link2 className="h-4 w-4 text-primary" />
               <h3 className="text-sm font-semibold text-foreground">Backend address · Base URL</h3>
-              <span className="status-chip status-chip-neutral">Not a secret</span>
+              <span className="status-chip status-chip-neutral whitespace-nowrap">Not a secret</span>
             </div>
             <SecretRow label="Backend address (Base URL)" value={backendUrl} />
             <p className="text-xs text-muted-foreground">
               What: where your backend lives. Where used: front of every API path below.
-              Your User ID below is what identifies you — keep that server-side.
+              Your API key below is what identifies you — keep it server-side.
             </p>
           </section>
 
@@ -131,14 +134,19 @@ const Developer = () => {
                     <p className="text-xs text-muted-foreground">Used for: <code className="font-mono">Authorization: Bearer</code> on every API request, and signing browser room tokens.</p>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No API key is stored for this account. Sign out and sign in again — if it is still
-                    missing, key issuance failed at signup and support has to reissue it.
-                  </p>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm text-muted-foreground">
+                      No API key is stored for this session. Sign in again — if it is still missing,
+                      key issuance failed at signup and support has to reissue it.
+                    </p>
+                    <Button variant="outline" size="sm" onClick={signInAgain}>
+                      <LogIn className="h-4 w-4" /> Sign in again
+                    </Button>
+                  </div>
                 )}
                 <div className="space-y-1">
-                  <SecretRow label="User ID · account reference" value={user.user_id} secret />
-                  <p className="text-xs text-muted-foreground">Used for: identifying your account in support requests. No longer sent as identity — the API key is.</p>
+                  <SecretRow label="User ID · account reference" value={user.user_id} />
+                  <p className="text-xs text-muted-foreground">Used for: quoting your account in a support request. Requests do not send it — the API key identifies you.</p>
                 </div>
               </div>
             )}
@@ -155,7 +163,7 @@ const Developer = () => {
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               {developerActions.map((action) => {
-                const preview = action.buildSpec("");
+                const preview = action.buildSpec();
                 return (
                   <div
                     key={preview.id + action.name}

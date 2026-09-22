@@ -1,11 +1,27 @@
 import { CallRecord } from "@/types/passthroughCall";
 import { authedFetch } from "@/services/auth/authedFetch";
+import { readJson } from "@/lib/readJson";
 
 const PASSTHROUGH_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/passthrough-call`;
 
-export async function callCallRecordsEndpoint(params: URLSearchParams): Promise<unknown> {
+export interface CallRecordsQuery {
+  page: number;
+  limit: number;
+  toNumber?: string;
+  callStatus?: string;
+  startDate?: Date;
+  endDate?: Date;
+}
+
+export async function callCallRecordsEndpoint(query: CallRecordsQuery): Promise<unknown> {
+  const params = new URLSearchParams({ page: String(query.page), limit: String(query.limit) });
+  if (query.toNumber) params.set("to_number", query.toNumber);
+  if (query.callStatus) params.set("call_status", query.callStatus);
+  if (query.startDate) params.set("start_date", query.startDate.toISOString());
+  if (query.endDate) params.set("end_date", query.endDate.toISOString());
+
   const res = await authedFetch(`${PASSTHROUGH_BASE}/call-records?${params.toString()}`);
-  const json = await res.json();
+  const json = await readJson(res);
   if (!res.ok) {
     throw new Error(json.error || "Failed to fetch records");
   }
@@ -38,7 +54,7 @@ export async function callPassthroughOutboundEndpoint(payload: unknown): Promise
     body: JSON.stringify(payload),
   });
 
-  const json = await res.json();
+  const json = await readJson(res);
   if (!res.ok) {
     throw new Error(json.error || "Failed to initiate call");
   }

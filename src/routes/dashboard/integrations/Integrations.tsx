@@ -9,10 +9,11 @@ import {
   callResyncIntegrationEndpoint,
   callResyncStatusEndpoint,
   callStoreIntegrationEndpoint,
+  condenseIntegrationResponse,
 } from "@/services/integration/integrationService";
 import { IntegrationData, ResyncData } from "@/types/integration";
 import { toast } from "sonner";
-import { Link2, Mic2, Eye, EyeOff, ShieldCheck, Loader2, RefreshCw, CheckCircle2, AlertTriangle, Blocks } from "lucide-react";
+import { Link2, Mic2, ShieldCheck, Loader2, RefreshCw, CheckCircle2, AlertTriangle, Blocks } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const Integrations = () => {
@@ -45,20 +46,24 @@ const Integrations = () => {
     const [apiKey, setApiKey] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [connectedServices, setConnectedServices] = useState<IntegrationData[]>([]);
-    const [showKeys, setShowKeys] = useState<{ [key: string]: boolean }>({});
     const [resync, setResync] = useState<{ [service: string]: ResyncData }>({});
     const timers = useRef<{ [service: string]: ReturnType<typeof setTimeout> }>({});
     const user = getStoredUser();
 
     const pollResync = async (service: string) => {
-        if (!user?.user_id) return;
+        if (!user?.api_key) return;
         // drop any pending poll for this service so we never stack concurrent pollers
         if (timers.current[service]) clearTimeout(timers.current[service]);
         try {
-            const { ok, json } = await callResyncStatusEndpoint({ userId: user.user_id, serviceName: service });
+            const { ok, status, json } = await callResyncStatusEndpoint({ serviceName: service });
             if (!ok) {
-                // no re-sync has run for this (user, service) yet — nothing to sync
-                setResync(prev => { const n = { ...prev }; delete n[service]; return n; });
+                // A 404 means no re-sync has run for this service yet; anything else is a real failure.
+                setResync(prev => {
+                    const n = { ...prev };
+                    if (status === 404) delete n[service];
+                    else n[service] = { status: "error", error: json.error };
+                    return n;
+                });
                 return;
             }
             if (!json.success || !json.data) return;
@@ -73,9 +78,9 @@ const Integrations = () => {
     };
 
     const handleResync = async (service: string) => {
-        if (!user?.user_id) return;
+        if (!user?.api_key) return;
         try {
-            const json = await callResyncIntegrationEndpoint({ user_id: user.user_id, service_name: service });
+            const json = await callResyncIntegrationEndpoint({ service_name: service });
             if (json.success) {
                 setResync(prev => ({ ...prev, [service]: { status: "running", processed: 0 } }));
                 pollResync(service);
@@ -93,30 +98,35 @@ const Integrations = () => {
     const providers = ["cartesia", "sarvam", "elevenlabs", "mistral", "gemini", "openai", "deepgram"];
 
     const fetchIntegrations = async () => {
-        if (!user?.user_id) return;
+        if (!user?.api_key) return;
         const results: IntegrationData[] = [];
+        const unreachable: string[] = [];
 
-        for (const provider of providers) {
+        await Promise.all(providers.map(async (provider) => {
             try {
-                const data = await callGetIntegrationEndpoint({ userId: user.user_id, serviceName: provider });
-                if (data.success && data.data) {
-                    results.push(data.data);
-                }
-            } catch (error) {
-                console.error(`Error fetching ${provider} integration:`, error);
+                const { ok, status, json } = await callGetIntegrationEndpoint({ serviceName: provider });
+                const integration = ok ? condenseIntegrationResponse(json) : null;
+                if (integration) results.push(integration);
+                else if (status !== 404) unreachable.push(PROVIDER_DISPLAY_NAMES[provider] ?? provider);
+            } catch {
+                unreachable.push(PROVIDER_DISPLAY_NAMES[provider] ?? provider);
             }
-        }
+        }));
+        results.sort((a, b) => providers.indexOf(a.service_name) - providers.indexOf(b.service_name));
         setConnectedServices(results);
+        if (unreachable.length > 0) {
+            toast.error(`Couldn't check ${unreachable.join(", ")}. Refresh to try again.`);
+        }
         // resume any re-sync job still running after a reload (404 = no-op for idle providers)
         results.forEach(s => pollResync(s.service_name));
     };
 
     useEffect(() => {
         fetchIntegrations();
-    }, [user?.user_id]);
+    }, [user?.api_key]);
 
     const handleSave = async () => {
-        if (!user?.user_id || !selectedProvider || !apiKey) {
+        if (!user?.api_key || !selectedProvider || !apiKey) {
             toast.error("Please provide an API key");
             return;
         }
@@ -124,7 +134,6 @@ const Integrations = () => {
         setIsLoading(true);
         try {
             const data = await callStoreIntegrationEndpoint({
-                user_id: user.user_id,
                 service_name: selectedProvider,
                 api_key: apiKey,
             });
@@ -149,10 +158,6 @@ const Integrations = () => {
         }
     };
 
-    const toggleKeyVisibility = (serviceName: string) => {
-        setShowKeys(prev => ({ ...prev, [serviceName]: !prev[serviceName] }));
-    };
-
     return (
         <div className="page-shell overflow-auto">
             <div className="page-padding max-w-5xl mx-auto space-y-10 md:space-y-12 pb-20">
@@ -169,7 +174,7 @@ const Integrations = () => {
                         <h1 className="text-2xl font-bold tracking-tight">
                             Provider Keys
                         </h1>
-                        <p className="text-sm text-muted-foreground">Keys for OpenAI, Gemini, ElevenLabs and other voice providers. Your assistants use these — they are different from Your API Keys.</p>
+                        <p className="text-sm text-muted-foreground">Keys for OpenAI, Gemini, ElevenLabs and other voice providers. Your assistants use these — they are different from Your API key.</p>
                     </div>
                 </div>
             </motion.div>
@@ -221,18 +226,10 @@ const Integrations = () => {
                                                 </div>
                                             </div>
 
-                                            <div
-                                                onClick={() => toggleKeyVisibility(service.service_name)}
-                                                className="cursor-pointer group/key relative bg-background/50 p-2.5 rounded-lg border border-border hover:border-primary/30 transition-colors"
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <div className="font-mono text-xs overflow-hidden text-ellipsis whitespace-nowrap pr-6 text-muted-foreground group-hover/key:text-foreground transition-colors">
-                                                        {showKeys[service.service_name] ? service.api_key : "••••••••••••••••"}
-                                                    </div>
-                                                    <div className="absolute right-2.5 text-muted-foreground group-hover/key:text-primary transition-colors">
-                                                        {showKeys[service.service_name] ? <EyeOff size={14} /> : <Eye size={14} />}
-                                                    </div>
-                                                </div>
+                                            <div className="bg-background/50 p-2 rounded-lg border border-border">
+                                                <p className="font-mono text-xs truncate text-muted-foreground" title="Stored key — only the last four characters are shown">
+                                                    Key ending {service.api_key_preview.replace(/^\*+/, "") || "····"}
+                                                </p>
                                             </div>
 
                                             {/* Re-sync status */}

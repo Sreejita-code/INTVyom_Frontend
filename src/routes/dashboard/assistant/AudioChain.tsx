@@ -118,7 +118,7 @@ export function AudioChain({ mode, stt, llm, tts }: AudioChainProps) {
 
       {mode === "realtime" && (
         <p className="text-[11px] leading-5 text-muted-foreground">
-          One model does all three jobs. There is no separate transcriber or voice to configure.
+          One model does all three jobs. There is no separate transcriber or speech provider to configure.
         </p>
       )}
     </div>

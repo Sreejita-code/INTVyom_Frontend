@@ -24,7 +24,7 @@ export interface TrunkItem {
 
 export interface TrunkDetail {
   _id: string;
-  user_id: string;
+  user_id?: string;
   external_trunk_id: string;
   trunk_name: string;
   trunk_type: "twilio" | "exotel";

@@ -56,6 +56,8 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { toastError } from "@/lib/toastError";
+import { InboundNumberPicker } from "./InboundNumberPicker";
+import { isPhoneLike } from "./phoneNumber";
 
 /** Sentinel for "nothing attached" in the comboboxes; sent to the API as null. */
 const NONE = "none";
@@ -78,7 +80,6 @@ export default function InboundPage() {
     const [numberSearchQuery, setNumberSearchQuery] = useState("");
 
     // Dropdown open states
-    const [openPhoneDropdown, setOpenPhoneDropdown] = useState(false);
     const [openModalAssistantDropdown, setOpenModalAssistantDropdown] = useState(false);
     const [openModalStrategyDropdown, setOpenModalStrategyDropdown] = useState(false);
     const [openMainAssistantDropdown, setOpenMainAssistantDropdown] = useState(false);
@@ -100,13 +101,15 @@ export default function InboundPage() {
     const [updateStrategyId, setUpdateStrategyId] = useState<string>(NONE);
 
     const fetchData = useCallback(async () => {
-        if (!user?.user_id) return;
+        if (!user?.api_key) return;
 
+        const unavailable: string[] = [];
         try {
             // Fetch Assistants
-            const astRes = await callListAssistantsEndpoint({ userId: user.user_id });
+            const astRes = await callListAssistantsEndpoint({});
 
-            if (astRes.ok) {
+            if (!astRes.ok) unavailable.push("assistants");
+            else {
                 setAssistants(condenseListAssistantsResponse(astRes.json).map((ast) => ({
                     assistant_id: ast.assistant_id,
                     name: ast.assistant_name
@@ -114,44 +117,50 @@ export default function InboundPage() {
             }
 
             // Fetch SIP Trunks (Filter for Exotel)
-            const sipRes = await callListTrunksEndpoint(user.user_id);
-            if (sipRes.ok) {
+            const sipRes = await callListTrunksEndpoint();
+            if (!sipRes.ok) unavailable.push("numbers");
+            else {
+                // The trunk list withholds trunk_config, so a number is only offered when the
+                // backend returns one; otherwise the user types it.
                 const exotel = condenseListTrunksResponse(sipRes.json)
-                    .filter((t: any) => t.trunk_type === 'exotel' && t.trunk_config?.exotel_number)
-                    .map((t: any) => ({
-                        trunk_id: t.external_trunk_id || t._id,
-                        number: t.trunk_config.exotel_number,
-                        name: t.trunk_name || "Exotel Trunk"
+                    .filter((t) => t.trunk_type === "exotel" && t.trunk_config?.exotel_number)
+                    .map((t) => ({
+                        trunk_id: t.external_trunk_id || t._id || "",
+                        number: t.trunk_config?.exotel_number ?? "",
+                        name: t.trunk_name || "Exotel Trunk",
                     }));
                 setExotelNumbers(exotel);
             }
 
             // Fetch Context Strategies (optional attachment for each number)
-            const strategyJson = await callListStrategiesEndpoint(user.user_id);
+            const strategyJson = await callListStrategiesEndpoint();
             setStrategies(condenseListStrategiesResponse(strategyJson).map((st) => ({
                 strategy_id: st.strategy_id,
                 name: st.name
             })));
         } catch (error) {
+            unavailable.push("strategies");
             console.error("Failed to fetch prerequisite data:", error);
-            // Without this the dropdowns just look empty, which reads as "you have none".
+        }
+        // Without this the dropdowns just look empty, which reads as "you have none".
+        if (unavailable.length > 0) {
             toast({
                 variant: "destructive",
-                title: "Could not load assistants, numbers or strategies",
+                title: `Could not load ${unavailable.join(", ")}`,
                 description: "The dropdowns may be incomplete. Refresh to try again.",
             });
         }
-    }, [user?.user_id, toast]);
+    }, [user?.api_key, toast]);
 
     // FIX: Removed selectedInbound dependencies and added showLoading flag to prevent infinite loops
     const fetchList = async (showLoading = true) => {
-        if (!user?.user_id) {
+        if (!user?.api_key) {
             setListLoading(false);
             return;
         }
         if (showLoading) setListLoading(true);
         try {
-            const json = await callListInboundMappingsEndpoint(user.user_id);
+            const json = await callListInboundMappingsEndpoint();
             setInbounds(condenseListInboundMappingsResponse(json) as InboundItem[]);
         } catch (error) {
             console.error(error);
@@ -166,7 +175,7 @@ export default function InboundPage() {
         fetchData();
         fetchList(true);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.user_id]);
+    }, [user?.api_key]);
 
     const handleSelectInbound = (inbound: InboundItem) => {
         setSelectedInbound(inbound);
@@ -188,9 +197,9 @@ export default function InboundPage() {
     const strategyNameFor = (id: string) => strategies.find(s => s.strategy_id === id)?.name;
 
     const handleAssignInbound = async () => {
-        if (!user?.user_id) return;
-        if (!modalForm.phone_number) {
-            toast({ variant: "destructive", title: "Validation Error", description: "Phone number is required" });
+        if (!user?.api_key) return;
+        if (!isPhoneLike(modalForm.phone_number)) {
+            toast({ variant: "destructive", title: "Validation Error", description: "Enter the full Exotel number, with the country code." });
             return;
         }
         if (!modalForm.assistant_id || modalForm.assistant_id === NONE) {
@@ -201,7 +210,6 @@ export default function InboundPage() {
         setIsCreating(true);
         try {
             const payload = {
-                user_id: user.user_id,
                 assistant_id: modalForm.assistant_id,
                 service: "exotel",
                 inbound_config: {
@@ -233,7 +241,7 @@ export default function InboundPage() {
     const strategyChanged = updateStrategyId !== (selectedInbound?.inbound_context_strategy_id || NONE);
 
     const handleUpdateMapping = async () => {
-        if (!selectedInbound || !user?.user_id) return;
+        if (!selectedInbound || !user?.api_key) return;
         if (!assistantChanged && !strategyChanged) return;
 
         setIsUpdating(true);
@@ -241,7 +249,6 @@ export default function InboundPage() {
         try {
             // Send only what changed; the API rejects an update with no fields.
             const payload = {
-                user_id: user.user_id,
                 ...(assistantChanged && { assistant_id: updateAssistantId === NONE ? null : updateAssistantId }),
                 ...(strategyChanged && { inbound_context_strategy_id: updateStrategyId === NONE ? null : updateStrategyId }),
             };
@@ -274,11 +281,10 @@ export default function InboundPage() {
     };
 
     const handleDetachInbound = async () => {
-        if (!selectedInbound || !user?.user_id) return;
+        if (!selectedInbound || !user?.api_key) return;
         setIsDetaching(true);
         try {
             const { ok, json } = await callDetachInboundEndpoint({
-                userId: user.user_id,
                 inboundId: selectedInbound.inbound_id,
             });
             if (ok) {
@@ -308,12 +314,11 @@ export default function InboundPage() {
     };
 
     const handleDeleteInbound = async () => {
-        if (!selectedInbound || !user?.user_id) return;
+        if (!selectedInbound || !user?.api_key) return;
 
         setIsDeleting(true);
         try {
             const { ok, json } = await callDeleteInboundMappingEndpoint({
-                userId: user.user_id,
                 inboundId: selectedInbound.inbound_id,
             });
 
@@ -376,48 +381,12 @@ export default function InboundPage() {
                                 <div className="p-6 space-y-6">
                                     {/* Searchable Phone Number Dropdown */}
                                     <div className="space-y-2">
-                                        <Label className="text-sm font-medium">Select Exotel Number</Label>
-                                        <Popover open={openPhoneDropdown} onOpenChange={setOpenPhoneDropdown}>
-                                            <PopoverTrigger asChild>
-                                                <Button
-                                                    variant="outline"
-                                                    role="combobox"
-                                                    aria-expanded={openPhoneDropdown}
-                                                    className="w-full justify-between bg-muted/30 h-11"
-                                                >
-                                                    {modalForm.phone_number
-                                                        ? exotelNumbers.find((n) => n.number === modalForm.phone_number)?.number || modalForm.phone_number
-                                                        : "Search available numbers..."}
-                                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-[min(380px,calc(100vw-2rem))] p-0" align="start">
-                                                <Command>
-                                                    <CommandInput placeholder="Search phone numbers or trunk name..." />
-                                                    <CommandList>
-                                                        <CommandEmpty>No Exotel numbers found. Please create a trunk first.</CommandEmpty>
-                                                        <CommandGroup>
-                                                            {exotelNumbers.map((num) => (
-                                                                <CommandItem
-                                                                    key={num.number}
-                                                                    value={`${num.number} ${num.name}`} // Allows searching by number OR trunk name
-                                                                    onSelect={() => {
-                                                                        setModalForm({ ...modalForm, phone_number: num.number });
-                                                                        setOpenPhoneDropdown(false);
-                                                                    }}
-                                                                >
-                                                                    <Check className={cn("mr-2 h-4 w-4", modalForm.phone_number === num.number ? "opacity-100" : "opacity-0")} />
-                                                                    <div className="flex flex-col">
-                                                                        <span>{num.number}</span>
-                                                                        <span className="text-[10px] text-muted-foreground">{num.name}</span>
-                                                                    </div>
-                                                                </CommandItem>
-                                                            ))}
-                                                        </CommandGroup>
-                                                    </CommandList>
-                                                </Command>
-                                            </PopoverContent>
-                                        </Popover>
+                                        <Label className="text-sm font-medium">Exotel number</Label>
+                                        <InboundNumberPicker
+                                            numbers={exotelNumbers}
+                                            value={modalForm.phone_number}
+                                            onChange={(phone_number) => setModalForm({ ...modalForm, phone_number })}
+                                        />
                                     </div>
 
                                     {/* Searchable Assistant Dropdown */}

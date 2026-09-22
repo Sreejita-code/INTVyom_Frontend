@@ -95,6 +95,9 @@ is `src/index.css`. Add those layers when a real need arrives, not before.
 - **Identity is the bearer key.** Authenticated services call `authedFetch`
   (`src/services/auth/authedFetch.ts`), which attaches `Authorization: Bearer <api_key>` from the
   stored session and clears it (returning to `/auth`) on `401`. `login`/`signup` use plain `fetch`.
+  Never send `user_id` — the backend ignores it. Pages gate requests on `user?.api_key`.
+- Services read response bodies with `readJson` (`src/lib/readJson.ts`), never `res.json()`, so a
+  proxy's HTML error page becomes `{ error }` rather than a `SyntaxError`.
 - Keep comment style consistent with existing code; do not add new comments unless they
   document non-obvious backend behavior.
 - No dead code. Delete unused components and dependencies rather than keeping them
@@ -104,14 +107,13 @@ is `src/index.css`. Add those layers when a real need arrives, not before.
 ## Baseline
 
 Pre-existing, not regressions — compare against these before claiming a
-regression. Measured 2026-09-12; refreshed 2026-09-22.
+regression. Measured 2026-09-12; refreshed 2026-09-22 (after `plan/api-contract-alignment.md`).
 
-- `npm run test` — 31 files, 246 tests; 245 pass. The one failure is
-  `tests/lib/apiSnippet.test.ts > renders Python the interpreter compiles`, which fails
-  only where `python3` is not installed — environmental, not a code failure.
+- `npm run test` — 43 files, 303 tests, all pass. `tests/lib/apiSnippet.test.ts > renders
+  Python the interpreter compiles` skips its check where `python3` is not installed.
 - `npm run typecheck` — clean on any filesystem (the two case collisions that used to break
   Windows checkouts were fixed on 2026-09-22).
-- `npm run lint` — 88 problems (80 errors, 8 warnings), almost all
+- `npm run lint` — 82 problems (74 errors, 8 warnings), almost all
   `@typescript-eslint/no-explicit-any` spread across routes, plus
   `tailwind.config.ts` and `src/components/ui`
 - `npm run build` — `tsc -b && vite build`; succeeds, emits a >500 kB chunk warning

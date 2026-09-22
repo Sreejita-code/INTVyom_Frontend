@@ -5,8 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { storeUser } from "@/services/storage/storageService";
-import { callLoginEndpoint, callSignupEndpoint } from "@/services/auth/authService";
-import { AuthResponse } from "@/types/auth";
+import { callLoginEndpoint, callSignupEndpoint, condenseAuthResponse } from "@/services/auth/authService";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
@@ -42,24 +41,25 @@ const Auth = () => {
             password: form.password,
           });
 
-      const userData = data as AuthResponse;
+      const user = condenseAuthResponse(data);
 
-      // The backend returns the ID inside the `user` object as `id`, and the API key that every
-      // subsequent request is authenticated with. Both are stored; a null key means upstream
-      // issuance failed and the user will be bounced back here on their first request.
-      storeUser({
-        user_id: userData.user.id,
-        user_name: userData.user.user_name,
-        user_email: userData.user.user_email,
-        api_key: userData.user.api_key ?? null,
-      });
+      if (!user.api_key) {
+        toast({
+          variant: "destructive",
+          title: isSignup ? "Account created, but no API key was issued" : "No API key on this account",
+          description: "Sign in again in a moment. If this keeps happening, contact support to reissue your key.",
+        });
+        setIsSignup(false);
+        return;
+      }
 
+      storeUser(user);
       toast({ title: isSignup ? "Account created!" : "Welcome back!" });
       navigate("/dashboard");
-    } catch (err: any) {
+    } catch (err) {
       toast({
         title: "Error",
-        description: err.message || "Something went wrong",
+        description: (err as Error).message || "Something went wrong",
         variant: "destructive",
       });
     } finally {

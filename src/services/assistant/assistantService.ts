@@ -3,19 +3,22 @@ import { CallLog, CallTranscript, CallUsage, CallUsageLine } from "@/types/callL
 import { ServiceResponse } from "@/types/http";
 import { parseUsd } from "@/lib/formatUsd";
 import { authedFetch } from "@/services/auth/authedFetch";
+import { readJson } from "@/lib/readJson";
 
 const ASSISTANT_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/assistant`;
 
 export async function callListAssistantsEndpoint(args: {
-  userId: string;
   page?: number;
   limit?: number;
+  /** Case-insensitive partial match, applied by the backend across every page. */
+  assistantName?: string;
 }): Promise<ServiceResponse<unknown>> {
-  const query = new URLSearchParams({ user_id: args.userId });
+  const query = new URLSearchParams();
   if (args.page != null) query.set("page", String(args.page));
   if (args.limit != null) query.set("limit", String(args.limit));
+  if (args.assistantName) query.set("assistant_name", args.assistantName);
   const res = await authedFetch(`${ASSISTANT_BASE}/list?${query.toString()}`);
-  return { ok: res.ok, json: await res.json() };
+  return { ok: res.ok, json: await readJson(res) };
 }
 
 export const condenseListAssistantsResponse = (json: unknown): AssistantSummary[] => {
@@ -49,11 +52,10 @@ export const condenseListAssistantsResponse = (json: unknown): AssistantSummary[
 };
 
 export async function callGetAssistantDetailsEndpoint(args: {
-  userId: string;
   assistantId: string;
 }): Promise<ServiceResponse<unknown>> {
-  const res = await authedFetch(`${ASSISTANT_BASE}/details/${args.assistantId}?user_id=${args.userId}`);
-  return { ok: res.ok, json: await res.json() };
+  const res = await authedFetch(`${ASSISTANT_BASE}/details/${args.assistantId}`);
+  return { ok: res.ok, json: await readJson(res) };
 }
 
 export const condenseAssistantDetailsResponse = (json: unknown): unknown => {
@@ -63,14 +65,13 @@ export const condenseAssistantDetailsResponse = (json: unknown): unknown => {
 };
 
 export async function callDeleteAssistantEndpoint(args: {
-  userId: string;
   assistantId: string;
 }): Promise<unknown> {
-  const res = await authedFetch(`${ASSISTANT_BASE}/delete/${args.assistantId}?user_id=${args.userId}`, {
+  const res = await authedFetch(`${ASSISTANT_BASE}/delete/${args.assistantId}`, {
     method: "DELETE",
   });
 
-  const json = await res.json();
+  const json = await readJson(res);
   if (!res.ok) throw new Error(json.error || json.message || "Failed to delete assistant");
   return json;
 }
@@ -82,17 +83,8 @@ export async function callCreateAssistantEndpoint(payload: unknown): Promise<unk
     body: JSON.stringify(payload),
   });
 
-  const json = await res.json();
-  if (!res.ok) {
-    // Enhanced error handling with validation details
-    if (json.validation_errors) {
-      const errorMessages = Object.entries(json.validation_errors)
-        .map(([field, errors]) => `${field}: ${(errors as string[]).join(", ")}`)
-        .join("; ");
-      throw new Error(`Validation failed - ${errorMessages}`);
-    }
-    throw new Error(json.error || json.message || "Operation failed");
-  }
+  const json = await readJson(res);
+  if (!res.ok) throw new Error(json.error || "Operation failed");
   return json;
 }
 
@@ -103,22 +95,12 @@ export async function callUpdateAssistantEndpoint(assistantId: string, payload: 
     body: JSON.stringify(payload),
   });
 
-  const json = await res.json();
-  if (!res.ok) {
-    // Enhanced error handling with validation details
-    if (json.validation_errors) {
-      const errorMessages = Object.entries(json.validation_errors)
-        .map(([field, errors]) => `${field}: ${(errors as string[]).join(", ")}`)
-        .join("; ");
-      throw new Error(`Validation failed - ${errorMessages}`);
-    }
-    throw new Error(json.error || json.message || "Operation failed");
-  }
+  const json = await readJson(res);
+  if (!res.ok) throw new Error(json.error || "Operation failed");
   return json;
 }
 
 export interface AssistantCallLogsQuery {
-  userId: string;
   assistantId: string;
   page: number;
   limit: number;
@@ -134,7 +116,6 @@ export interface AssistantCallLogsQuery {
  */
 export function buildAssistantCallLogsQuery(args: AssistantCallLogsQuery): Record<string, string> {
   const query: Record<string, string> = {
-    user_id: args.userId,
     page: String(args.page),
     limit: String(args.limit),
     sort_by: args.sortBy,
@@ -159,7 +140,7 @@ export async function callGetAssistantCallLogsEndpoint(args: AssistantCallLogsQu
   const queryParams = new URLSearchParams(buildAssistantCallLogsQuery(args));
 
   const res = await authedFetch(`${ASSISTANT_BASE}/call-logs/${args.assistantId}?${queryParams.toString()}`);
-  const json = await res.json();
+  const json = await readJson(res);
 
   if (!res.ok) {
     throw new Error(json.error || json.message || "Failed to fetch logs");
@@ -267,3 +248,65 @@ export const condenseCallLogsResponse = (json: unknown): AssistantCallLogsPage =
     total: typeof pagination.total === "number" ? pagination.total : 0,
   };
 };
+
+export interface AssistantValidation {
+  valid: boolean;
+  message: string;
+  suggestions: string[];
+}
+
+/**
+ * Dry-runs a configuration against the backend's mode/provider rules. Always answers 200: an
+ * invalid configuration comes back as `is_valid: false` with the reason in `message`.
+ */
+export async function callValidateAssistantEndpoint(payload: unknown): Promise<AssistantValidation> {
+  const res = await authedFetch(`${ASSISTANT_BASE}/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const json = await readJson(res);
+  if (!res.ok) throw new Error(json.error || "Could not validate the configuration");
+  const suggestions = json.data?.suggestions;
+  return {
+    valid: json.data?.is_valid !== false,
+    message: String(json.message ?? ""),
+    suggestions: suggestions && typeof suggestions === "object"
+      ? Object.entries(suggestions as Record<string, unknown>)
+          .filter(([key]) => !key.endsWith("_notes"))
+          .map(([, value]) => String(value))
+      : [],
+  };
+}
+
+export interface AssistantTemplate {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export async function callListTemplatesEndpoint(): Promise<AssistantTemplate[]> {
+  const res = await authedFetch(`${ASSISTANT_BASE}/templates`);
+  const json = await readJson(res);
+  if (!res.ok) throw new Error(json.error || "Failed to load templates");
+  return Array.isArray(json.data) ? json.data : [];
+}
+
+/** A template's configuration: mode and provider settings, with no name, prompt or description. */
+export async function callGetTemplateEndpoint(templateId: string): Promise<Record<string, unknown>> {
+  const res = await authedFetch(`${ASSISTANT_BASE}/templates/${encodeURIComponent(templateId)}`);
+  const json = await readJson(res);
+  if (!res.ok) throw new Error(json.error || "Failed to load the template");
+  return json.data?.configuration ?? {};
+}
+
+export async function callAssistantBillableMinutesEndpoint(args: {
+  assistantId: string;
+  toNumber: string;
+}): Promise<number> {
+  const query = new URLSearchParams({ to_number: args.toNumber });
+  const res = await authedFetch(`${ASSISTANT_BASE}/billable-minutes/${args.assistantId}?${query.toString()}`);
+  const json = await readJson(res);
+  if (!res.ok) throw new Error(json.error || "Failed to load billable minutes");
+  return Number(json.data?.total_billable_minutes ?? 0);
+}

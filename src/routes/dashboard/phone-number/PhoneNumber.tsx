@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { toastError } from "@/lib/toastError";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { getStoredUser } from "@/services/storage/storageService";
@@ -20,7 +21,7 @@ import {
   condenseListTrunksResponse,
   condenseTrunkDetailsResponse,
 } from "@/services/sip/sipService";
-import { TrunkDetail, TrunkItem } from "@/types/sip";
+import { TrunkConfigSummary, TrunkDetail, TrunkItem } from "@/types/sip";
 import { JsonSample } from "@/components/common/JsonSample";
 import { PASSTHROUGH_WEBHOOK_SAMPLE } from "@/lib/webhookSamples";
 
@@ -32,6 +33,14 @@ const PassthroughWebhookSample = () => (
         note="Fires when the call ends, on every outcome including busy, no_answer and timeout. No assistant runs on a passthrough call, so assistant_id is null, transcripts is empty and there is no usage block."
     />
 );
+
+/** Numbers the API returned for a trunk: Twilio lists `numbers`, Exotel carries one `exotel_number`. */
+const trunkNumbers = (trunk: { trunk_config?: TrunkConfigSummary }): string[] =>
+    trunk.trunk_config?.numbers?.length
+        ? trunk.trunk_config.numbers
+        : trunk.trunk_config?.exotel_number
+            ? [trunk.trunk_config.exotel_number]
+            : [];
 
 export default function PhoneNumberPage() {
     const user = getStoredUser();
@@ -62,13 +71,13 @@ export default function PhoneNumberPage() {
     const [isDeleting, setIsDeleting] = useState(false);
 
     const fetchList = useCallback(async () => {
-        if (!user?.user_id) {
+        if (!user?.api_key) {
             setListLoading(false);
             return;
         }
         setListLoading(true);
         try {
-            const { ok, json } = await callListTrunksEndpoint(user.user_id);
+            const { ok, json } = await callListTrunksEndpoint();
             if (ok) {
                 const data = condenseListTrunksResponse(json);
                 setTrunks(data);
@@ -76,6 +85,8 @@ export default function PhoneNumberPage() {
                 if (data.length === 0) {
                     setIsModalOpen(true);
                 }
+            } else {
+                toast(toastError(json, "Failed to load phone lines"));
             }
         } catch (error) {
             console.error(error);
@@ -83,7 +94,7 @@ export default function PhoneNumberPage() {
         } finally {
             setListLoading(false);
         }
-    }, [user?.user_id, toast]);
+    }, [user?.api_key, toast]);
 
     useEffect(() => {
         fetchList();
@@ -100,7 +111,7 @@ export default function PhoneNumberPage() {
 
     // Accept 'any' temporarily or strict type but extracting safely
     const handleSelectTrunk = async (trunk: any) => {
-        if (!user?.user_id) return;
+        if (!user?.api_key) return;
 
         setSelectedTrunk(null);
         setDetailLoading(true);
@@ -115,7 +126,7 @@ export default function PhoneNumberPage() {
         }
 
         try {
-            const json = await callGetTrunkDetailsEndpoint({ userId: user.user_id, trunkId });
+            const json = await callGetTrunkDetailsEndpoint({ trunkId });
             setSelectedTrunk(condenseTrunkDetailsResponse(json) as TrunkDetail);
             setMobileDetailOpen(true);
             
@@ -124,7 +135,6 @@ export default function PhoneNumberPage() {
             // Fallback: created a partial detail object from the list item
             setSelectedTrunk({
                 _id: trunk._id || trunk.trunk_id,
-                user_id: user.user_id,
                 external_trunk_id: trunk.external_trunk_id || trunk.trunk_id,
                 trunk_name: trunk.trunk_name,
                 trunk_type: trunk.trunk_type,
@@ -141,7 +151,7 @@ export default function PhoneNumberPage() {
     };
 
     const handleCreateTrunk = async () => {
-        if (!user?.user_id) {
+        if (!user?.api_key) {
             toast({ variant: "destructive", title: "Auth Error", description: "User ID not found" });
             return;
         }
@@ -174,7 +184,6 @@ export default function PhoneNumberPage() {
             }
 
             const payload: any = {
-                user_id: user.user_id,
                 trunk_name: modalForm.trunk_name,
                 trunk_type: activeTab,
                 trunk_config,
@@ -212,13 +221,13 @@ export default function PhoneNumberPage() {
     };
 
     const handleDeleteTrunk = async () => {
-        if (!selectedTrunk || !user?.user_id) return;
+        if (!selectedTrunk || !user?.api_key) return;
 
         if (!window.confirm("Are you sure you want to remove this phone line?")) return;
 
         setIsDeleting(true);
         try {
-            const { ok, json } = await callDeleteTrunkEndpoint({ userId: user.user_id, trunkId: selectedTrunk._id });
+            const { ok, json } = await callDeleteTrunkEndpoint({ trunkId: selectedTrunk._id });
 
             if (ok) {
                 toast({ title: "Removed", description: "Phone line removed successfully" });
@@ -484,7 +493,7 @@ export default function PhoneNumberPage() {
                                             )}>
                                                 {item.trunk_name}
                                             </h4>
-                                            <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground/60 mt-1">
+                                            <p className="text-xs uppercase tracking-wider font-bold text-muted-foreground/60 mt-1">
                                                 {item.trunk_type}
                                             </p>
                                         </div>
@@ -529,7 +538,7 @@ export default function PhoneNumberPage() {
                                     Back
                                 </Button>
                                 <div className="flex items-center gap-3">
-                                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
+                                    <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary border border-primary/20">
                                         <Phone className="h-6 w-6" />
                                     </div>
                                     <div>
@@ -558,14 +567,14 @@ export default function PhoneNumberPage() {
                                     </Button>
                                 </div>
                                 <div className={cn(
-                                    "status-chip",
+                                    "status-chip self-start md:self-end",
                                     selectedTrunk.trunk_type === "twilio"
                                         ? "status-chip-info"
                                         : "status-chip-neutral"
                                 )}>
                                     {selectedTrunk.trunk_type}
                                 </div>
-                                <p className="text-[10px] text-muted-foreground">
+                                <p className="text-xs text-muted-foreground">
                                     Updated {selectedTrunk.updatedAt ? new Date(selectedTrunk.updatedAt).toLocaleDateString() : 'Unknown'}
                                 </p>
                             </div>
@@ -581,21 +590,21 @@ export default function PhoneNumberPage() {
                                             <h3 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
                                                 <Info className="h-3 w-3" /> Information
                                             </h3>
-                                            <div className="glass rounded-xl p-6 space-y-6">
+                                            <div className="glass rounded-lg p-6 space-y-6">
                                                 <div className="space-y-1">
-                                                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Provider</Label>
+                                                    <Label className="text-xs uppercase font-bold text-muted-foreground">Provider</Label>
                                                     <p className="text-sm font-semibold capitalize">{selectedTrunk.trunk_type}</p>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">Created On</Label>
+                                                    <Label className="text-xs uppercase font-bold text-muted-foreground">Created On</Label>
                                                     <p className="text-sm font-semibold">
                                                         {selectedTrunk.createdAt ? new Date(selectedTrunk.createdAt).toLocaleDateString(undefined, { dateStyle: 'long' }) : 'Unknown'}
                                                     </p>
                                                 </div>
-                                                {selectedTrunk.trunk_type === "twilio" && (
+                                                {selectedTrunk.trunk_config?.address && (
                                                     <div className="space-y-1">
-                                                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">SIP Address</Label>
-                                                        <p className="text-sm font-mono break-all">{selectedTrunk.trunk_config?.address || 'N/A'}</p>
+                                                        <Label className="text-xs uppercase font-bold text-muted-foreground">SIP Address</Label>
+                                                        <p className="text-sm font-mono break-all">{selectedTrunk.trunk_config.address}</p>
                                                     </div>
                                                 )}
                                             </div>
@@ -610,7 +619,7 @@ export default function PhoneNumberPage() {
                                             <h3 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
                                                 <Webhook className="h-3 w-3" /> Passthrough
                                             </h3>
-                                            <div className="glass rounded-xl p-6 space-y-4">
+                                            <div className="glass rounded-lg p-6 space-y-4">
                                                 <div className="flex items-center justify-between">
                                                     <div className="space-y-1">
                                                         <p className="text-sm font-semibold">Passthrough Mode</p>
@@ -627,7 +636,7 @@ export default function PhoneNumberPage() {
                                                 </div>
                                                 {selectedTrunk.passthrough_mode && selectedTrunk.passthrough_webhook_url && (
                                                     <div className="space-y-1 pt-2 border-t border-border/50">
-                                                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">End-of-call notification URL</Label>
+                                                        <Label className="text-xs uppercase font-bold text-muted-foreground">End-of-call notification URL</Label>
                                                         <div className="bg-muted/30 p-3 rounded-lg border border-border/50">
                                                             <p className="text-xs font-mono break-all text-primary">{selectedTrunk.passthrough_webhook_url}</p>
                                                         </div>
@@ -640,37 +649,22 @@ export default function PhoneNumberPage() {
                                             <h3 className="text-xs font-bold uppercase tracking-widest text-primary flex items-center gap-2">
                                                 <Shield className="h-3 w-3" /> Configuration
                                             </h3>
-                                            <div className="glass rounded-xl p-8 space-y-8">
-                                                {selectedTrunk.trunk_type === "twilio" ? (
-                                                    <div className="space-y-4">
-                                                        {/* The API never returns the account SID or auth token — they are
-                                                            credentials. Only the non-secret address and numbers come back,
-                                                            when the deployment returns them at all. */}
-                                                        <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-2">
-                                                            <Hash className="h-3 w-3" /> Registered Numbers
-                                                        </Label>
-                                                        <div className="flex flex-wrap gap-3">
-                                                            {selectedTrunk.trunk_config?.numbers && selectedTrunk.trunk_config.numbers.length > 0 ? (
-                                                                selectedTrunk.trunk_config.numbers.map(n => (
-                                                                    <div key={n} className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-bold">
-                                                                        <Phone className="h-3 w-3" /> {n}
-                                                                    </div>
-                                                                ))
-                                                            ) : (
-                                                                <p className="text-sm text-muted-foreground italic">No numbers returned by the API</p>
-                                                            )}
-                                                        </div>
+                                            <div className="glass rounded-lg p-6 space-y-4">
+                                                <Label className="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-2">
+                                                    <Hash className="h-3 w-3" /> {selectedTrunk.trunk_type === "exotel" ? "Exotel number" : "Registered numbers"}
+                                                </Label>
+                                                {trunkNumbers(selectedTrunk).length > 0 ? (
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {trunkNumbers(selectedTrunk).map((n) => (
+                                                            <div key={n} className="flex items-center gap-2 px-3 py-2 bg-primary/10 text-primary border border-primary/20 rounded-lg text-sm font-mono">
+                                                                <Phone className="h-3 w-3" /> {n}
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 ) : (
-                                                    <div className="space-y-4">
-                                                        <Label className="text-[10px] uppercase font-bold text-muted-foreground">Exotel Number</Label>
-                                                        <div className="bg-primary/5 p-6 rounded-xl border border-primary/20 flex items-center gap-4">
-                                                            <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center text-primary">
-                                                                <Phone className="h-6 w-6" />
-                                                            </div>
-                                                            <p className="text-2xl font-black tracking-tight">{selectedTrunk.trunk_config?.exotel_number || 'N/A'}</p>
-                                                        </div>
-                                                    </div>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        Numbers aren't shown for this trunk yet. Credentials are never shown here.
+                                                    </p>
                                                 )}
                                             </div>
                                         </section>

@@ -40,8 +40,17 @@ const ROUTES = [
 const slug = (route) => route.replace(/\//g, "_").replace(/^_/, "") || "root";
 
 async function startServer() {
-  const proc = spawn("npm", ["run", "dev"], { stdio: "ignore" });
-  process.on("exit", () => proc.kill());
+  // Its own process group, so stopping it also stops the vite child npm spawns.
+  const proc = spawn("npm", ["run", "dev"], { stdio: "ignore", detached: true });
+  const stop = () => {
+    try {
+      process.kill(-proc.pid);
+    } catch {
+      // Already gone.
+    }
+  };
+  proc.stop = stop;
+  process.on("exit", stop);
   for (let i = 0; i < 60; i++) {
     try {
       await fetch(ORIGIN);
@@ -135,6 +144,6 @@ for (const route of routes) {
 }
 
 await browser.close();
-server.kill();
+server.stop();
 console.log(`\n${failed} failing checks. Screenshots in ${OUT}/`);
 process.exit(failed ? 1 : 0);

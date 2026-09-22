@@ -18,12 +18,12 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { JsonSample } from "@/components/common/JsonSample";
-import { AssistantDetail, AssistantMode, SttProvider, TtsProvider } from "@/types/assistant";
+import { AssistantDetail, AssistantMode, EndCallWebhookTuning, SttProvider, TtsProvider } from "@/types/assistant";
 import { ToolSummary } from "@/types/tool";
 import { cn } from "@/lib/utils";
 import { MODES, modeAccent } from "@/lib/assistantModes";
 import { END_CALL_WEBHOOK_SAMPLE } from "@/lib/webhookSamples";
-import { emptyForm } from "./constants";
+import { END_CALL_WEBHOOK_FIELDS, emptyForm } from "./constants";
 import { 
   LANGUAGE_CODES, 
   STT_PROVIDERS, 
@@ -39,12 +39,16 @@ import {
   applyTtsProvider,
   getProviderModeError,
   getModelModeError,
+  endCallWebhookErrors,
+  hydrateForm,
+  normalizeEndCallWebhook,
 } from "./assistantConfig";
 import { AudioChain } from "./AudioChain";
 import { FieldRow } from "./FieldRow";
 import { LlmSection } from "./LlmSection";
 import { PromptEditor } from "./PromptEditor";
 import { SttSection } from "./SttSection";
+import { TemplatePicker } from "./TemplatePicker";
 import { TtsSection } from "./TtsSection";
 
 interface AssistantFormProps {
@@ -120,16 +124,15 @@ export function AssistantForm({
     }));
   };
 
-  const updateEndCallWebhook = (key: "timeout_seconds" | "attempts", value: number | null) => {
+  const updateEndCallWebhook = (key: keyof EndCallWebhookTuning, value: number | null) => {
     setFormData((prev) => ({
       ...prev,
-      assistant_end_call_webhook: {
-        timeout_seconds: prev.assistant_end_call_webhook?.timeout_seconds ?? null,
-        attempts: prev.assistant_end_call_webhook?.attempts ?? null,
-        [key]: value,
-      },
+      assistant_end_call_webhook: { ...normalizeEndCallWebhook(prev.assistant_end_call_webhook), [key]: value },
     }));
   };
+
+  const hasWebhookUrl = Boolean(formData.assistant_end_call_url?.trim());
+  const webhookErrors = hasWebhookUrl ? endCallWebhookErrors(formData.assistant_end_call_webhook) : {};
 
   const selectedLanguages = formData.assistant_interaction_config?.preferred_languages ?? [];
 
@@ -243,9 +246,14 @@ export function AssistantForm({
     tts: findProvider(TTS_PROVIDERS, formData.assistant_tts_model)?.label ?? formData.assistant_tts_model,
   };
 
+  const applyTemplate = (configuration: Record<string, unknown>) =>
+    setFormData((prev) => hydrateForm({ ...prev, ...configuration }));
+
   return (
     <ScrollArea className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-4xl space-y-8 p-4 pb-20 md:space-y-10 md:p-8">
+        {mode === "create" && <TemplatePicker onApply={applyTemplate} />}
+
         {/* Validation Errors */}
         {Object.keys(validationErrors).length > 0 && (
           <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 shadow-sm">
@@ -705,11 +713,13 @@ export function AssistantForm({
           <FieldRow
             wide
             label="End-call webhook"
+            htmlFor="end-call-webhook-url"
             help="The full call record is POSTed here when the call ends — transcript, duration, outcome. Leave empty to skip it."
             control={
               // A Textarea rather than an Input so a signed URL with query parameters wraps and can
               // be read end to end. Enter is swallowed — a URL has no second line.
               <Textarea
+                id="end-call-webhook-url"
                 placeholder="https://api.example.com/call-ended"
                 value={formData.assistant_end_call_url}
                 onChange={(e) => updateField("assistant_end_call_url", e.target.value.replace(/\n/g, ""))}
@@ -735,35 +745,36 @@ export function AssistantForm({
           <FieldRow
             wide
             label="Delivery tuning"
-            help="How long to wait for the webhook to answer, and how many times to retry. Leave both blank to use the server defaults — 30 seconds, 3 attempts."
+            help="How long to wait for the webhook to answer, and how many times to try. Leave a field blank to use the server default. Needs a webhook URL above."
             control={
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1.5">
-                  <span className="text-xs text-muted-foreground">Timeout in seconds (1–120)</span>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={120}
-                    placeholder="30"
-                    value={formData.assistant_end_call_webhook?.timeout_seconds ?? ""}
-                    onChange={(e) =>
-                      updateEndCallWebhook("timeout_seconds", e.target.value === "" ? null : Number(e.target.value))
-                    }
-                  />
-                </label>
-                <label className="grid gap-1.5">
-                  <span className="text-xs text-muted-foreground">Attempts (1–5)</span>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={5}
-                    placeholder="3"
-                    value={formData.assistant_end_call_webhook?.attempts ?? ""}
-                    onChange={(e) =>
-                      updateEndCallWebhook("attempts", e.target.value === "" ? null : Number(e.target.value))
-                    }
-                  />
-                </label>
+              <div className="space-y-2">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {END_CALL_WEBHOOK_FIELDS.map((field) => (
+                    <label key={field.key} className="grid gap-2">
+                      <span className="text-xs text-muted-foreground">{field.label}</span>
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        step={1}
+                        min={field.min}
+                        max={field.max}
+                        placeholder={`Default: ${field.fallback}`}
+                        disabled={!hasWebhookUrl}
+                        aria-invalid={webhookErrors[field.key] ? true : undefined}
+                        className={cn(webhookErrors[field.key] && "border-destructive focus-visible:ring-destructive")}
+                        value={formData.assistant_end_call_webhook?.[field.key] ?? ""}
+                        onChange={(e) =>
+                          updateEndCallWebhook(field.key, e.target.value === "" ? null : Number(e.target.value))
+                        }
+                      />
+                    </label>
+                  ))}
+                </div>
+                {Object.values(webhookErrors).length > 0 && (
+                  <p role="alert" className="text-xs text-destructive">
+                    {Object.values(webhookErrors).join(" ")}
+                  </p>
+                )}
               </div>
             }
           />
