@@ -1,4 +1,5 @@
 import { ServiceResponse } from "@/types/http";
+import { authedFetch } from "@/services/auth/authedFetch";
 
 const CALL_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/call`;
 
@@ -10,7 +11,7 @@ export async function callOutboundEndpoint(payload: {
   /** Fills the `{{placeholders}}` in the assistant's prompt and opening line. Omit when empty. */
   metadata?: Record<string, unknown>;
 }): Promise<ServiceResponse<unknown>> {
-  const res = await fetch(`${CALL_BASE}/outbound`, {
+  const res = await authedFetch(`${CALL_BASE}/outbound`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -23,7 +24,7 @@ export async function callQueueStatusEndpoint(
   queueId: string,
   userId: string,
 ): Promise<ServiceResponse<unknown>> {
-  const res = await fetch(`${CALL_BASE}/queue/${encodeURIComponent(queueId)}?user_id=${encodeURIComponent(userId)}`);
+  const res = await authedFetch(`${CALL_BASE}/queue/${encodeURIComponent(queueId)}?user_id=${encodeURIComponent(userId)}`);
   return { ok: res.ok, json: await res.json() };
 }
 

@@ -1,5 +1,6 @@
 import { AudioItem } from "@/types/audio";
 import { ServiceResponse } from "@/types/http";
+import { authedFetch } from "@/services/auth/authedFetch";
 
 const AUDIO_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/audio`;
 
@@ -8,7 +9,7 @@ export async function callListAudiosEndpoint(args: {
   page?: number;
   limit?: number;
 }): Promise<ServiceResponse<unknown>> {
-  const res = await fetch(
+  const res = await authedFetch(
     `${AUDIO_BASE}/list?user_id=${args.userId}&page=${args.page ?? 1}&limit=${args.limit ?? 50}`
   );
   return { ok: res.ok, json: await res.json() };
@@ -27,14 +28,14 @@ export async function callDeleteAudioEndpoint(args: {
   userId: string;
   audioId: string;
 }): Promise<ServiceResponse<unknown>> {
-  const res = await fetch(`${AUDIO_BASE}/${args.audioId}?user_id=${args.userId}`, {
+  const res = await authedFetch(`${AUDIO_BASE}/${args.audioId}?user_id=${args.userId}`, {
     method: "DELETE",
   });
   return { ok: res.ok, json: await res.json() };
 }
 
 export async function callUploadAudioEndpoint(formData: FormData): Promise<ServiceResponse<unknown>> {
-  const res = await fetch(`${AUDIO_BASE}/upload`, {
+  const res = await authedFetch(`${AUDIO_BASE}/upload`, {
     method: "POST",
     body: formData,
   });

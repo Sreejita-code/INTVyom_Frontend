@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import {
+  API_KEY_PLACEHOLDER,
   RequestSpec,
   SNIPPET_LANGUAGES,
   SNIPPET_LANGUAGE_LABELS,
@@ -59,7 +60,7 @@ export const ApiSnippetButton = ({
 }: ApiSnippetButtonProps) => {
   const [open, setOpen] = useState(false);
   const [language, setLanguage] = useState<SnippetLanguage>("curl");
-  const [revealUserId, setRevealUserId] = useState(false);
+  const [revealSecrets, setRevealSecrets] = useState(false);
   const { copied, copy } = useCopyToClipboard(1500);
   const { toast } = useToast();
   const user = getStoredUser();
@@ -67,10 +68,13 @@ export const ApiSnippetButton = ({
   // Only built while the sheet is open: the builders do real work (assistant payloads run the
   // provider validation), so calling one on every keystroke of a form would be wasteful and noisy.
   const spec = open
-    ? buildSpec(revealUserId && user?.user_id ? user.user_id : USER_ID_PLACEHOLDER)
+    ? buildSpec(revealSecrets && user?.user_id ? user.user_id : USER_ID_PLACEHOLDER)
     : null;
 
-  const options = { baseUrl: backendUrl() };
+  const options = {
+    baseUrl: backendUrl(),
+    apiKey: revealSecrets && user?.api_key ? user.api_key : API_KEY_PLACEHOLDER,
+  };
 
   const copySnippet = async () => {
     if (!spec) return;
@@ -182,18 +186,19 @@ export const ApiSnippetButton = ({
         <div className="border-t border-border p-4 md:p-6 space-y-2">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-sm text-foreground">Show my real user ID</p>
+              <p className="text-sm text-foreground">Show my real credentials</p>
               <p className="text-xs text-muted-foreground break-words">
-                Off, the snippet prints{" "}
-                <code className="font-mono">{USER_ID_PLACEHOLDER}</code>. Your user ID identifies
-                your account to the backend — keep it out of anything you share.
+                Off, the snippet prints <code className="font-mono">{API_KEY_PLACEHOLDER}</code> in
+                the <code className="font-mono">Authorization</code> header and{" "}
+                <code className="font-mono">{USER_ID_PLACEHOLDER}</code> in the body. Your API key is
+                a credential — keep it out of anything you share.
               </p>
             </div>
             <Switch
-              checked={revealUserId}
-              onCheckedChange={setRevealUserId}
-              disabled={!user?.user_id}
-              aria-label="Show my real user ID"
+              checked={revealSecrets}
+              onCheckedChange={setRevealSecrets}
+              disabled={!user?.api_key && !user?.user_id}
+              aria-label="Show my real credentials"
             />
           </div>
         </div>

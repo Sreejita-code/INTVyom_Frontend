@@ -171,30 +171,42 @@ export const OPENAI_REALTIME_MODELS: FieldOption[] = [
   { value: "gpt-realtime-mini", label: "gpt-realtime-mini", hint: "Cheaper and faster, less capable." },
 ];
 
-/** Gemini Live models for Realtime mode. */
+/**
+ * Gemini Live models for Realtime mode. Mirrors the backend's `GEMINI_LIVE_MODELS`.
+ * `gemini-live-2.5-flash-native-audio` is the Vertex AI id and is rejected upstream, so it is
+ * deliberately absent. `gemini-3.8-live` is the default.
+ */
 export const GEMINI_LIVE_MODELS: FieldOption[] = [
   {
-    value: "gemini-2.5-flash-native-audio-preview-12-2025",
-    label: "gemini-2.5-flash-native-audio-preview-12-2025",
+    value: "gemini-3.8-live",
+    label: "gemini-3.8-live",
     hint: "Default. Recommended — supports farewells and silence reprompts.",
   },
   {
-    value: "gemini-live-2.5-flash-native-audio",
-    label: "gemini-live-2.5-flash-native-audio",
-    hint: "GA Live model.",
+    value: "gemini-3.8-live-extended-thinking",
+    label: "gemini-3.8-live-extended-thinking",
+    hint: "Deliberates longer before speaking.",
   },
   {
     value: "gemini-3.1-flash-live-preview",
     label: "gemini-3.1-flash-live-preview",
     hint: "Preview model — ignores farewells & silence reprompts after 1st turn.",
   },
+  {
+    value: "gemini-2.5-flash-native-audio-preview-12-2025",
+    label: "gemini-2.5-flash-native-audio-preview-12-2025",
+    hint: "Previous generation.",
+  },
 ];
 
-/** The 30 Gemini Live voice roster names. */
+/**
+ * The 30 Gemini Live voice roster names — the installed plugin's closed set, mirrored from the
+ * backend's `GEMINI_VOICES`. A name outside it cannot work, so this list must not drift.
+ */
 export const GEMINI_LIVE_VOICES: FieldOption[] = [
-  "Puck", "Charon", "Kore", "Fenrir", "Aoede", "Zephyr", "Leto", "Nereid", "Orion", "Pegasus",
-  "Rhea", "Tethys", "Titan", "Vesta", "Acastus", "Achilles", "Actaeon", "Adonis", "Agamemnon", "Ajax",
-  "Alcander", "Alcon", "Alexander", "Althea", "Amphion", "Anchises", "Andromache", "Antigone", "Apollo", "Ariadne",
+  "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede", "Callirrhoe", "Autonoe",
+  "Enceladus", "Iapetus", "Umbriel", "Algieba", "Despina", "Erinome", "Algenib", "Rasalgethi", "Laomedeia", "Achernar",
+  "Alnilam", "Schedar", "Gacrux", "Pulcherrima", "Achird", "Zubenelgenubi", "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat",
 ].map((v) => ({ value: v, label: v }));
 
 export const isGeminiVoice = (voice?: string): boolean => {
@@ -404,8 +416,7 @@ export const STT_PROVIDERS: ProviderSpec[] = [
         fallback: "saaras:v3",
         options: [
           { value: "saaras:v3", label: "saaras:v3", hint: "Default. The only model that reads transcription mode." },
-          { value: "saaras:v2.5", label: "saaras:v2.5" },
-          { value: "saarika:v2.5", label: "saarika:v2.5" },
+          { value: "saaras:v4", label: "saaras:v4", hint: "Newer model. Saaras v2.5 and Saarika v2.5 were sunset by Sarvam." },
         ],
         help: "Which Saras model transcribes the caller.",
       },
@@ -419,7 +430,7 @@ export const STT_PROVIDERS: ProviderSpec[] = [
           ...asOptions(SARVAM_LANGUAGES),
         ],
         help: "Auto-detect handles a caller who switches language mid-sentence. Pinning a code locks every utterance to it.",
-        warn: "The full list below is saaras:v3's. The v2.5 models speak only the first 11 (as-IN, bn-IN, gu-IN, hi-IN, kn-IN, ml-IN, mr-IN, od-IN, pa-IN, ta-IN, te-IN, en-IN); anything else is dropped back to auto-detect on those models.",
+        warn: "The full list below is the saaras roster. Auto-detect is the safest choice when the caller may switch language.",
       },
       {
         key: "mode",
@@ -434,7 +445,7 @@ export const STT_PROVIDERS: ProviderSpec[] = [
           { value: "translit", label: "translit", hint: "Romanized: \"mera phone number hai 9840950950\"." },
         ],
         help: "The shape of the transcript your webhooks and call logs receive. It does not change what the assistant understands, only how the text is written down.",
-        warn: "Read on saaras:v3 only. The v2.5 models reject it outright, so it is dropped before the call rather than sent — they transcribe on their own default style.",
+        warn: "Read on saaras:v3 only. Other Saras models reject it outright, so it is dropped before the call rather than sent — they transcribe on their own default style.",
       },
     ],
   },
@@ -476,8 +487,9 @@ export const STT_PROVIDERS: ProviderSpec[] = [
         control: "select",
         fallback: "nova-3",
         options: [
-          { value: "nova-3", label: "nova-3", hint: "Default. 45 languages, reads keyterms." },
-          { value: "nova-2", label: "nova-2", hint: "Previous generation." },
+          { value: "nova-3", label: "nova-3", hint: "Default. Reads keyterms." },
+          { value: "nova-3-general", label: "nova-3-general", hint: "General-purpose nova-3." },
+          { value: "nova-3-multilingual", label: "nova-3-multilingual", hint: "Multi-language nova-3." },
           { value: "flux-general-en", label: "flux-general-en", hint: "English only, brings its own turn detection." },
           { value: "flux-general-multi", label: "flux-general-multi", hint: "Multilingual, brings its own turn detection." },
         ],
@@ -492,7 +504,7 @@ export const STT_PROVIDERS: ProviderSpec[] = [
           { value: "multi", label: "multi (auto-detect)", hint: "Detects the language per segment." },
           ...asOptions(BCP47_LANGUAGES),
         ],
-        help: "Pin one language, or use multi to detect per segment. Leaving it unset auto-detects on nova-3 and flux-general-multi; nova-2 and flux-general-en cannot detect and stay on en-US.",
+        help: "Pin one language, or use multi to detect per segment. Leaving it unset auto-detects on nova-3 and flux-general-multi; flux-general-en cannot detect and stays on en-US.",
         warn: "Multi is billed at a higher per-minute rate than a pinned language. On the flux models this is only a hint, and only flux-general-multi reads it.",
       },
       {
@@ -508,7 +520,7 @@ export const STT_PROVIDERS: ProviderSpec[] = [
         control: "text",
         placeholder: "e.g. invoice",
         help: "Biases recognition toward a term the model keeps getting wrong — a product name, a surname.",
-        warn: "Read on nova-3 and flux only. On nova-2 it does nothing at all.",
+        warn: "Read on nova-3 and flux only. A legacy nova-2 assistant ignores it.",
         advanced: true,
       },
     ],
@@ -671,7 +683,7 @@ export const getSttModelError = (
 ): string | null => {
   // Validate Sarvam model/language compatibility
   if (provider === "sarvam") {
-    const validModels = ["saaras:v3", "saaras:v2.5", "saarika:v2.5"];
+    const validModels = ["saaras:v3", "saaras:v4"];
     if (!validModels.includes(model)) {
       return `Invalid Sarvam model "${model}". Valid models: ${validModels.join(", ")}.`;
     }
@@ -714,7 +726,7 @@ export const getSttModelError = (
   
   // Validate Deepgram model compatibility
   if (provider === "deepgram") {
-    const validModels = ["nova-3", "nova-2", "flux-general-en", "flux-general-multi"];
+    const validModels = ["nova-3", "nova-3-general", "nova-3-multilingual", "flux-general-en", "flux-general-multi"];
     if (!validModels.includes(model)) {
       return `Invalid Deepgram model "${model}". Valid models: ${validModels.join(", ")}.`;
     }
@@ -772,8 +784,8 @@ export const ttsInertReason = (
 ): string | undefined => {
   if (provider === "elevenlabs" && key === "speed") {
     const model = String(config.model ?? "eleven_v3");
-    if (model === "eleven_v3") {
-      return "eleven_v3 has no speed control. Switch to eleven_multilingual_v2, eleven_turbo_v2_5, or eleven_flash_v2_5 to adjust speed.";
+    if (model === "eleven_v3" || model === "eleven_v3_conversational") {
+      return `${model} has no speed control. Switch to eleven_multilingual_v2, eleven_turbo_v2_5, or eleven_flash_v2_5 to adjust speed.`;
     }
   }
   return undefined;
@@ -927,6 +939,7 @@ export const TTS_PROVIDERS: ProviderSpec[] = [
         fallback: "eleven_v3",
         options: [
           { value: "eleven_v3", label: "eleven_v3", hint: "Default. Most expressive." },
+          { value: "eleven_v3_conversational", label: "eleven_v3_conversational", hint: "v3 tuned for conversation." },
           { value: "eleven_multilingual_v2", label: "eleven_multilingual_v2" },
           { value: "eleven_turbo_v2_5", label: "eleven_turbo_v2_5", hint: "Lower latency." },
           { value: "eleven_flash_v2_5", label: "eleven_flash_v2_5", hint: "Lowest latency." },

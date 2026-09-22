@@ -24,10 +24,18 @@ export interface RequestSpec {
 
 export interface SnippetOptions {
   baseUrl: string;
+  /**
+   * The key printed in the `Authorization: Bearer` header. Omit it for an unauthenticated request;
+   * pass `API_KEY_PLACEHOLDER` (or the real key) otherwise.
+   */
+  apiKey?: string;
 }
 
 /** The placeholder every snippet shows in place of the signed-in user's identifier. */
 export const USER_ID_PLACEHOLDER = "$VYOM_USER_ID";
+
+/** The placeholder every snippet shows in place of the signed-in user's API key. */
+export const API_KEY_PLACEHOLDER = "$VYOM_API_KEY";
 
 export const SNIPPET_LANGUAGES = ["curl", "python", "node"] as const;
 
@@ -65,10 +73,9 @@ const shellQuote = (text: string) => `'${text.replace(/'/g, "'\\''")}'`;
 
 export function renderCurl(spec: RequestSpec, options: SnippetOptions): string {
   const lines = [`curl -X ${spec.method} "${buildRequestUrl(spec, options)}"`];
-  if (hasBody(spec)) {
-    lines.push(`  -H "Content-Type: application/json"`);
-    lines.push(`  -d ${shellQuote(jsonBody(spec))}`);
-  }
+  if (hasBody(spec)) lines.push(`  -H "Content-Type: application/json"`);
+  if (options.apiKey) lines.push(`  -H "Authorization: Bearer ${options.apiKey}"`);
+  if (hasBody(spec)) lines.push(`  -d ${shellQuote(jsonBody(spec))}`);
   return lines.join(" \\\n");
 }
 
@@ -106,6 +113,14 @@ function pythonParams(spec: RequestSpec): string | null {
   return `{${body}}`;
 }
 
+/** The `headers=` dict for `requests`, or `null` when the request carries none. */
+function pythonHeaders(spec: RequestSpec, options: SnippetOptions): string | null {
+  const entries: string[] = [];
+  if (hasBody(spec)) entries.push(`"Content-Type": "application/json"`);
+  if (options.apiKey) entries.push(`"Authorization": "Bearer ${options.apiKey}"`);
+  return entries.length > 0 ? `{${entries.join(", ")}}` : null;
+}
+
 export function renderPython(spec: RequestSpec, options: SnippetOptions): string {
   const call = spec.method.toLowerCase();
   const params = pythonParams(spec);
@@ -114,8 +129,9 @@ export function renderPython(spec: RequestSpec, options: SnippetOptions): string
   const url = params ? `${originOf(options)}${spec.path}` : buildRequestUrl(spec, options);
   const args = [`    "${url}"`];
   if (params) args.push(`    params=${params}`);
+  const headers = pythonHeaders(spec, options);
+  if (headers) args.push(`    headers=${headers}`);
   if (hasBody(spec)) {
-    args.push(`    headers={"Content-Type": "application/json"}`);
     args.push(`    json=${pythonLiteral(wireBody(spec), "    ")}`);
   }
   return [
@@ -129,10 +145,19 @@ export function renderPython(spec: RequestSpec, options: SnippetOptions): string
   ].join("\n");
 }
 
+/** The `headers` object literal for `fetch`, or `null` when the request carries none. */
+function nodeHeaders(spec: RequestSpec, options: SnippetOptions): string | null {
+  const entries: string[] = [];
+  if (hasBody(spec)) entries.push(`"Content-Type": "application/json"`);
+  if (options.apiKey) entries.push(`"Authorization": "Bearer ${options.apiKey}"`);
+  return entries.length > 0 ? `{ ${entries.join(", ")} }` : null;
+}
+
 export function renderNode(spec: RequestSpec, options: SnippetOptions): string {
   const init = [`  method: "${spec.method}"`];
+  const headers = nodeHeaders(spec, options);
+  if (headers) init.push(`  headers: ${headers}`);
   if (hasBody(spec)) {
-    init.push(`  headers: { "Content-Type": "application/json" }`);
     init.push(`  body: JSON.stringify(${indentRest(jsonBody(spec), "  ")})`);
   }
   return [

@@ -117,6 +117,7 @@ INTVyom_Frontend/
 │   │   ├── call/callService.ts
 │   │   ├── webCall/webCallService.ts
 │   │   ├── auth/authService.ts
+│   │   ├── auth/authedFetch.ts         # fetch + Authorization: Bearer <api_key>, 401 → /auth
 │   │   └── storage/storageService.ts   # localStorage helpers (getStoredUser, etc.)
 │   ├── types/                    # One module per domain (http, auth, assistant, callLog, ...)
 │   ├── components/
@@ -173,7 +174,8 @@ module exports:
 - `condense<X>Response(json)` — normalizes the raw API payload into typed domain shapes
   (`src/types/`), so pages never read response envelopes directly.
 
-Pages import service functions only — no inline `fetch` calls live in `src/routes/`.
+Authenticated services call `authedFetch` (see **Authentication** below) rather than `fetch`
+directly. Pages import service functions only — no inline `fetch` calls live in `src/routes/`.
 Browser storage access (`getStoredUser`, `storeUser`, `clearUser`) lives in
 `src/services/storage/storageService.ts`.
 
@@ -182,6 +184,22 @@ request/response pair, so it does not fit `call`/`condense`.
 `webCall/webCallService.ts` mints the token via the normal pair; the room lifecycle
 itself is driven by `@livekit/components-react` inside the `assistant` and
 `make-call` routes.
+
+## Authentication
+
+Identity is the **API key** issued at signup and returned by `POST /api/auth/login` and
+`POST /api/auth/signup` as `user.api_key`. The client stores it with the rest of the session in
+`localStorage["intvyom_auth"]` and sends it on every authenticated request as
+`Authorization: Bearer <api_key>`.
+
+- Every authenticated service calls `authedFetch` (`src/services/auth/authedFetch.ts`) instead of
+  `fetch`. It attaches the stored key and, on a `401`, clears the session and redirects to `/auth`.
+- `login` and `signup` use plain `fetch` — they are how the key is obtained, and their `401` means
+  "wrong password", not "session expired".
+- `user_id` is still sent in some request bodies and query strings during the transition, but the
+  backend ignores it: the bearer key is what identifies the caller.
+- The API never returns provider keys (`api_key` inside a TTS/STT config) or SIP trunk credentials.
+  The editor strips provider keys, and the Phone Number page shows only the non-secret trunk fields.
 
 ## Features / Pages
 

@@ -85,9 +85,16 @@ is `src/index.css`. Add those layers when a real need arrives, not before.
 - **File naming**: `PascalCase.tsx` for components, `camelCase.ts` for hooks/services/types/
   helpers, `kebab-case.tsx` inside `src/components/ui/` only. No `utils.ts` dumping grounds —
   `src/lib/utils.ts` is grandfathered in for `cn`; name new helper files after what they do.
+- **No two files in one directory may differ only in case** (`Index.tsx` next to `index.ts`,
+  `webCallClientGuide.ts` next to `WebCallClientGuide.tsx`). On a case-insensitive filesystem the
+  bundler and `tsc` resolve the wrong one; that is why the landing page is `IndexPage.tsx` and the
+  web-call guide data is `webCallGuideSteps.ts`.
 - No behavior changes when refactoring: swapping inline `fetch` calls for service functions
   must preserve the exact request shape and error handling.
 - Type all API payloads through `src/types/`; services own the `call`/`condense` pattern.
+- **Identity is the bearer key.** Authenticated services call `authedFetch`
+  (`src/services/auth/authedFetch.ts`), which attaches `Authorization: Bearer <api_key>` from the
+  stored session and clears it (returning to `/auth`) on `401`. `login`/`signup` use plain `fetch`.
 - Keep comment style consistent with existing code; do not add new comments unless they
   document non-obvious backend behavior.
 - No dead code. Delete unused components and dependencies rather than keeping them
@@ -97,13 +104,18 @@ is `src/index.css`. Add those layers when a real need arrives, not before.
 ## Baseline
 
 Pre-existing, not regressions — compare against these before claiming a
-regression. Measured 2026-09-12.
+regression. Measured 2026-09-12; refreshed 2026-09-22.
 
-- `npm run test` — 17 files, 177 tests pass
-- `npm run typecheck` — clean
-- `npm run lint` — 89 problems (80 errors, 9 warnings), almost all
+- `npm run test` — 31 files, 246 tests; 245 pass. The one failure is
+  `tests/lib/apiSnippet.test.ts > renders Python the interpreter compiles`, which fails
+  only where `python3` is not installed — environmental, not a code failure.
+- `npm run typecheck` — clean on any filesystem (the two case collisions that used to break
+  Windows checkouts were fixed on 2026-09-22).
+- `npm run lint` — 88 problems (80 errors, 8 warnings), almost all
   `@typescript-eslint/no-explicit-any` spread across routes, plus
   `tailwind.config.ts` and `src/components/ui`
-- `npm run build` — succeeds; emits a >500 kB chunk warning (~1.90 MB main bundle)
+- `npm run build` — `tsc -b && vite build`; succeeds, emits a >500 kB chunk warning
+  (~1.90 MB main bundle).
 - `node .agents/skills/run-intvyom-frontend/driver.mjs sweep` — 0 failing
-  checks across 15 routes × 5 widths
+  checks across 15 routes × 5 widths. Off-origin calls are stubbed with `200`, so the seeded
+  session's `api_key` is never validated by a real backend.

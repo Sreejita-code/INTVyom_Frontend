@@ -1,13 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, KeyRound, Link2, Loader2, MonitorPlay, Terminal } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Link2, MonitorPlay, Terminal } from "lucide-react";
 
 import { ApiSnippetButton } from "@/components/common/ApiSnippet";
 import { Button } from "@/components/ui/button";
 import { CopyIdButton } from "@/components/common/CopyIdButton";
 import { getStoredUser } from "@/services/storage/storageService";
-import { callGetApiKeysEndpoint, condenseGetApiKeysResponse, ApiKeyData } from "@/services/auth/authService";
-import { useToast } from "@/hooks/use-toast";
 import { developerActions } from "./developerActions";
 import { WebCallClientGuide } from "./WebCallClientGuide";
 
@@ -55,32 +53,7 @@ const SecretRow = ({ label, value, secret }: SecretRowProps) => {
 };
 
 const Developer = () => {
-  const [keys, setKeys] = useState<ApiKeyData[]>([]);
-  const [loading, setLoading] = useState(true);
   const user = getStoredUser();
-  const { toast } = useToast();
-
-  useEffect(() => {
-    const fetchKeys = async () => {
-      if (!user?.user_name) {
-        setLoading(false);
-        return;
-      }
-      try {
-        const data = await callGetApiKeysEndpoint(user.user_name);
-        setKeys(condenseGetApiKeysResponse(data));
-      } catch {
-        toast({
-          title: "Error",
-          description: "Failed to fetch API keys",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchKeys();
-  }, []);
 
   return (
     <div className="page-shell overflow-auto">
@@ -107,8 +80,8 @@ const Developer = () => {
             <h3 className="text-sm font-semibold text-foreground">Which ID or key do I need?</h3>
             <ul className="grid gap-2 sm:grid-cols-2 text-xs">
               <li className="rounded-md border border-border/60 bg-muted/20 p-3">
-                <span className="status-chip status-chip-info">User ID</span>
-                <p className="mt-2 text-muted-foreground">Who you are. Send as <code className="font-mono">user_id</code> on every API request. Find yours below.</p>
+                <span className="status-chip status-chip-info">API key</span>
+                <p className="mt-2 text-muted-foreground">Who you are. Send as <code className="font-mono">Authorization: Bearer &lt;api_key&gt;</code> on every API request. Find yours below.</p>
               </li>
               <li className="rounded-md border border-border/60 bg-muted/20 p-3">
                 <span className="status-chip status-chip-neutral">Assistant ID</span>
@@ -116,7 +89,7 @@ const Developer = () => {
               </li>
               <li className="rounded-md border border-border/60 bg-muted/20 p-3">
                 <span className="status-chip status-chip-neutral">LiveKit key</span>
-                <p className="mt-2 text-muted-foreground">Joins a voice room in the browser. Listed below next to your User ID.</p>
+                <p className="mt-2 text-muted-foreground">The same value as your API key. It also signs the room tokens a browser call connects with.</p>
               </li>
               <li className="rounded-md border border-border/60 bg-muted/20 p-3">
                 <span className="status-chip status-chip-warning">Provider key</span>
@@ -144,37 +117,30 @@ const Developer = () => {
               <h3 className="text-sm font-semibold text-foreground">Your account credentials</h3>
             </div>
             <p className="text-xs text-muted-foreground">
-              Used for: every API request from your code. Assistant IDs live on the Assistants page —
-              one per assistant, not per account.
+              The API key authenticates every request from your code, sent as{" "}
+              <code className="font-mono">Authorization: Bearer &lt;api_key&gt;</code>. Assistant IDs
+              live on the Assistants page — one per assistant, not per account.
             </p>
-            {loading ? (
-              <div className="flex items-center justify-center py-10 glass rounded-lg">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              </div>
-            ) : keys.length === 0 ? (
-              <div className="glass rounded-lg p-4 space-y-2">
-                {user?.user_id ? (
-                  <>
-                    <SecretRow label="User ID · who you are" value={user.user_id} secret />
-                    <p className="text-xs text-muted-foreground">Used for: <code className="font-mono">user_id</code> on every API request.</p>
-                  </>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Sign in to see your credentials.</p>
-                )}
-              </div>
+            {!user?.user_id ? (
+              <p className="text-sm text-muted-foreground">Sign in to see your credentials.</p>
             ) : (
-              keys.map((k, i) => (
-                <div key={i} className="glass rounded-lg p-4 space-y-4">
+              <div className="glass rounded-lg p-4 space-y-4">
+                {user.api_key ? (
                   <div className="space-y-1">
-                    <SecretRow label="User ID · who you are" value={k.user_id} secret />
-                    <p className="text-xs text-muted-foreground">Used for: <code className="font-mono">user_id</code> on every API request.</p>
+                    <SecretRow label="API key · your credential" value={user.api_key} secret />
+                    <p className="text-xs text-muted-foreground">Used for: <code className="font-mono">Authorization: Bearer</code> on every API request, and signing browser room tokens.</p>
                   </div>
-                  <div className="space-y-1">
-                    <SecretRow label="LiveKit API key · joins voice rooms" value={k.api_key} secret />
-                    <p className="text-xs text-muted-foreground">Used for: connecting to a voice room in the browser. Not the same as an assistant ID.</p>
-                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No API key is stored for this account. Sign out and sign in again — if it is still
+                    missing, key issuance failed at signup and support has to reissue it.
+                  </p>
+                )}
+                <div className="space-y-1">
+                  <SecretRow label="User ID · account reference" value={user.user_id} secret />
+                  <p className="text-xs text-muted-foreground">Used for: identifying your account in support requests. No longer sent as identity — the API key is.</p>
                 </div>
-              ))
+              </div>
             )}
           </section>
 

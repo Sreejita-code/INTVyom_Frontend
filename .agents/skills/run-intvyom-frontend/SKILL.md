@@ -74,9 +74,10 @@ npm run dev     # http://localhost:8080
   only reaches the console listener. This is why the driver watches `console`
   and `pageerror`, and why "the page looked fine" is not evidence.
 - **`/dashboard/*` needs a session.** The driver seeds
-  `localStorage["intvyom_auth"]` (`{user_id, user_name}`, key from
+  `localStorage["intvyom_auth"]` (`{user_id, user_name, api_key}`, key from
   `src/services/storage/storageService.ts`) before first paint. Without it
-  every dashboard route renders the login page.
+  every dashboard route renders the login page. The `api_key` is a stub — the
+  backend is stubbed below, so it is never validated.
 - **`/` and `/auth` need the opposite.** With a session seeded, `/` redirects
   straight to `/dashboard/assistant`, so the driver clears storage for those
   two routes.

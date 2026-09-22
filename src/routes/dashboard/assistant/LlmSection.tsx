@@ -40,7 +40,7 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
   const defaultModel = isCascade
     ? "gpt-4.1"
     : isGemini
-      ? "gemini-2.5-flash-native-audio-preview-12-2025"
+      ? "gemini-3.8-live"
       : "gpt-realtime-1.5";
   const model = llmConfig?.model?.trim() || defaultModel;
   const reasoning = isReasoningModel(model);

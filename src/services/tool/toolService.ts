@@ -1,10 +1,11 @@
 import { ToolSummary } from "@/types/tool";
 import { ServiceResponse } from "@/types/http";
+import { authedFetch } from "@/services/auth/authedFetch";
 
 const TOOL_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/tool`;
 
 export async function callListToolsEndpoint(userId: string): Promise<ServiceResponse<unknown>> {
-  const res = await fetch(`${TOOL_BASE}/list?user_id=${userId}`);
+  const res = await authedFetch(`${TOOL_BASE}/list?user_id=${userId}`);
   return { ok: res.ok, json: await res.json() };
 }
 
@@ -19,7 +20,7 @@ export async function callGetToolDetailsEndpoint(args: {
   userId: string;
   toolId: string;
 }): Promise<ServiceResponse<unknown>> {
-  const res = await fetch(`${TOOL_BASE}/details/${args.toolId}?user_id=${args.userId}`);
+  const res = await authedFetch(`${TOOL_BASE}/details/${args.toolId}?user_id=${args.userId}`);
   return { ok: res.ok, json: await res.json() };
 }
 
@@ -27,7 +28,7 @@ export async function callDeleteToolEndpoint(args: {
   userId: string;
   toolId: string;
 }): Promise<unknown> {
-  const res = await fetch(`${TOOL_BASE}/delete/${args.toolId}?user_id=${args.userId}`, {
+  const res = await authedFetch(`${TOOL_BASE}/delete/${args.toolId}?user_id=${args.userId}`, {
     method: "DELETE",
   });
   if (!res.ok) throw new Error("Failed to delete");
@@ -35,7 +36,7 @@ export async function callDeleteToolEndpoint(args: {
 }
 
 export async function callCreateToolEndpoint(payload: unknown): Promise<unknown> {
-  const res = await fetch(`${TOOL_BASE}/create`, {
+  const res = await authedFetch(`${TOOL_BASE}/create`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -47,7 +48,7 @@ export async function callCreateToolEndpoint(payload: unknown): Promise<unknown>
 }
 
 export async function callUpdateToolEndpoint(toolId: string, payload: unknown): Promise<unknown> {
-  const res = await fetch(`${TOOL_BASE}/update/${toolId}`, {
+  const res = await authedFetch(`${TOOL_BASE}/update/${toolId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -65,7 +66,7 @@ export async function callToggleToolAttachmentEndpoint(args: {
   attach: boolean;
 }): Promise<unknown> {
   const endpoint = args.attach ? "attach" : "detach";
-  const res = await fetch(`${TOOL_BASE}/${endpoint}/${args.assistantId}`, {
+  const res = await authedFetch(`${TOOL_BASE}/${endpoint}/${args.assistantId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ user_id: args.userId, tool_ids: args.toolIds }),

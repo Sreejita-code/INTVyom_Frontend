@@ -181,8 +181,8 @@ const repairLlmForMode = (llm: AssistantLlmConfig | undefined, mode: AssistantMo
 
   const provider = next.provider || "openai";
   if (provider === "gemini") {
-    if (!next.model || !["gemini-2.5-flash-native-audio-preview-12-2025", "gemini-live-2.5-flash-native-audio", "gemini-3.1-flash-live-preview"].includes(next.model)) {
-      next.model = "gemini-2.5-flash-native-audio-preview-12-2025";
+    if (!next.model || !["gemini-3.8-live", "gemini-3.8-live-extended-thinking", "gemini-3.1-flash-live-preview", "gemini-2.5-flash-native-audio-preview-12-2025"].includes(next.model)) {
+      next.model = "gemini-3.8-live";
     }
     if (!next.voice || !isGeminiVoice(next.voice)) {
       next.voice = "Puck";
@@ -270,6 +270,10 @@ export const hydrateForm = (detail: any): AssistantDetail => {
     assistant_interaction_config: {
       ...emptyForm.assistant_interaction_config,
       ...(detail.assistant_interaction_config ?? {}),
+    },
+    assistant_end_call_webhook: {
+      timeout_seconds: detail.assistant_end_call_webhook?.timeout_seconds ?? null,
+      attempts: detail.assistant_end_call_webhook?.attempts ?? null,
     },
     assistant_greeting_audio: {
       enabled: detail.assistant_greeting_audio?.enabled ?? false,
@@ -407,6 +411,17 @@ export const buildAssistantPayload = (
       audio_id: form.assistant_greeting_audio?.audio_id ?? "",
     },
   };
+
+  // Upstream merges the webhook object key by key; `null` means "server default". On update the
+  // nulls are sent so a cleared field really clears. On create there is nothing to clear, so an
+  // untuned webhook is omitted rather than sent as `{}`.
+  const webhook = form.assistant_end_call_webhook;
+  if (creating === false || webhook?.timeout_seconds != null || webhook?.attempts != null) {
+    payload.assistant_end_call_webhook = {
+      timeout_seconds: webhook?.timeout_seconds ?? null,
+      attempts: webhook?.attempts ?? null,
+    };
+  }
 
   if (!isRealtime) {
     // Validate STT provider compatibility

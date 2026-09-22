@@ -642,45 +642,25 @@ export default function PhoneNumberPage() {
                                             </h3>
                                             <div className="glass rounded-xl p-8 space-y-8">
                                                 {selectedTrunk.trunk_type === "twilio" ? (
-                                                    <>
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                                            <div className="space-y-2">
-                                                                <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-2">
-                                                                    <User className="h-3 w-3" /> Account SID
-                                                                </Label>
-                                                                <div className="bg-muted/30 p-3 rounded-lg border border-border/50">
-                                                                    <p className="text-sm font-mono truncate">{selectedTrunk.trunk_config?.username || 'Not set'}</p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="space-y-2">
-                                                                <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-2">
-                                                                    <Lock className="h-3 w-3" /> Auth Token
-                                                                </Label>
-                                                                <div className="bg-muted/30 p-3 rounded-lg border border-border/50 flex items-center justify-between">
-                                                                    <p className="text-sm font-mono">••••••••••••••••</p>
-                                                                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground">
-                                                                        <Info className="h-3 w-3" />
-                                                                    </Button>
-                                                                </div>
-                                                            </div>
+                                                    <div className="space-y-4">
+                                                        {/* The API never returns the account SID or auth token — they are
+                                                            credentials. Only the non-secret address and numbers come back,
+                                                            when the deployment returns them at all. */}
+                                                        <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-2">
+                                                            <Hash className="h-3 w-3" /> Registered Numbers
+                                                        </Label>
+                                                        <div className="flex flex-wrap gap-3">
+                                                            {selectedTrunk.trunk_config?.numbers && selectedTrunk.trunk_config.numbers.length > 0 ? (
+                                                                selectedTrunk.trunk_config.numbers.map(n => (
+                                                                    <div key={n} className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-bold">
+                                                                        <Phone className="h-3 w-3" /> {n}
+                                                                    </div>
+                                                                ))
+                                                            ) : (
+                                                                <p className="text-sm text-muted-foreground italic">No numbers returned by the API</p>
+                                                            )}
                                                         </div>
-                                                        <div className="space-y-4">
-                                                            <Label className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-2">
-                                                                <Hash className="h-3 w-3" /> Registered Numbers
-                                                            </Label>
-                                                            <div className="flex flex-wrap gap-3">
-                                                                {selectedTrunk.trunk_config?.numbers && selectedTrunk.trunk_config.numbers.length > 0 ? (
-                                                                    selectedTrunk.trunk_config.numbers.map(n => (
-                                                                        <div key={n} className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-sm font-bold">
-                                                                            <Phone className="h-3 w-3" /> {n}
-                                                                        </div>
-                                                                    ))
-                                                                ) : (
-                                                                    <p className="text-sm text-muted-foreground italic">No numbers registered</p>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </>
+                                                    </div>
                                                 ) : (
                                                     <div className="space-y-4">
                                                         <Label className="text-[10px] uppercase font-bold text-muted-foreground">Exotel Number</Label>

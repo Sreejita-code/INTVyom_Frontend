@@ -48,12 +48,15 @@ import "@livekit/components-styles";
 const LIVEKIT_URL = "${LIVEKIT_URL}";
 const BACKEND_URL = "https://your-backend";
 
-// Your user_id is a credential. In production mint the token on your server and return only
+// Your API key is a credential. In production mint the token on your server and return only
 // the token to the browser.
 async function getToken() {
   const res = await fetch(BACKEND_URL + "/api/web-call/get-token", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer $VYOM_API_KEY",
+    },
     body: JSON.stringify({
       user_id: "$VYOM_USER_ID",
       assistant_id: "<assistant_id>",
@@ -151,7 +154,10 @@ const BACKEND_URL = "https://your-backend";
 async function getChatToken() {
   const res = await fetch(BACKEND_URL + "/api/web-call/get-token", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer $VYOM_API_KEY",
+    },
     body: JSON.stringify({
       user_id: "$VYOM_USER_ID",
       assistant_id: "<assistant_id>",
@@ -248,7 +254,10 @@ const BACKEND_URL = "https://your-backend";
 
 const res = await fetch(BACKEND_URL + "/api/web-call/get-token", {
   method: "POST",
-  headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: "Bearer $VYOM_API_KEY",
+  },
   body: JSON.stringify({
     user_id: "$VYOM_USER_ID",
     assistant_id: "<assistant_id>",

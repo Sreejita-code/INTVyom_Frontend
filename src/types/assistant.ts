@@ -121,6 +121,14 @@ export interface AssistantDetail {
   assistant_end_call_trigger_phrase?: string;
   assistant_end_call_agent_message?: string;
   assistant_end_call_url?: string;
+  /**
+   * Delivery tuning for the end-call webhook. Upstream merges this object key by key, so a null (or
+   * omitted) value means "fall back to the server default" — 30s timeout, 3 attempts.
+   */
+  assistant_end_call_webhook?: {
+    timeout_seconds?: number | null;
+    attempts?: number | null;
+  };
   assistant_greeting_audio?: {
     enabled: boolean;
     audio_id: string;

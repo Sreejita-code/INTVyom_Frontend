@@ -55,11 +55,12 @@ async function startServer() {
 
 async function newContext(browser) {
   const context = await browser.newContext();
-  // Without this every /dashboard/* route bounces to /auth.
+  // Without this every /dashboard/* route bounces to /auth. The api_key is a stub — off-origin
+  // calls are stubbed below, so it is never validated — but it lets credential fields render.
   await context.addInitScript(() => {
     localStorage.setItem(
       "intvyom_auth",
-      JSON.stringify({ user_id: "driver", user_name: "driver" }),
+      JSON.stringify({ user_id: "driver", user_name: "driver", api_key: "driver-key" }),
     );
   });
   // Stub every off-origin call so pages render their empty state, not an error.

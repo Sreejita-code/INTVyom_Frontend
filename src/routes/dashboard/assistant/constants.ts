@@ -46,6 +46,7 @@ export const emptyForm: AssistantDetail = {
   assistant_end_call_trigger_phrase: "",
   assistant_end_call_agent_message: "",
   assistant_end_call_url: "",
+  assistant_end_call_webhook: { timeout_seconds: null, attempts: null },
   assistant_greeting_audio: { enabled: false, audio_id: "" },
 };
 

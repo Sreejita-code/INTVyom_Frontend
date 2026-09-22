@@ -128,6 +128,28 @@ describe("placeholder identifiers", () => {
   });
 });
 
+describe("authorization header", () => {
+  const authed = { baseUrl: "https://api.example.com", apiKey: "key-1" };
+
+  it("adds a Bearer header to every renderer", () => {
+    expect(renderCurl(postSpec, authed)).toContain('-H "Authorization: Bearer key-1"');
+    expect(renderPython(postSpec, authed)).toContain('"Authorization": "Bearer key-1"');
+    expect(renderNode(postSpec, authed)).toContain('"Authorization": "Bearer key-1"');
+  });
+
+  it("sends the header on a bodyless GET too", () => {
+    expect(renderCurl(getSpec, authed)).toContain("Authorization: Bearer key-1");
+    expect(renderPython(getSpec, authed)).toContain('"Authorization": "Bearer key-1"');
+    expect(renderNode(getSpec, authed)).toContain('"Authorization": "Bearer key-1"');
+  });
+
+  it("omits the header when no key is passed", () => {
+    expect(renderCurl(postSpec, options)).not.toContain("Authorization");
+    expect(renderPython(postSpec, options)).not.toContain("Authorization");
+    expect(renderNode(postSpec, options)).not.toContain("Authorization");
+  });
+});
+
 describe("generated snippets parse", () => {
   // A snippet that does not run is worse than none. A prompt with an apostrophe and a double
   // quote is the shape that breaks naive shell quoting, so it is the one worth parsing.

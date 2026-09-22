@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { storeUser } from "@/services/storage/storageService";
 import { callLoginEndpoint, callSignupEndpoint } from "@/services/auth/authService";
+import { AuthResponse } from "@/types/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
@@ -41,12 +42,16 @@ const Auth = () => {
             password: form.password,
           });
 
-      const userData = data as { user?: { id: string; user_name: string } };
+      const userData = data as AuthResponse;
 
-      // FIXED: The backend returns the ID inside the `user` object as `id`
+      // The backend returns the ID inside the `user` object as `id`, and the API key that every
+      // subsequent request is authenticated with. Both are stored; a null key means upstream
+      // issuance failed and the user will be bounced back here on their first request.
       storeUser({
         user_id: userData.user.id,
         user_name: userData.user.user_name,
+        user_email: userData.user.user_email,
+        api_key: userData.user.api_key ?? null,
       });
 
       toast({ title: isSignup ? "Account created!" : "Welcome back!" });

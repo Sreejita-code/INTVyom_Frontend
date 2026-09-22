@@ -6,7 +6,7 @@ import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { WEB_CALL_CLIENT_STEPS } from "./webCallClientGuide";
+import { WEB_CALL_CLIENT_STEPS } from "./webCallGuideSteps";
 
 const livekitUrl = () => import.meta.env.VITE_LIVEKIT_URL || "wss://<your-livekit-server>";
 

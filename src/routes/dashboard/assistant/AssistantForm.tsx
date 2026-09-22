@@ -120,6 +120,17 @@ export function AssistantForm({
     }));
   };
 
+  const updateEndCallWebhook = (key: "timeout_seconds" | "attempts", value: number | null) => {
+    setFormData((prev) => ({
+      ...prev,
+      assistant_end_call_webhook: {
+        timeout_seconds: prev.assistant_end_call_webhook?.timeout_seconds ?? null,
+        attempts: prev.assistant_end_call_webhook?.attempts ?? null,
+        [key]: value,
+      },
+    }));
+  };
+
   const selectedLanguages = formData.assistant_interaction_config?.preferred_languages ?? [];
 
   // Keep the stored order stable in LANGUAGE_CODES order, so the chips don't reshuffle
@@ -718,6 +729,42 @@ export function AssistantForm({
                 do your own processing afterwards — a slow reply holds the call's teardown open. Delivery is retried, so
                 key on <code className="font-mono">data.room_name</code> and ignore a payload you have already stored.
               </>
+            }
+          />
+
+          <FieldRow
+            wide
+            label="Delivery tuning"
+            help="How long to wait for the webhook to answer, and how many times to retry. Leave both blank to use the server defaults — 30 seconds, 3 attempts."
+            control={
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1.5">
+                  <span className="text-xs text-muted-foreground">Timeout in seconds (1–120)</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={120}
+                    placeholder="30"
+                    value={formData.assistant_end_call_webhook?.timeout_seconds ?? ""}
+                    onChange={(e) =>
+                      updateEndCallWebhook("timeout_seconds", e.target.value === "" ? null : Number(e.target.value))
+                    }
+                  />
+                </label>
+                <label className="grid gap-1.5">
+                  <span className="text-xs text-muted-foreground">Attempts (1–5)</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={5}
+                    placeholder="3"
+                    value={formData.assistant_end_call_webhook?.attempts ?? ""}
+                    onChange={(e) =>
+                      updateEndCallWebhook("attempts", e.target.value === "" ? null : Number(e.target.value))
+                    }
+                  />
+                </label>
+              </div>
             }
           />
 

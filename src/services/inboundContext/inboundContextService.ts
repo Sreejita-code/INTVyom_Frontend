@@ -1,10 +1,11 @@
 import { StrategyItem } from "@/types/inboundContext";
 import { ServiceResponse } from "@/types/http";
+import { authedFetch } from "@/services/auth/authedFetch";
 
 const INBOUND_CONTEXT_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/inbound-context-strategy`;
 
 export async function callListStrategiesEndpoint(userId: string): Promise<unknown> {
-  const res = await fetch(`${INBOUND_CONTEXT_BASE}/list?user_id=${userId}`);
+  const res = await authedFetch(`${INBOUND_CONTEXT_BASE}/list?user_id=${userId}`);
   // An error body condenses to [], which silently reads as "you have no strategies".
   if (!res.ok) throw new Error(`Failed to list strategies (${res.status})`);
   return res.json();
@@ -32,7 +33,7 @@ export const condenseListStrategiesResponse = (json: unknown): StrategyItem[] =>
 };
 
 export async function callCreateStrategyEndpoint(payload: unknown): Promise<ServiceResponse<unknown>> {
-  const res = await fetch(`${INBOUND_CONTEXT_BASE}/create`, {
+  const res = await authedFetch(`${INBOUND_CONTEXT_BASE}/create`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -44,7 +45,7 @@ export async function callUpdateStrategyEndpoint(
   strategyId: string,
   payload: unknown
 ): Promise<ServiceResponse<unknown>> {
-  const res = await fetch(`${INBOUND_CONTEXT_BASE}/update/${strategyId}`, {
+  const res = await authedFetch(`${INBOUND_CONTEXT_BASE}/update/${strategyId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -56,7 +57,7 @@ export async function callDeleteStrategyEndpoint(args: {
   userId: string;
   strategyId: string;
 }): Promise<ServiceResponse<unknown>> {
-  const res = await fetch(`${INBOUND_CONTEXT_BASE}/delete/${args.strategyId}?user_id=${args.userId}`, {
+  const res = await authedFetch(`${INBOUND_CONTEXT_BASE}/delete/${args.strategyId}?user_id=${args.userId}`, {
     method: "DELETE",
   });
   return { ok: res.ok, json: await res.json() };

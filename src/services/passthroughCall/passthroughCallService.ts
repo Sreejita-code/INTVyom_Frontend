@@ -1,9 +1,10 @@
 import { CallRecord } from "@/types/passthroughCall";
+import { authedFetch } from "@/services/auth/authedFetch";
 
 const PASSTHROUGH_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/passthrough-call`;
 
 export async function callCallRecordsEndpoint(params: URLSearchParams): Promise<unknown> {
-  const res = await fetch(`${PASSTHROUGH_BASE}/call-records?${params.toString()}`);
+  const res = await authedFetch(`${PASSTHROUGH_BASE}/call-records?${params.toString()}`);
   const json = await res.json();
   if (!res.ok) {
     throw new Error(json.error || "Failed to fetch records");
@@ -31,7 +32,7 @@ export const condenseCallRecordsResponse = (json: unknown): {
 };
 
 export async function callPassthroughOutboundEndpoint(payload: unknown): Promise<unknown> {
-  const res = await fetch(`${PASSTHROUGH_BASE}/passthrough-outbound`, {
+  const res = await authedFetch(`${PASSTHROUGH_BASE}/passthrough-outbound`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

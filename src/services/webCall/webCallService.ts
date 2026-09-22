@@ -1,3 +1,5 @@
+import { authedFetch } from "@/services/auth/authedFetch";
+
 const WEB_CALL_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/web-call`;
 
 export async function callGetWebCallTokenEndpoint(args: {
@@ -7,7 +9,7 @@ export async function callGetWebCallTokenEndpoint(args: {
   /** Fills the `{{placeholders}}` in the assistant's prompt, exactly as on an outbound call. */
   metadata?: Record<string, unknown>;
 }): Promise<unknown> {
-  const res = await fetch(`${WEB_CALL_BASE}/get-token`, {
+  const res = await authedFetch(`${WEB_CALL_BASE}/get-token`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

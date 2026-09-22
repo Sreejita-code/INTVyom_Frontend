@@ -28,6 +28,24 @@ describe("applyModeChange", () => {
     expect(next.assistant_llm_config?.model).toBe("gpt-realtime-1.5");
   });
 
+  it("repairs a Gemini model that is no longer in the Live list to the current default", () => {
+    const next = applyModeChange(
+      form({ assistant_mode: "realtime", assistant_llm_config: { provider: "gemini", model: "gemini-live-2.5-flash-native-audio" } }),
+      "realtime",
+    );
+
+    expect(next.assistant_llm_config?.model).toBe("gemini-3.8-live");
+  });
+
+  it("keeps a valid Gemini Live model", () => {
+    const next = applyModeChange(
+      form({ assistant_mode: "realtime", assistant_llm_config: { provider: "gemini", model: "gemini-3.8-live-extended-thinking" } }),
+      "realtime",
+    );
+
+    expect(next.assistant_llm_config?.model).toBe("gemini-3.8-live-extended-thinking");
+  });
+
   it("swaps the model family in both directions", () => {
     const toCascade = applyModeChange(
       form({ assistant_mode: "pipeline", assistant_llm_config: { provider: "openai", model: "gpt-realtime-1.5" } }),
@@ -344,6 +362,40 @@ describe("buildAssistantPayload on create", () => {
   });
 });
 
+describe("end-call webhook delivery tuning", () => {
+  it("sends the tuning on an update", () => {
+    const payload = buildAssistantPayload(
+      form({ assistant_mode: "pipeline", assistant_end_call_webhook: { timeout_seconds: 60, attempts: 4 } }),
+      false,
+      { creating: false },
+    );
+
+    expect(payload.assistant_end_call_webhook).toEqual({ timeout_seconds: 60, attempts: 4 });
+  });
+
+  it("sends nulls for untouched fields on update, which mean the server default", () => {
+    const payload = buildAssistantPayload(form({ assistant_mode: "pipeline" }), false, { creating: false });
+
+    expect(payload.assistant_end_call_webhook).toEqual({ timeout_seconds: null, attempts: null });
+  });
+
+  it("omits the webhook entirely on create when nothing is tuned", () => {
+    const payload = buildAssistantPayload(form({ assistant_mode: "pipeline" }), false, { creating: true });
+
+    expect(payload).not.toHaveProperty("assistant_end_call_webhook");
+  });
+
+  it("keeps only the tuned value on create", () => {
+    const payload = buildAssistantPayload(
+      form({ assistant_mode: "pipeline", assistant_end_call_webhook: { timeout_seconds: 90, attempts: null } }),
+      false,
+      { creating: true },
+    );
+
+    expect(payload.assistant_end_call_webhook).toEqual({ timeout_seconds: 90 });
+  });
+});
+
 describe("hydrateForm", () => {
   it("keeps provider config whole instead of reducing it to the fields the form once knew", () => {
     const hydrated = hydrateForm({
@@ -373,5 +425,15 @@ describe("hydrateForm", () => {
     });
 
     expect(hydrated.assistant_tts_config).toEqual({ voice_id: "abc" });
+  });
+
+  it("hydrates stored webhook tuning, defaulting absent fields to null", () => {
+    const hydrated = hydrateForm({
+      assistant_name: "Bot",
+      assistant_mode: "pipeline",
+      assistant_end_call_webhook: { attempts: 5 },
+    });
+
+    expect(hydrated.assistant_end_call_webhook).toEqual({ timeout_seconds: null, attempts: 5 });
   });
 });

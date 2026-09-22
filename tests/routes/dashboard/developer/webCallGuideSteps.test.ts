@@ -4,7 +4,7 @@ import {
   WEB_CALL_CLIENT_STEPS,
   AGENT_TEXT_TOPIC,
   USER_TEXT_TOPIC,
-} from "@/routes/dashboard/developer/webCallClientGuide";
+} from "@/routes/dashboard/developer/webCallGuideSteps";
 
 describe("WEB_CALL_CLIENT_STEPS", () => {
   it("exposes three samples with unique ids", () => {

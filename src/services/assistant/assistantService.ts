@@ -2,6 +2,7 @@ import { AssistantCallLogsPage, AssistantItem, AssistantMode, AssistantSummary }
 import { CallLog, CallTranscript, CallUsage, CallUsageLine } from "@/types/callLog";
 import { ServiceResponse } from "@/types/http";
 import { parseUsd } from "@/lib/formatUsd";
+import { authedFetch } from "@/services/auth/authedFetch";
 
 const ASSISTANT_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/assistant`;
 
@@ -13,7 +14,7 @@ export async function callListAssistantsEndpoint(args: {
   const query = new URLSearchParams({ user_id: args.userId });
   if (args.page != null) query.set("page", String(args.page));
   if (args.limit != null) query.set("limit", String(args.limit));
-  const res = await fetch(`${ASSISTANT_BASE}/list?${query.toString()}`);
+  const res = await authedFetch(`${ASSISTANT_BASE}/list?${query.toString()}`);
   return { ok: res.ok, json: await res.json() };
 }
 
@@ -51,7 +52,7 @@ export async function callGetAssistantDetailsEndpoint(args: {
   userId: string;
   assistantId: string;
 }): Promise<ServiceResponse<unknown>> {
-  const res = await fetch(`${ASSISTANT_BASE}/details/${args.assistantId}?user_id=${args.userId}`);
+  const res = await authedFetch(`${ASSISTANT_BASE}/details/${args.assistantId}?user_id=${args.userId}`);
   return { ok: res.ok, json: await res.json() };
 }
 
@@ -65,7 +66,7 @@ export async function callDeleteAssistantEndpoint(args: {
   userId: string;
   assistantId: string;
 }): Promise<unknown> {
-  const res = await fetch(`${ASSISTANT_BASE}/delete/${args.assistantId}?user_id=${args.userId}`, {
+  const res = await authedFetch(`${ASSISTANT_BASE}/delete/${args.assistantId}?user_id=${args.userId}`, {
     method: "DELETE",
   });
 
@@ -75,7 +76,7 @@ export async function callDeleteAssistantEndpoint(args: {
 }
 
 export async function callCreateAssistantEndpoint(payload: unknown): Promise<unknown> {
-  const res = await fetch(`${ASSISTANT_BASE}/create`, {
+  const res = await authedFetch(`${ASSISTANT_BASE}/create`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -96,7 +97,7 @@ export async function callCreateAssistantEndpoint(payload: unknown): Promise<unk
 }
 
 export async function callUpdateAssistantEndpoint(assistantId: string, payload: unknown): Promise<unknown> {
-  const res = await fetch(`${ASSISTANT_BASE}/update/${assistantId}`, {
+  const res = await authedFetch(`${ASSISTANT_BASE}/update/${assistantId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -157,7 +158,7 @@ export function buildAssistantCallLogsQuery(args: AssistantCallLogsQuery): Recor
 export async function callGetAssistantCallLogsEndpoint(args: AssistantCallLogsQuery): Promise<unknown> {
   const queryParams = new URLSearchParams(buildAssistantCallLogsQuery(args));
 
-  const res = await fetch(`${ASSISTANT_BASE}/call-logs/${args.assistantId}?${queryParams.toString()}`);
+  const res = await authedFetch(`${ASSISTANT_BASE}/call-logs/${args.assistantId}?${queryParams.toString()}`);
   const json = await res.json();
 
   if (!res.ok) {

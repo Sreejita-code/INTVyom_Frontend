@@ -1,5 +1,6 @@
 import { MeetingJoinResult } from "@/types/meetingCall";
 import { ServiceResponse } from "@/types/http";
+import { authedFetch } from "@/services/auth/authedFetch";
 
 const MEETING_CALL_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/meeting-call`;
 
@@ -20,7 +21,7 @@ export async function callJoinMeetingEndpoint(payload: {
   /** Fills the `{{placeholders}}` in the assistant's prompt, exactly as on an outbound call. */
   metadata?: Record<string, unknown>;
 }): Promise<ServiceResponse<unknown>> {
-  const res = await fetch(`${MEETING_CALL_BASE}/join`, {
+  const res = await authedFetch(`${MEETING_CALL_BASE}/join`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

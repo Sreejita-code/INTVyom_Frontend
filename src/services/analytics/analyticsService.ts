@@ -7,6 +7,7 @@ import {
   ServiceBreakdownItem,
   TimeSeriesPoint,
 } from "@/types/analytics";
+import { authedFetch } from "@/services/auth/authedFetch";
 
 const ANALYTICS_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/analytics`;
 
@@ -122,7 +123,7 @@ export const getDefaultAnalyticsDateRange = (now = new Date()) => {
 };
 
 const requestAnalytics = async (path: string, query: URLSearchParams) => {
-  const response = await fetch(`${ANALYTICS_BASE}${path}?${query.toString()}`);
+  const response = await authedFetch(`${ANALYTICS_BASE}${path}?${query.toString()}`);
   const json = await response.json();
 
   if (!response.ok) {
@@ -312,7 +313,7 @@ export async function callPlatformBillableMinutesEndpoint(filters: AnalyticsFilt
   if (filters.endDate) query.set("end_date", filters.endDate.toISOString());
 
   const url = `${import.meta.env.VITE_BACKEND_URL}/api/assistant/platform-billable-minutes?${query.toString()}`;
-  const response = await fetch(url);
+  const response = await authedFetch(url);
   const json = await response.json();
 
   if (!response.ok) {
