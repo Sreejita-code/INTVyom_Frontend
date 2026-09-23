@@ -13,23 +13,14 @@ export async function callGetIntegrationEndpoint(args: {
   return { ok: res.ok, status: res.status, json: await readJson(res) };
 }
 
-/**
- * The stored integration with its key reduced to a preview. `GET /get` still returns the full
- * provider key; only the last four characters are kept.
- */
+/** `GET /get` returns only `api_key_preview` (`***` plus the last four characters). */
 export const condenseIntegrationResponse = (json: unknown): IntegrationData | null => {
   const data = (json as { data?: Record<string, unknown> } | null)?.data;
   if (!data || typeof data.service_name !== "string") return null;
-  const preview =
-    typeof data.api_key_preview === "string"
-      ? data.api_key_preview
-      : typeof data.api_key === "string"
-        ? `***${data.api_key.slice(-4)}`
-        : "";
   return {
     service_type: String(data.service_type ?? ""),
     service_name: data.service_name,
-    api_key_preview: preview,
+    api_key_last4: typeof data.api_key_preview === "string" ? data.api_key_preview.slice(-4) : "",
   };
 };
 

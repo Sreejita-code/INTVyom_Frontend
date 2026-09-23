@@ -3,7 +3,10 @@ import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { callAssistantBillableMinutesEndpoint } from "@/services/assistant/assistantService";
+import {
+  callAssistantBillableMinutesEndpoint,
+  condenseBillableMinutesResponse,
+} from "@/services/assistant/assistantService";
 
 /** Billable minutes this assistant has spent calling one number. The backend requires the number. */
 export function BillableMinutesLookup({ assistantId }: { assistantId: string }) {
@@ -18,7 +21,8 @@ export function BillableMinutesLookup({ assistantId }: { assistantId: string }) 
     setError(null);
     setMinutes(null);
     try {
-      setMinutes(await callAssistantBillableMinutesEndpoint({ assistantId, toNumber: toNumber.trim() }));
+      const json = await callAssistantBillableMinutesEndpoint({ assistantId, toNumber: toNumber.trim() });
+      setMinutes(condenseBillableMinutesResponse(json));
     } catch (err) {
       setError((err as Error).message);
     } finally {

@@ -248,7 +248,6 @@ export default function MakeCallPage() {
         if (!queue || !user?.api_key) return;
         if (queue.status === "dispatched" || queue.status === "failed" || queue.status === "unknown") return;
 
-        // A few transient failures are fine; after that, stop and say the status is unknown.
         let failures = 0;
         const id = setInterval(async () => {
             let status = "";

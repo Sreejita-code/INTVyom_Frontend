@@ -200,10 +200,9 @@ Identity is the **API key** issued at signup and returned by `POST /api/auth/log
 - No request sends `user_id`; the backend ignores it. The stored `user_id` is kept only as an account
   reference on the Developer page.
 - A signup that returns `api_key: null` (upstream key issuance failed) does not start a session.
-- The API never returns TTS/STT provider keys or SIP trunk credentials, and the Phone Number page
-  shows only the non-secret trunk fields it does return. `GET /api/integration/get` still returns the
-  full provider key; `condenseIntegrationResponse` keeps only a `***1234` preview, so the full key is
-  never rendered. Backend follow-ups are tracked in `plan/backend-requests.md`.
+- The API never returns TTS/STT provider keys or SIP trunk credentials. Trunk responses carry an
+  allow-list of non-secret `trunk_config` keys (address, numbers, Exotel number, SIP overrides), and
+  `GET /api/integration/get` returns only a `***1234` preview of a stored provider key.
 
 ## Features / Pages
 

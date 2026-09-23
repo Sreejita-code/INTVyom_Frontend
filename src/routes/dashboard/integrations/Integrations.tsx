@@ -228,7 +228,7 @@ const Integrations = () => {
 
                                             <div className="bg-background/50 p-2 rounded-lg border border-border">
                                                 <p className="font-mono text-xs truncate text-muted-foreground" title="Stored key — only the last four characters are shown">
-                                                    Key ending {service.api_key_preview.replace(/^\*+/, "") || "····"}
+                                                    Key ending {service.api_key_last4 || "····"}
                                                 </p>
                                             </div>
 

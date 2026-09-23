@@ -6,28 +6,30 @@ import {
   AssistantTemplate,
   callGetTemplateEndpoint,
   callListTemplatesEndpoint,
+  condenseTemplateResponse,
+  condenseTemplatesResponse,
 } from "@/services/assistant/assistantService";
 
 interface TemplatePickerProps {
-  /** Receives the template's configuration; the caller keeps the name and prompt already typed. */
   onApply: (configuration: Record<string, unknown>) => void;
 }
 
-/** "Start from a template" for a new assistant. Hidden when the backend offers none. */
 export function TemplatePicker({ onApply }: TemplatePickerProps) {
   const [templates, setTemplates] = useState<AssistantTemplate[]>([]);
   const [applying, setApplying] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    callListTemplatesEndpoint().then(setTemplates).catch(() => setTemplates([]));
+    callListTemplatesEndpoint()
+      .then((json) => setTemplates(condenseTemplatesResponse(json)))
+      .catch(() => setTemplates([]));
   }, []);
 
   const apply = async (id: string) => {
     setApplying(id);
     setError(null);
     try {
-      onApply(await callGetTemplateEndpoint(id));
+      onApply(condenseTemplateResponse(await callGetTemplateEndpoint(id)));
     } catch (e) {
       setError((e as Error).message);
     } finally {

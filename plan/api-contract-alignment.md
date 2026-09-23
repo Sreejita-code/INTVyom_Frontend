@@ -83,7 +83,7 @@ and a driver `sweep`/`route` run for any UI touched.
   - `billable-minutes/{id}`: `to_number` is required (400 without it). Returns
     `data.total_billable_minutes`.
   - `assistant/create`: `assistant_description` is required (422).
-- [ ] Probe assistant `phase0-probe` was created for end-to-end checks. Delete it at the end.
+- [x] Probe assistant `phase0-probe` was created for end-to-end checks and deleted on 2026-09-23.
 
 ## Phase 1 — Backend requests doc (no backend code)
 

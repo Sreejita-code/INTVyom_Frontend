@@ -5,18 +5,12 @@ import { cn } from "@/lib/utils";
 import { ExotelNumber } from "@/types/sip";
 import { isPhoneLike } from "./phoneNumber";
 
-
 interface InboundNumberPickerProps {
-  /** Numbers the trunk list returned. The API omits them today, so this is often empty. */
   numbers: ExotelNumber[];
   value: string;
   onChange: (number: string) => void;
 }
 
-/**
- * A typed phone number with the known trunk numbers as native suggestions. A plain input rather
- * than a popover: it works inside the assign dialog's focus trap and needs no list to be useful.
- */
 export function InboundNumberPicker({ numbers, value, onChange }: InboundNumberPickerProps) {
   const listId = useId();
   const invalid = value.trim() !== "" && !isPhoneLike(value);
@@ -45,7 +39,7 @@ export function InboundNumberPicker({ numbers, value, onChange }: InboundNumberP
       </datalist>
       <p className={cn("text-xs", invalid ? "text-destructive" : "text-muted-foreground")}>
         {invalid
-          ? "Use digits only, with the country code, e.g. +918044319240."
+          ? "Use digits only, e.g. +918044319240."
           : "The full number, with the country code."}
       </p>
     </div>

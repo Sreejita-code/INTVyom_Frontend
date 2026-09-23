@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 
 interface FieldRowProps {
   label: string;
-  /** The id of the control, so clicking the label focuses it and screen readers pair them. */
   htmlFor?: string;
   required?: boolean;
   /** What this control does on a real call. */

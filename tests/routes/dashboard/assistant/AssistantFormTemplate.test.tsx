@@ -5,9 +5,10 @@ import { AssistantForm } from "@/routes/dashboard/assistant/AssistantForm";
 import { emptyForm } from "@/routes/dashboard/assistant/constants";
 import { AssistantDetail } from "@/types/assistant";
 
-vi.mock("@/services/assistant/assistantService", () => ({
-  callListTemplatesEndpoint: async () => [{ id: "pipeline-basic", name: "Basic Pipeline Assistant", description: "d" }],
-  callGetTemplateEndpoint: async () => ({ assistant_mode: "pipeline", assistant_tts_model: "cartesia" }),
+vi.mock("@/services/assistant/assistantService", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/services/assistant/assistantService")>()),
+  callListTemplatesEndpoint: async () => ({ data: [{ id: "pipeline-basic", name: "Basic Pipeline Assistant", description: "d" }] }),
+  callGetTemplateEndpoint: async () => ({ data: { configuration: { assistant_mode: "pipeline", assistant_tts_model: "cartesia" } } }),
 }));
 
 describe("AssistantForm templates", () => {

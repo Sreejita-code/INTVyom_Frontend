@@ -120,8 +120,6 @@ export default function InboundPage() {
             const sipRes = await callListTrunksEndpoint();
             if (!sipRes.ok) unavailable.push("numbers");
             else {
-                // The trunk list withholds trunk_config, so a number is only offered when the
-                // backend returns one; otherwise the user types it.
                 const exotel = condenseListTrunksResponse(sipRes.json)
                     .filter((t) => t.trunk_type === "exotel" && t.trunk_config?.exotel_number)
                     .map((t) => ({

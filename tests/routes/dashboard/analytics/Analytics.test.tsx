@@ -193,7 +193,7 @@ describe("Analytics page", () => {
       endDate: new Date("2026-03-29T12:00:00.000Z"),
     });
     expect(createObjectURL).toHaveBeenCalledWith(blob);
-    expect(revokeObjectURL).toHaveBeenCalledWith("blob:sheet");
+    await waitFor(() => expect(revokeObjectURL).toHaveBeenCalledWith("blob:sheet"));
     expect(open).not.toHaveBeenCalled();
     click.mockRestore();
   });

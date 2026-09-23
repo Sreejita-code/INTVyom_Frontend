@@ -65,7 +65,6 @@ const indentRest = (text: string, pad: string) => text.split("\n").join(`\n${pad
 /** `'` cannot appear inside a single-quoted shell string; close, escape, reopen. */
 const shellQuote = (text: string) => `'${text.replace(/'/g, "'\\''")}'`;
 
-/** The request headers as `[name, value]` pairs, shared by every renderer. */
 function headerEntries(spec: RequestSpec, options: SnippetOptions): [string, string][] {
   const entries: [string, string][] = [];
   if (hasBody(spec)) entries.push(["Content-Type", "application/json"]);
@@ -73,7 +72,6 @@ function headerEntries(spec: RequestSpec, options: SnippetOptions): [string, str
   return entries;
 }
 
-/** The headers as a JSON-style object literal, or `null` when the request carries none. */
 function headerObject(spec: RequestSpec, options: SnippetOptions, pad: string): string | null {
   const entries = headerEntries(spec, options).map(([name, value]) => `"${name}": "${value}"`);
   return entries.length > 0 ? `{${pad}${entries.join(", ")}${pad}}` : null;

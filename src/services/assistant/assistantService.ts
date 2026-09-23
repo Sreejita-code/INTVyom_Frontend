@@ -76,6 +76,20 @@ export async function callDeleteAssistantEndpoint(args: {
   return json;
 }
 
+/**
+ * Validation `suggestions` (on `/validate` and on a rejected create/update) pair each hint with a
+ * `<field>_notes` explanation that repeats the error; only the hints are kept.
+ */
+const suggestionHints = (suggestions: unknown): string[] =>
+  suggestions && typeof suggestions === "object"
+    ? Object.entries(suggestions as Record<string, unknown>)
+        .filter(([key]) => !key.endsWith("_notes"))
+        .map(([, value]) => String(value))
+    : [];
+
+const saveErrorMessage = (json: { error?: string; suggestions?: unknown }): string =>
+  [json.error || "Operation failed", ...suggestionHints(json.suggestions)].join(" ");
+
 export async function callCreateAssistantEndpoint(payload: unknown): Promise<unknown> {
   const res = await authedFetch(`${ASSISTANT_BASE}/create`, {
     method: "POST",
@@ -84,7 +98,7 @@ export async function callCreateAssistantEndpoint(payload: unknown): Promise<unk
   });
 
   const json = await readJson(res);
-  if (!res.ok) throw new Error(json.error || "Operation failed");
+  if (!res.ok) throw new Error(saveErrorMessage(json));
   return json;
 }
 
@@ -96,7 +110,7 @@ export async function callUpdateAssistantEndpoint(assistantId: string, payload: 
   });
 
   const json = await readJson(res);
-  if (!res.ok) throw new Error(json.error || "Operation failed");
+  if (!res.ok) throw new Error(saveErrorMessage(json));
   return json;
 }
 
@@ -259,7 +273,7 @@ export interface AssistantValidation {
  * Dry-runs a configuration against the backend's mode/provider rules. Always answers 200: an
  * invalid configuration comes back as `is_valid: false` with the reason in `message`.
  */
-export async function callValidateAssistantEndpoint(payload: unknown): Promise<AssistantValidation> {
+export async function callValidateAssistantEndpoint(payload: unknown): Promise<unknown> {
   const res = await authedFetch(`${ASSISTANT_BASE}/validate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -267,17 +281,17 @@ export async function callValidateAssistantEndpoint(payload: unknown): Promise<A
   });
   const json = await readJson(res);
   if (!res.ok) throw new Error(json.error || "Could not validate the configuration");
-  const suggestions = json.data?.suggestions;
-  return {
-    valid: json.data?.is_valid !== false,
-    message: String(json.message ?? ""),
-    suggestions: suggestions && typeof suggestions === "object"
-      ? Object.entries(suggestions as Record<string, unknown>)
-          .filter(([key]) => !key.endsWith("_notes"))
-          .map(([, value]) => String(value))
-      : [],
-  };
+  return json;
 }
+
+export const condenseValidationResponse = (json: unknown): AssistantValidation => {
+  const node = (json ?? {}) as { message?: unknown; data?: { is_valid?: unknown; suggestions?: unknown } };
+  return {
+    valid: node.data?.is_valid !== false,
+    message: typeof node.message === "string" ? node.message : "",
+    suggestions: suggestionHints(node.data?.suggestions),
+  };
+};
 
 export interface AssistantTemplate {
   id: string;
@@ -285,28 +299,45 @@ export interface AssistantTemplate {
   description: string;
 }
 
-export async function callListTemplatesEndpoint(): Promise<AssistantTemplate[]> {
+export async function callListTemplatesEndpoint(): Promise<unknown> {
   const res = await authedFetch(`${ASSISTANT_BASE}/templates`);
   const json = await readJson(res);
   if (!res.ok) throw new Error(json.error || "Failed to load templates");
-  return Array.isArray(json.data) ? json.data : [];
+  return json;
 }
 
-/** A template's configuration: mode and provider settings, with no name, prompt or description. */
-export async function callGetTemplateEndpoint(templateId: string): Promise<Record<string, unknown>> {
+export const condenseTemplatesResponse = (json: unknown): AssistantTemplate[] => {
+  const data = (json as { data?: unknown } | null)?.data;
+  if (!Array.isArray(data)) return [];
+  return data
+    .filter((t): t is Record<string, unknown> => Boolean(t) && typeof t.id === "string")
+    .map((t) => ({ id: t.id as string, name: String(t.name ?? t.id), description: String(t.description ?? "") }));
+};
+
+export async function callGetTemplateEndpoint(templateId: string): Promise<unknown> {
   const res = await authedFetch(`${ASSISTANT_BASE}/templates/${encodeURIComponent(templateId)}`);
   const json = await readJson(res);
   if (!res.ok) throw new Error(json.error || "Failed to load the template");
-  return json.data?.configuration ?? {};
+  return json;
 }
 
+/** A template's configuration: mode and provider settings, with no name, prompt or description. */
+export const condenseTemplateResponse = (json: unknown): Record<string, unknown> => {
+  const configuration = (json as { data?: { configuration?: unknown } } | null)?.data?.configuration;
+  return configuration && typeof configuration === "object" ? (configuration as Record<string, unknown>) : {};
+};
+
+/** The backend requires `to_number`; without it the answer is a 400. */
 export async function callAssistantBillableMinutesEndpoint(args: {
   assistantId: string;
   toNumber: string;
-}): Promise<number> {
+}): Promise<unknown> {
   const query = new URLSearchParams({ to_number: args.toNumber });
   const res = await authedFetch(`${ASSISTANT_BASE}/billable-minutes/${args.assistantId}?${query.toString()}`);
   const json = await readJson(res);
   if (!res.ok) throw new Error(json.error || "Failed to load billable minutes");
-  return Number(json.data?.total_billable_minutes ?? 0);
+  return json;
 }
+
+export const condenseBillableMinutesResponse = (json: unknown): number =>
+  Number((json as { data?: { total_billable_minutes?: unknown } } | null)?.data?.total_billable_minutes ?? 0);

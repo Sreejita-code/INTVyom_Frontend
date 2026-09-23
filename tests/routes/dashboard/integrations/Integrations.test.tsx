@@ -27,14 +27,14 @@ describe("Integrations page", () => {
   it("shows only the last four characters of a stored provider key", async () => {
     getIntegration.mockImplementation(async ({ serviceName }: { serviceName: string }) =>
       serviceName === "openai"
-        ? { ok: true, status: 200, json: { success: true, data: { service_type: "llm", service_name: "openai", api_key: "sk-live-abcdef1234" } } }
+        ? { ok: true, status: 200, json: { success: true, data: { service_type: "llm", service_name: "openai", api_key_preview: "***1234" } } }
         : notFound,
     );
 
     render(<Integrations />);
 
     expect(await screen.findByText(/key ending 1234/i)).toBeInTheDocument();
-    expect(document.body.textContent).not.toContain("sk-live");
+    expect(document.body.textContent).not.toContain("***");
     expect(toastError).not.toHaveBeenCalled();
   });
 

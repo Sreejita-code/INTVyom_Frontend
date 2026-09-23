@@ -1,12 +1,14 @@
 /**
- * The non-secret half of a trunk's config. The API deliberately withholds the Twilio
- * `username`/`password` (and never documents them in a list response), so they are not modelled
- * here — a trunk read from the API has no credential fields to show.
+ * The allow-listed, non-secret keys the API returns in `trunk_config` on create, list and
+ * details. The Twilio `username`/`password` are never returned, so they are not modelled here.
  */
 export interface TrunkConfigSummary {
   address?: string;
   numbers?: string[];
   exotel_number?: string;
+  sip_host?: string;
+  sip_port?: number;
+  sip_domain?: string;
 }
 
 export interface TrunkItem {
@@ -28,7 +30,6 @@ export interface TrunkDetail {
   external_trunk_id: string;
   trunk_name: string;
   trunk_type: "twilio" | "exotel";
-  /** Present only when the deployment returns the non-secret keys; never carries credentials. */
   trunk_config?: TrunkConfigSummary;
   passthrough_mode: boolean;
   passthrough_webhook_url?: string;

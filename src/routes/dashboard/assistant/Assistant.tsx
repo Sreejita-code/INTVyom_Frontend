@@ -22,6 +22,7 @@ import {
   callGetAssistantDetailsEndpoint,
   callUpdateAssistantEndpoint,
   callValidateAssistantEndpoint,
+  condenseValidationResponse,
   condenseAssistantDetailsResponse,
 } from "@/services/assistant/assistantService";
 import { callListToolsEndpoint, condenseListToolsResponse, callToggleToolAttachmentEndpoint } from "@/services/tool/toolService";
@@ -312,7 +313,7 @@ export default function AssistantPage() {
 
       // A dry run first, so a mode/provider mismatch comes back with the backend's reason and a
       // suggestion. If the check itself cannot run, the save still goes ahead and is validated there.
-      const check = await callValidateAssistantEndpoint(payload).catch(() => null);
+      const check = await callValidateAssistantEndpoint(payload).then(condenseValidationResponse).catch(() => null);
       if (check && !check.valid) {
         toast({
           variant: "destructive",
@@ -609,7 +610,7 @@ export default function AssistantPage() {
                           Minutes
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))]">
+                      <PopoverContent align="end" className="w-80">
                         <BillableMinutesLookup assistantId={selectedId} />
                       </PopoverContent>
                     </Popover>

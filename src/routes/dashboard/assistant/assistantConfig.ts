@@ -176,7 +176,6 @@ const pruneStt = (
   return out;
 };
 
-/** A Gemini model or voice the catalog no longer offers is swapped for the default. */
 const repairGeminiLlm = (llm: AssistantLlmConfig): AssistantLlmConfig => ({
   ...llm,
   model: isGeminiModel(llm.model) ? llm.model : GEMINI_DEFAULT_MODEL,
@@ -249,10 +248,6 @@ export const applyTtsProvider = (form: AssistantDetail, provider: TtsProvider): 
   assistant_tts_config: defaultConfigFor(findProvider(TTS_PROVIDERS, provider)),
 });
 
-/**
- * Fetched assistant → form state.
- */
-/** Both tuning keys, each a number or `null` (server default). */
 export const normalizeEndCallWebhook = (
   webhook: EndCallWebhookTuning | undefined,
 ): Required<EndCallWebhookTuning> => ({
@@ -280,6 +275,9 @@ export const endCallWebhookError = (webhook: EndCallWebhookTuning | undefined): 
 const hydrateLlm = (llm: AssistantLlmConfig): AssistantLlmConfig =>
   llm.provider === "gemini" ? repairGeminiLlm(llm) : llm;
 
+/**
+ * Fetched assistant → form state.
+ */
 export const hydrateForm = (detail: any): AssistantDetail => {
   const mode: AssistantMode = detail.assistant_mode ?? "pipeline";
   const sttModel: SttProvider = detail.assistant_stt_model ?? "sarvam";

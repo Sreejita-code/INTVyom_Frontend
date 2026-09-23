@@ -672,7 +672,6 @@ export const sttInertReason = (
   return undefined;
 };
 
-/** The model ids a transcriber accepts, read from its catalog entry so the two cannot drift. */
 const sttModelIds = (provider: string): string[] =>
   findProvider(STT_PROVIDERS, provider)?.fields.find((f) => f.key === "model")?.options?.map((o) => o.value) ?? [];
 

@@ -303,8 +303,10 @@ export default function AnalyticsPage() {
       const link = document.createElement("a");
       link.href = url;
       link.download = "platform_billable_minutes.xlsx";
+      document.body.appendChild(link);
       link.click();
-      URL.revokeObjectURL(url);
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
     } catch (error) {
       toast(toastError({ error: (error as Error).message }, "Failed to download billable minutes"));
     }

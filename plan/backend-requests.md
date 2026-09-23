@@ -85,3 +85,34 @@ passthrough handlers are the source of truth.
 Also document whether `GET /api/assistant/details/{id}` returns `assistant_end_call_webhook`.
 Upstream's details doc does not list it, so the editor may not be able to show saved
 tuning.
+
+## Status — verified 2026-09-23
+
+Checked three ways: against the `intvyom-api-docs-local` MCP server, against the backend code
+(uncommitted in `../INTVyom_Backend`), and live against `http://localhost:3000`. The backend suite
+passes 143/143.
+
+| # | Request | Status |
+| :--- | :--- | :--- |
+| 1 | Create-trunk response leaks credentials | Done. `toPublicTrunk` on create; test "the create response never echoes the SIP credentials". |
+| 2 | Trunk list/details return non-secret config | Done, via an allow-list (`address`, `numbers`, `exotel_number`, `sip_host`, `sip_port`, `sip_domain`). |
+| 3 | `GET /integration/get` plaintext key | Done. Returns `api_key_preview` only. |
+| 4 | Validation `suggestions` dropped | Done. The error body now carries `suggestions`, and the frontend appends the hints to the save error. |
+| 5 | Call-logs unknown assistant → 500 | Done. Returns 404 (verified live). |
+| 6 | Swagger corrections | Mostly done: web-call `data.token`, list/details `data.assistant_*`, create's local-mirror shape, resync fields plus `interrupted`, path params resolved, details' `assistant_end_call_webhook`. |
+
+Remaining doc fixes, verified 2026-09-23 through the MCP server (after a backend reload) and the
+backend suite (145/145):
+
+- [x] `GET /api/assistant/call-logs/{id}`: 200 is now `data.logs[]` (`CallLog`) plus `data.pagination`.
+- [x] `ErrorResponse.suggestions` is now `ValidationSuggestions`, an object keyed by slot, the same
+  shape as `/validate`'s `data.suggestions`.
+- [x] The overview and the integration note now say `POST /api/integration/store`.
+
+Note: `node --watch src/index.js` does not reload `swagger.yaml`, so after editing the docs,
+restart the server (or touch `src/index.js`) before the MCP server serves them.
+
+Open question: the frontend's call-log labels and search also read `call_type`, `call_service`,
+`platform_number`, `is_passthrough` and `metadata`. The `CallLog` schema does not list them. If
+upstream returns them, add them to the schema. If it does not, the Call Logs page always falls back
+to its generic label.

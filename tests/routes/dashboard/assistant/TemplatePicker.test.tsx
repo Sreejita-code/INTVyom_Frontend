@@ -6,7 +6,8 @@ import { TemplatePicker } from "@/routes/dashboard/assistant/TemplatePicker";
 const listTemplates = vi.fn();
 const getTemplate = vi.fn();
 
-vi.mock("@/services/assistant/assistantService", () => ({
+vi.mock("@/services/assistant/assistantService", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/services/assistant/assistantService")>()),
   callListTemplatesEndpoint: () => listTemplates(),
   callGetTemplateEndpoint: (id: string) => getTemplate(id),
 }));
@@ -18,11 +19,13 @@ describe("TemplatePicker", () => {
   });
 
   it("starts the new assistant from the chosen template's configuration", async () => {
-    listTemplates.mockResolvedValue([
-      { id: "realtime-gemini", name: "Realtime Gemini Assistant", description: "Low latency" },
-      { id: "pipeline-basic", name: "Basic Pipeline Assistant", description: "Cheapest" },
-    ]);
-    getTemplate.mockResolvedValue({ assistant_mode: "pipeline", assistant_tts_model: "sarvam" });
+    listTemplates.mockResolvedValue({
+      data: [
+        { id: "realtime-gemini", name: "Realtime Gemini Assistant", description: "Low latency" },
+        { id: "pipeline-basic", name: "Basic Pipeline Assistant", description: "Cheapest" },
+      ],
+    });
+    getTemplate.mockResolvedValue({ data: { configuration: { assistant_mode: "pipeline", assistant_tts_model: "sarvam" } } });
     const onApply = vi.fn();
 
     render(<TemplatePicker onApply={onApply} />);
