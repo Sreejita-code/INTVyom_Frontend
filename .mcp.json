@@ -4,11 +4,11 @@
       "type": "http",
       "url": "https://api-livekit-vyom.indusnettechnologies.com/mcp"
     },
-    "intvyom-api-docs-local": {
+    "intvoicekit-api-docs-local": {
       "type": "http",
       "url": "http://localhost:3000/mcp"
     },
-    "intvyom-api-docs-prod": {
+    "intvoicekit-api-docs-prod": {
       "type": "http",
       "url": "https://voicekit-api.indusnettechnologies.com/mcp"
     }

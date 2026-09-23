@@ -2,7 +2,7 @@
  * Renders a backend request as a copyable snippet in cURL, Python, or Node.
  *
  * Pure by design: the base URL and the key are passed in, never read from `import.meta.env` or
- * storage here, so the caller decides whether the real key or `$VYOM_API_KEY` is printed.
+ * storage here, so the caller decides whether the real key or `$VOICEKIT_API_KEY` is printed.
  */
 
 export type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
@@ -28,8 +28,8 @@ export interface SnippetOptions {
   apiKey?: string;
 }
 
-/** The placeholder every snippet shows in place of the signed-in user's API key. */
-export const API_KEY_PLACEHOLDER = "$VYOM_API_KEY";
+/** The placeholder every snippet shows in place of the signed-in user's VoiceKit API key. */
+export const API_KEY_PLACEHOLDER = "$VOICEKIT_API_KEY";
 
 export const SNIPPET_LANGUAGES = ["curl", "python", "node"] as const;
 

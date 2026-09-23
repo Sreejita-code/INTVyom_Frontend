@@ -1,6 +1,6 @@
 import { AuthUser } from "@/types/auth";
 
-const AUTH_KEY = "intvyom_auth";
+const AUTH_KEY = "intvoicekit_auth";
 
 export function getStoredUser(): AuthUser | null {
   const raw = localStorage.getItem(AUTH_KEY);
@@ -20,7 +20,7 @@ export function clearUser() {
   localStorage.removeItem(AUTH_KEY);
 }
 
-const ONBOARDING_KEY = "intvyom_onboarding_dismissed";
+const ONBOARDING_KEY = "intvoicekit_onboarding_dismissed";
 
 export function isOnboardingDismissed(): boolean {
   return localStorage.getItem(ONBOARDING_KEY) === "1";

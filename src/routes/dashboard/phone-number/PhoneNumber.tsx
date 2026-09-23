@@ -356,6 +356,7 @@ export default function PhoneNumberPage() {
                                                         </Label>
                                                         <Input
                                                             id="username"
+                                                            autoComplete="off"
                                                             value={modalForm.username}
                                                             onChange={(e) => setModalForm({ ...modalForm, username: e.target.value })}
                                                             placeholder="Account SID"
@@ -369,6 +370,7 @@ export default function PhoneNumberPage() {
                                                         <Input
                                                             id="password"
                                                             type="password"
+                                                            autoComplete="new-password"
                                                             value={modalForm.password}
                                                             onChange={(e) => setModalForm({ ...modalForm, password: e.target.value })}
                                                             placeholder="Auth Token"

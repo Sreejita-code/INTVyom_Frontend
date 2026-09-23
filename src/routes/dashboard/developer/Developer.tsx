@@ -76,7 +76,7 @@ const Developer = () => {
               <Terminal className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-foreground">Your API key</h2>
+              <h2 className="text-xl font-semibold text-foreground">Your VoiceKit API key</h2>
               <p className="text-sm text-muted-foreground">
                 Copy what your code needs to call the API. Each box says what it is and where you use it.
               </p>
@@ -87,8 +87,8 @@ const Developer = () => {
             <h3 className="text-sm font-semibold text-foreground">Which ID or key do I need?</h3>
             <ul className="grid gap-2 sm:grid-cols-2 text-xs">
               <li className="rounded-md border border-border/60 bg-muted/20 p-3">
-                <span className="status-chip status-chip-info">API key</span>
-                <p className="mt-2 text-muted-foreground">Who you are. Send as <code className="font-mono">Authorization: Bearer &lt;api_key&gt;</code> on every API request; it also signs the room tokens a browser call joins with. Find yours below.</p>
+                <span className="status-chip status-chip-info">VoiceKit API key</span>
+                <p className="mt-2 text-muted-foreground">Your one credential. Send as <code className="font-mono">Authorization: Bearer &lt;api_key&gt;</code> on every API request. Issued at signup — find yours below.</p>
               </li>
               <li className="rounded-md border border-border/60 bg-muted/20 p-3">
                 <span className="status-chip status-chip-neutral">Assistant ID</span>
@@ -97,6 +97,10 @@ const Developer = () => {
               <li className="rounded-md border border-border/60 bg-muted/20 p-3">
                 <span className="status-chip status-chip-warning">Provider key</span>
                 <p className="mt-2 text-muted-foreground">Pays OpenAI, Gemini, ElevenLabs, etc. Stored on the Provider Keys page, never pasted here.</p>
+              </li>
+              <li className="rounded-md border border-border/60 bg-muted/20 p-3">
+                <span className="status-chip status-chip-neutral">Room token</span>
+                <p className="mt-2 text-muted-foreground">Not yours to hold. The backend mints one per web call and hands it to the browser. You never sign one.</p>
               </li>
             </ul>
           </section>
@@ -110,7 +114,7 @@ const Developer = () => {
             <SecretRow label="Backend address (Base URL)" value={backendUrl} />
             <p className="text-xs text-muted-foreground">
               What: where your backend lives. Where used: front of every API path below.
-              Your API key below is what identifies you — keep it server-side.
+              Your VoiceKit API key below is what identifies you — keep it server-side.
             </p>
           </section>
 
@@ -120,7 +124,7 @@ const Developer = () => {
               <h3 className="text-sm font-semibold text-foreground">Your account credentials</h3>
             </div>
             <p className="text-xs text-muted-foreground">
-              The API key authenticates every request from your code, sent as{" "}
+              The VoiceKit API key authenticates every request from your code, sent as{" "}
               <code className="font-mono">Authorization: Bearer &lt;api_key&gt;</code>. Assistant IDs
               live on the Assistants page — one per assistant, not per account.
             </p>
@@ -130,13 +134,13 @@ const Developer = () => {
               <div className="glass rounded-lg p-4 space-y-4">
                 {user.api_key ? (
                   <div className="space-y-1">
-                    <SecretRow label="API key · your credential" value={user.api_key} secret />
-                    <p className="text-xs text-muted-foreground">Used for: <code className="font-mono">Authorization: Bearer</code> on every API request, and signing browser room tokens.</p>
+                    <SecretRow label="VoiceKit API key" value={user.api_key} secret />
+                    <p className="text-xs text-muted-foreground">Used for: <code className="font-mono">Authorization: Bearer</code> on every API request. It does not sign room tokens — the backend does that.</p>
                   </div>
                 ) : (
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">
-                      No API key is stored for this session. Sign in again — if it is still missing,
+                      No VoiceKit API key is stored for this session. Sign in again — if it is still missing,
                       key issuance failed at signup and support has to reissue it.
                     </p>
                     <Button variant="outline" size="sm" onClick={signInAgain}>
@@ -146,7 +150,7 @@ const Developer = () => {
                 )}
                 <div className="space-y-1">
                   <SecretRow label="User ID · account reference" value={user.user_id} />
-                  <p className="text-xs text-muted-foreground">Used for: quoting your account in a support request. Requests do not send it — the API key identifies you.</p>
+                  <p className="text-xs text-muted-foreground">Used for: quoting your account in a support request. Requests do not send it — the VoiceKit API key identifies you.</p>
                 </div>
               </div>
             )}
@@ -204,8 +208,9 @@ const Developer = () => {
               </h3>
             </div>
             <p className="text-xs text-muted-foreground">
-              The token above is half of a web call. These samples take it from there — connect to
-              the room, play the assistant, type to it, and render the transcript as it is spoken.
+              <code className="font-mono">POST /api/web-call/get-token</code> hands your browser a
+              room token. These samples take it from there — connect to the room, play the
+              assistant, type to it, and render the transcript as it is spoken.
             </p>
             <WebCallClientGuide />
           </section>

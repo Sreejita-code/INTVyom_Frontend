@@ -64,7 +64,7 @@ export function TtsSection({ ttsModel, ttsConfig, onProviderChange, onConfigChan
     >
       <FieldRow
         label="Provider"
-        help={`${spec?.tagline} The API key comes from your Integrations page.`}
+        help={`${spec?.tagline} The provider key comes from your Provider Keys page.`}
         control={
           <Select value={ttsModel} onValueChange={(v) => onProviderChange(v as TtsProvider)}>
             <SelectTrigger aria-label="Provider" className={TRIGGER_ONE_LINE}>

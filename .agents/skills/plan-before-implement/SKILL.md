@@ -23,7 +23,7 @@ request turns into an unwanted rewrite.
 - The directory you are about to touch, in full — every file, not the one you
   were pointed at.
 - `react-service-structure` for where a new file belongs, `ui-design-system`
-  for anything visual, `run-intvyom-frontend` for how to see the app.
+  for anything visual, `run-intvoicekit-frontend` for how to see the app.
 
 Never change code you have not read.
 
@@ -81,7 +81,7 @@ does not need a round trip.
 
 - Re-run the four baseline commands. Results must be no worse than step 2.
 - For UI work, run the driver over every route you touched and look at the
-  screenshots — see `run-intvyom-frontend`.
+  screenshots — see `run-intvoicekit-frontend`.
 - Update `README.md` (structure tree, routes, env vars) and `AGENTS.md`
   (conventions, baseline) in the same change. A structure change is not done
   until the docs match it.

@@ -1,7 +1,7 @@
 ---
 name: ui-design-system
 description: >
-  The visual and responsive quality bar for the INTVyom frontend, expressed in
+  The visual and responsive quality bar for the INTVOICEKIT frontend, expressed in
   this repo's own tokens and utilities. Use when building or changing any UI —
   a new page, a redesign, spacing or typography work, a responsive fix, or a
   polish pass. Triggers on "improve the UI", "make this look better", "fix the
@@ -105,7 +105,7 @@ forever except an actual live indicator — `pulse-neon` exists for that.
 
 Not adjectives — run the checks:
 
-1. `node .agents/skills/run-intvyom-frontend/driver.mjs route <the route>` —
+1. `node .agents/skills/run-intvoicekit-frontend/driver.mjs route <the route>` —
    zero overflow failures, zero console errors, at all five widths.
 2. **Open the 375 and 1920 screenshots and look at them.** A green overflow
    check does not mean the page reads well.

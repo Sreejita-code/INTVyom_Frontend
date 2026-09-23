@@ -48,6 +48,6 @@ describe("GettingStarted", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Dismiss getting started guide" }));
     expect(screen.queryByRole("heading", { name: "Get started in 5 steps" })).not.toBeInTheDocument();
-    expect(localStorage.getItem("intvyom_onboarding_dismissed")).toBe("1");
+    expect(localStorage.getItem("intvoicekit_onboarding_dismissed")).toBe("1");
   });
 });

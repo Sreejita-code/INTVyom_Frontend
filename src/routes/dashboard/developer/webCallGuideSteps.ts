@@ -44,18 +44,18 @@ import {
 import type { TextStreamReader } from "livekit-client";
 import "@livekit/components-styles";
 
-// Issued with your account. The token endpoint does NOT return it — hold it yourself.
+// Your LiveKit server URL. The token endpoint does NOT return it — hold it yourself.
 const LIVEKIT_URL = "${LIVEKIT_URL}";
 const BACKEND_URL = "https://your-backend";
 
-// Your API key is a credential. In production mint the token on your server and return only
-// the token to the browser.
+// Your VoiceKit API key is a credential. In production mint the token on your server and return
+// only the token to the browser.
 async function getToken() {
   const res = await fetch(BACKEND_URL + "/api/web-call/get-token", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: "Bearer $VYOM_API_KEY",
+      Authorization: "Bearer $VOICEKIT_API_KEY",
     },
     body: JSON.stringify({
       assistant_id: "<assistant_id>",
@@ -155,7 +155,7 @@ async function getChatToken() {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: "Bearer $VYOM_API_KEY",
+      Authorization: "Bearer $VOICEKIT_API_KEY",
     },
     body: JSON.stringify({
       assistant_id: "<assistant_id>",
@@ -254,7 +254,7 @@ const res = await fetch(BACKEND_URL + "/api/web-call/get-token", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
-    Authorization: "Bearer $VYOM_API_KEY",
+    Authorization: "Bearer $VOICEKIT_API_KEY",
   },
   body: JSON.stringify({
     assistant_id: "<assistant_id>",

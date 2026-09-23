@@ -127,7 +127,7 @@ const Integrations = () => {
 
     const handleSave = async () => {
         if (!user?.api_key || !selectedProvider || !apiKey) {
-            toast.error("Please provide an API key");
+            toast.error("Please provide a provider key");
             return;
         }
 
@@ -174,7 +174,7 @@ const Integrations = () => {
                         <h1 className="text-2xl font-bold tracking-tight">
                             Provider Keys
                         </h1>
-                        <p className="text-sm text-muted-foreground">Keys for OpenAI, Gemini, ElevenLabs and other voice providers. Your assistants use these — they are different from Your API key.</p>
+                        <p className="text-sm text-muted-foreground">Keys for OpenAI, Gemini, ElevenLabs and other voice providers. Your assistants use these — they are not your VoiceKit API key.</p>
                     </div>
                 </div>
             </motion.div>
@@ -355,14 +355,15 @@ const Integrations = () => {
                                                     <Link2 className="w-4 h-4 text-primary" />
                                                     Configure {provider}
                                                 </CardTitle>
-                                                <CardDescription className="text-xs">Paste your API key below.</CardDescription>
+                                                <CardDescription className="text-xs">Paste your {provider} key below. This is not your VoiceKit API key.</CardDescription>
                                             </CardHeader>
                                             <CardContent className="space-y-4 p-4 pt-0">
                                                 <div className="space-y-2">
-                                                    <Label htmlFor={`apiKey-${provider}`} className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">API Key</Label>
+                                                    <Label htmlFor={`apiKey-${provider}`} className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{provider} key</Label>
                                                     <Input
                                                         id={`apiKey-${provider}`}
                                                         type="password"
+                                                        autoComplete="new-password"
                                                         placeholder="sk-..."
                                                         value={apiKey}
                                                         onChange={(e) => setApiKey(e.target.value)}

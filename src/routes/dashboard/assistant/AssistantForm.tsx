@@ -395,7 +395,7 @@ export function AssistantForm({
               {isRealtimeMode
                 ? "One model, in the order the call runs it."
                 : "Each stage of the chain above, in the order the call runs them."}{" "}
-              API keys come from your Integrations page.
+              Provider keys come from your Provider Keys page.
             </p>
           </div>
 

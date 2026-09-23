@@ -100,6 +100,7 @@ export function DashboardSidebar({
             />
             <Input
               type="search"
+              autoComplete="off"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {

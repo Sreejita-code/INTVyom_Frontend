@@ -1,6 +1,6 @@
-# INTVyom Frontend
+# INTVOICEKIT Frontend
 
-React + Vite frontend for the INTVyom AI voice assistant dashboard. Manages assistants, phone numbers, call logs, analytics, integrations, and audio libraries with a dark neon-cyber UI.
+React + Vite frontend for the INTVOICEKIT AI voice assistant dashboard. Manages assistants, phone numbers, call logs, analytics, integrations, and audio libraries with a dark neon-cyber UI.
 
 ## Requirements
 
@@ -73,7 +73,7 @@ INTVyom_Frontend/
 │   ├── plan-before-implement/SKILL.md     # Read → baseline → propose → ask → implement
 │   ├── react-service-structure/SKILL.md   # Canonical folder layout + README standard
 │   ├── ui-design-system/SKILL.md          # Visual + responsive quality bar
-│   └── run-intvyom-frontend/              # SKILL.md + driver.mjs (Playwright)
+│   └── run-intvoicekit-frontend/              # SKILL.md + driver.mjs (Playwright)
 ├── .claude/skills/               # Directory symlinks into .agents/skills/ — never edit directly
 ├── public/                       # Static assets (served as-is)
 │   ├── logos/                    # TTS provider logos (cartesia, elevenlabs, sarvam)
@@ -190,7 +190,7 @@ itself is driven by `@livekit/components-react` inside the `assistant` and
 
 Identity is the **API key** issued at signup and returned by `POST /api/auth/login` and
 `POST /api/auth/signup` as `user.api_key`. The client stores it with the rest of the session in
-`localStorage["intvyom_auth"]` and sends it on every authenticated request as
+`localStorage["intvoicekit_auth"]` and sends it on every authenticated request as
 `Authorization: Bearer <api_key>`.
 
 - Every authenticated service calls `authedFetch` (`src/services/auth/authedFetch.ts`) instead of
@@ -304,16 +304,16 @@ npm run test:watch   # Watch mode
 
 ### Browser checks
 
-`.agents/skills/run-intvyom-frontend/driver.mjs` boots the dev server and drives
+`.agents/skills/run-intvoicekit-frontend/driver.mjs` boots the dev server and drives
 the app with Playwright: it signs itself in, stubs the backend, and visits every
 route at 375 / 768 / 1024 / 1440 / 1920 px, failing on horizontal overflow or
 console errors. Screenshots land in `.artifacts/screens/` (gitignored).
 
 ```bash
 npx playwright install chromium                                  # once per machine
-node .agents/skills/run-intvyom-frontend/driver.mjs sweep        # every route
-node .agents/skills/run-intvyom-frontend/driver.mjs route /dashboard/analytics
-node .agents/skills/run-intvyom-frontend/driver.mjs shot /dashboard/tools 375
+node .agents/skills/run-intvoicekit-frontend/driver.mjs sweep        # every route
+node .agents/skills/run-intvoicekit-frontend/driver.mjs route /dashboard/analytics
+node .agents/skills/run-intvoicekit-frontend/driver.mjs shot /dashboard/tools 375
 ```
 
 ## Assistant Editor

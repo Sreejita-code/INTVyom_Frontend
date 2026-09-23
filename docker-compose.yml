@@ -6,7 +6,7 @@ services:
       args:
         VITE_BACKEND_URL: ${VITE_BACKEND_URL}
         VITE_LIVEKIT_URL: ${VITE_LIVEKIT_URL}
-    container_name: intvyom-frontend
+    container_name: intvoicekit-frontend
     env_file:
       - .env
     ports:

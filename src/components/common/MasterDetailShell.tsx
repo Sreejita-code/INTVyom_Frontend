@@ -40,7 +40,7 @@ export function MasterDetailShell({
   detailClassName,
 }: MasterDetailShellProps) {
   const [collapsed, toggleCollapsed] = usePersistedFlag(
-    collapseKey ? `intvyom.list.${collapseKey}` : "",
+    collapseKey ? `intvoicekit.list.${collapseKey}` : "",
   );
   const collapsible = Boolean(collapseKey);
   const listHidden = collapsible && collapsed;

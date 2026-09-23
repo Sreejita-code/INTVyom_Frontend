@@ -60,7 +60,7 @@ export function CommandPalette({ open, onOpenChange, query, onQueryChange }: Com
       <DialogContent className="overflow-hidden p-0 shadow-lg">
         <DialogTitle className="sr-only">Search all pages</DialogTitle>
         <Command label="Search all pages" className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
-      <CommandInput value={query} onValueChange={onQueryChange} placeholder="Search pages, keys, IDs… (try “API key” or “phone”)" aria-label="Search all pages" />
+      <CommandInput value={query} onValueChange={onQueryChange} autoComplete="off" placeholder="Search pages, keys, IDs… (try “API key” or “phone”)" aria-label="Search all pages" />
       <CommandList>
         <CommandEmpty>No pages match. Try “API key”, “phone” or “calls”.</CommandEmpty>
         {groups.map((group) => (

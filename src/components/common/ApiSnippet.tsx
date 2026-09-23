@@ -180,13 +180,13 @@ export const ApiSnippetButton = ({
         <div className="border-t border-border p-4 md:p-6 space-y-2">
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-sm text-foreground">Show my real API key</p>
+              <p className="text-sm text-foreground">Show my real VoiceKit API key</p>
               <p className="text-xs text-muted-foreground break-words">
                 {!user?.api_key ? (
-                  "No API key is stored for this session, so the snippet keeps the placeholder."
+                  "No VoiceKit API key is stored for this session, so the snippet keeps the placeholder."
                 ) : revealSecrets ? (
                   <span className="text-destructive">
-                    The snippet now contains your real API key. Anyone who sees it can act as you — do
+                    The snippet now contains your real VoiceKit API key. Anyone who sees it can act as you — do
                     not paste it anywhere shared.
                   </span>
                 ) : (
@@ -202,7 +202,7 @@ export const ApiSnippetButton = ({
               checked={revealSecrets}
               onCheckedChange={setRevealSecrets}
               disabled={!user?.api_key}
-              aria-label="Show my real API key"
+              aria-label="Show my real VoiceKit API key"
             />
           </div>
         </div>

@@ -41,7 +41,7 @@ It found:
 
 Repo rules that apply throughout (AGENTS.md): the `call`/`condense` pattern, `@/` imports, no
 new comments unless they document backend behavior, no dead code, `plan-before-implement`
-one step at a time, `ui-design-system` for UI, and `run-intvyom-frontend` to verify UI work.
+one step at a time, `ui-design-system` for UI, and `run-intvoicekit-frontend` to verify UI work.
 No commits unless the user asks.
 
 **Baseline (2026-09-22):**
@@ -318,7 +318,7 @@ The backend ignores `user_id`; identity comes from the bearer key.
 - Per phase: typecheck clean, all tests pass (new tests added), lint at 88 problems or fewer,
   `npm run build` ok.
 - UI phases (2, 3, 5, 7, 9):
-  - `node .agents/skills/run-intvyom-frontend/driver.mjs sweep` reports 0 failing checks.
+  - `node .agents/skills/run-intvoicekit-frontend/driver.mjs sweep` reports 0 failing checks.
   - Screenshots of the touched surfaces at 375 and 1280 px.
 - End to end against the local backend (`http://localhost:3000`) with the test key:
   - log in

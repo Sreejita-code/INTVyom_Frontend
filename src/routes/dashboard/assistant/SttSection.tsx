@@ -167,7 +167,7 @@ export function SttSection({
         help={
           <>
             {spec?.tagline}
-            {spec?.value !== "native" && " The API key comes from your Integrations page."}
+            {spec?.value !== "native" && " The provider key comes from your Provider Keys page."}
             {mode === "realtime" && " In Realtime mode, the assistant's model handles transcription internally, so this setting is ignored."}
           </>
         }

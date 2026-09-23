@@ -11,7 +11,7 @@ import { DashboardSidebar } from "./DashboardSidebar";
 const DashboardLayout = () => {
   const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [collapsed, toggleCollapsed] = usePersistedFlag("intvyom.sidebar.collapsed");
+  const [collapsed, toggleCollapsed] = usePersistedFlag("intvoicekit.sidebar.collapsed");
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");

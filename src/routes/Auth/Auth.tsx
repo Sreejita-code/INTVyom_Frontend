@@ -46,7 +46,7 @@ const Auth = () => {
       if (!user.api_key) {
         toast({
           variant: "destructive",
-          title: isSignup ? "Account created, but no API key was issued" : "No API key on this account",
+          title: isSignup ? "Account created, but no VoiceKit API key was issued" : "No VoiceKit API key on this account",
           description: "Sign in again in a moment. If this keeps happening, contact support to reissue your key.",
         });
         setIsSignup(false);

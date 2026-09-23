@@ -4,7 +4,7 @@ Guidance for AI coding agents working in this repository.
 
 ## Project
 
-INTVyom frontend — a React + TypeScript (Vite) app for managing voice AI assistants
+INTVOICEKIT frontend — a React + TypeScript (Vite) app for managing voice AI assistants
 (assistants, tools, audio library, SIP trunks, inbound routing, integrations, analytics,
 and passthrough web calls). LiveKit is used for realtime voice/text chat in the browser.
 
@@ -23,7 +23,7 @@ wherever the two disagree.
   before adding a file, moving one, or deciding where something belongs.
 - **`ui-design-system`** — the visual and responsive quality bar in this repo's
   tokens and utilities. Read it before any UI change.
-- **`run-intvyom-frontend`** — launches the app and drives it in a real browser.
+- **`run-intvoicekit-frontend`** — launches the app and drives it in a real browser.
   Run it to see a change, screenshot a page, or sweep every route at five
   viewport widths for layout breaks. UI work is not verified until this has run.
 
@@ -118,6 +118,6 @@ regression. Measured 2026-09-12; refreshed 2026-09-22 (after `plan/api-contract-
   `tailwind.config.ts` and `src/components/ui`
 - `npm run build` — `tsc -b && vite build`; succeeds, emits a >500 kB chunk warning
   (~1.90 MB main bundle).
-- `node .agents/skills/run-intvyom-frontend/driver.mjs sweep` — 0 failing
+- `node .agents/skills/run-intvoicekit-frontend/driver.mjs sweep` — 0 failing
   checks across 15 routes × 5 widths. Off-origin calls are stubbed with `200`, so the seeded
   session's `api_key` is never validated by a real backend.

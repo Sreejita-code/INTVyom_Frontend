@@ -148,7 +148,7 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
             {isRealtime
               ? "Gemini is available here only. Pipeline and cascade need a text-only response, which Gemini's Live models cannot produce."
               : "OpenAI only in this mode. Switch to realtime to use Gemini."}{" "}
-            The API key comes from your Integrations page.
+            The provider key comes from your Provider Keys page.
           </>
         }
         control={

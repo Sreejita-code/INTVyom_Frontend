@@ -1,7 +1,7 @@
 ---
-name: run-intvyom-frontend
+name: run-intvoicekit-frontend
 description: >
-  Launch the INTVyom frontend and drive it in a real browser. Use to run or
+  Launch the INTVOICEKIT frontend and drive it in a real browser. Use to run or
   start the app, take a screenshot of a page, check a route at mobile and
   desktop widths, verify a UI change actually renders, or sweep every route
   for responsive layout breaks and console errors. Triggers on "run the app",
@@ -9,11 +9,11 @@ description: >
   "check the layout", "does this break on mobile".
 ---
 
-# Run INTVyom Frontend
+# Run INTVOICEKIT Frontend
 
 Paths below are relative to the repo root.
 
-The agent path is `.agents/skills/run-intvyom-frontend/driver.mjs` — a
+The agent path is `.agents/skills/run-intvoicekit-frontend/driver.mjs` — a
 Playwright script that boots the Vite dev server, signs itself in, walks routes
 at five viewport widths, and fails on horizontal overflow or console errors.
 Screenshots land in `.artifacts/screens/` (gitignored).
@@ -34,13 +34,13 @@ it resumes.
 
 ```bash
 # every route, every width — ~75 checks, a few minutes
-node .agents/skills/run-intvyom-frontend/driver.mjs sweep
+node .agents/skills/run-intvoicekit-frontend/driver.mjs sweep
 
 # one route, every width — the fast loop while iterating on a page
-node .agents/skills/run-intvyom-frontend/driver.mjs route /dashboard/analytics
+node .agents/skills/run-intvoicekit-frontend/driver.mjs route /dashboard/analytics
 
 # one screenshot at one width
-node .agents/skills/run-intvyom-frontend/driver.mjs shot /dashboard/tools 375
+node .agents/skills/run-intvoicekit-frontend/driver.mjs shot /dashboard/tools 375
 ```
 
 The driver starts and stops the dev server itself — do not start one first, the
@@ -74,7 +74,7 @@ npm run dev     # http://localhost:8080
   only reaches the console listener. This is why the driver watches `console`
   and `pageerror`, and why "the page looked fine" is not evidence.
 - **`/dashboard/*` needs a session.** The driver seeds
-  `localStorage["intvyom_auth"]` (`{user_id, user_name, api_key}`, key from
+  `localStorage["intvoicekit_auth"]` (`{user_id, user_name, api_key}`, key from
   `src/services/storage/storageService.ts`) before first paint. Without it
   every dashboard route renders the login page. The `api_key` is a stub — the
   backend is stubbed below, so it is never validated.

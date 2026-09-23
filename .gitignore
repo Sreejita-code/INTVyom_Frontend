@@ -28,7 +28,7 @@ dist-ssr
 
 .codex
 
-# Driver screenshots (.agents/skills/run-intvyom-frontend)
+# Driver screenshots (.agents/skills/run-intvoicekit-frontend)
 .artifacts
 
 # TypeScript incremental build state

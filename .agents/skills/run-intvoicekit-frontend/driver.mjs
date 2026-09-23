@@ -68,7 +68,7 @@ async function newContext(browser) {
   // calls are stubbed below, so it is never validated — but it lets credential fields render.
   await context.addInitScript(() => {
     localStorage.setItem(
-      "intvyom_auth",
+      "intvoicekit_auth",
       JSON.stringify({ user_id: "driver", user_name: "driver", api_key: "driver-key" }),
     );
   });
