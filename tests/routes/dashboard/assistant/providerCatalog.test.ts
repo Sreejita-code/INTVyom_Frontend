@@ -1,13 +1,23 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DUPLEX_BACKEND_MODELS,
+  DUPLEX_VOICES,
   GEMINI_LIVE_MODELS,
   GEMINI_LIVE_VOICES,
+  OPENAI_CASCADE_MODELS,
+  OPENAI_REALTIME_MODELS,
+  SARVAM_BULBUL_V3_SPEAKERS,
   STT_PROVIDERS,
   TTS_PROVIDERS,
+  elevenLabsReadsSetting,
   getSttModelError,
+  isReasoningModel,
   sttInertReason,
+  ttsFieldsFor,
+  ttsInertReason,
 } from "@/routes/dashboard/assistant/providerCatalog";
+import { SARVAM_V4_FLASH_SPEAKERS } from "@/routes/dashboard/assistant/sarvamSpeakers";
 
 /**
  * These lists are a mirror of the backend's `src/assistant/assistant.rules.js`. When the backend
@@ -89,5 +99,81 @@ describe("STT validation matches the backend's current rules", () => {
   it("rejects models that are not in the catalog", () => {
     expect(getSttModelError("deepgram", "nova-2")).toMatch(/Invalid Deepgram model/);
     expect(getSttModelError("sarvam", "saarika:v2.5")).toMatch(/Invalid Sarvam model/);
+  });
+});
+
+describe("OpenAI model lists mirror upstream 1.6.0", () => {
+  const cascade = OPENAI_CASCADE_MODELS.map((m) => m.value);
+  const realtime = OPENAI_REALTIME_MODELS.map((m) => m.value);
+
+  it("cascade drops the retired pair and adds gpt-6", () => {
+    expect(cascade).not.toContain("gpt-5.1");
+    expect(cascade).not.toContain("gpt-5.4-nano");
+    expect(cascade).toEqual(expect.arrayContaining(["gpt-6-sol", "gpt-6-luna"]));
+  });
+
+  it("treats the gpt-6 models as reasoning models", () => {
+    expect(isReasoningModel("gpt-6-sol")).toBe(true);
+    expect(isReasoningModel("gpt-6-luna")).toBe(true);
+  });
+
+  it("realtime adds the 2.1 pair", () => {
+    expect(realtime).toEqual(expect.arrayContaining(["gpt-realtime-2.1", "gpt-realtime-2.1-mini"]));
+  });
+
+  it("the duplex backend list is the reasoning models only, with the documented default", () => {
+    const values = DUPLEX_BACKEND_MODELS.map((m) => m.value);
+    expect(values).toContain("gpt-5.6-luna");
+    expect(values).toContain("gpt-6-sol");
+    expect(values).not.toContain("gpt-4.1");
+    expect(values.every(isReasoningModel)).toBe(true);
+  });
+
+  it("GPT-Live offers the six documented voices", () => {
+    expect(DUPLEX_VOICES.map((v) => v.value).sort()).toEqual(["beacon", "cedar", "cinder", "marin", "stone", "vesper"]);
+  });
+});
+
+describe("ElevenLabs voice settings per model", () => {
+  it("offers the v4 models", () => {
+    expect(optionValues(TTS_PROVIDERS, "elevenlabs", "model")).toEqual(expect.arrayContaining(["eleven_v4", "eleven_v4_turbo"]));
+  });
+
+  it.each([
+    ["eleven_v3", { stability: true, similarity_boost: false, style: false, speed: false, use_speaker_boost: false }],
+    ["eleven_v3_conversational", { stability: true, similarity_boost: false, style: false, speed: false, use_speaker_boost: true }],
+    ["eleven_v4", { stability: true, similarity_boost: true, style: false, speed: false, use_speaker_boost: false }],
+    ["eleven_turbo_v2_5", { stability: true, similarity_boost: true, style: false, speed: true, use_speaker_boost: false }],
+    ["eleven_multilingual_v2", { stability: true, similarity_boost: true, style: true, speed: true, use_speaker_boost: true }],
+  ])("%s reads exactly its documented settings", (model, expected) => {
+    for (const [key, reads] of Object.entries(expected)) {
+      expect(elevenLabsReadsSetting(model, key)).toBe(reads);
+      expect(ttsInertReason("elevenlabs", key, { model }) === undefined).toBe(reads);
+    }
+  });
+});
+
+describe("Sarvam Bulbul models", () => {
+  it("the v4-flash roster is the 224 documented speakers, sharing no name with v3", () => {
+    expect(new Set(SARVAM_V4_FLASH_SPEAKERS).size).toBe(224);
+    expect(SARVAM_BULBUL_V3_SPEAKERS.filter((v) => (SARVAM_V4_FLASH_SPEAKERS as readonly string[]).includes(v))).toEqual([]);
+  });
+
+  it("resolves the model-dependent fields against the stored model", () => {
+    const spec = TTS_PROVIDERS.find((p) => p.value === "sarvam");
+    const field = (config: Record<string, unknown>, key: string) => ttsFieldsFor(spec, config).find((f) => f.key === key)!;
+
+    expect(field({}, "speaker").options).toHaveLength(30);
+    expect(field({ model: "bulbul:v4-flash" }, "speaker").options).toHaveLength(224);
+    expect(field({}, "pace")).toMatchObject({ min: 0.3, max: 3 });
+    expect(field({ model: "bulbul:v4-flash" }, "pace")).toMatchObject({ min: 0.5, max: 2 });
+    expect(field({}, "target_language_code").options).toHaveLength(11);
+    expect(field({ model: "bulbul:v4-flash" }, "target_language_code").options).toHaveLength(23);
+    expect(field({ model: "bulbul:v4-flash" }, "speech_sample_rate").options?.map((o) => o.value)).toEqual(["8000", "16000", "22050", "24000"]);
+  });
+
+  it("greys temperature on v4-flash only", () => {
+    expect(ttsInertReason("sarvam", "temperature", { model: "bulbul:v4-flash" })).toMatch(/0\.6/);
+    expect(ttsInertReason("sarvam", "temperature", {})).toBeUndefined();
   });
 });

@@ -18,9 +18,12 @@ export async function callListAudiosEndpoint(args: {
 export const condenseListAudiosResponse = (json: unknown): AudioItem[] => {
   if (!json || typeof json !== "object") return [];
   const node = json as Record<string, unknown>;
-  const audios = node.data && typeof node.data === "object"
-    ? (node.data as Record<string, unknown>).audios
-    : undefined;
+  // The contract types `data` as a bare array; the backend has also answered `{ audios, ... }`.
+  const audios = Array.isArray(node.data)
+    ? node.data
+    : node.data && typeof node.data === "object"
+      ? (node.data as Record<string, unknown>).audios
+      : undefined;
   return Array.isArray(audios) ? (audios as AudioItem[]) : [];
 };
 

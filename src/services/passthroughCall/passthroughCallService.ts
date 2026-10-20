@@ -37,6 +37,9 @@ export const condenseCallRecordsResponse = (json: unknown): {
   const data = (json as Record<string, unknown>).data;
   if (!data || typeof data !== "object") return { records: [], total: 0 };
 
+  // The contract types `data` as a bare array; the backend has also answered `{ records, pagination }`.
+  if (Array.isArray(data)) return { records: data as CallRecord[], total: data.length };
+
   const node = data as Record<string, unknown>;
   const records = Array.isArray(node.records) ? (node.records as CallRecord[]) : [];
   const pagination = node.pagination && typeof node.pagination === "object"

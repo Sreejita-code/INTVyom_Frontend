@@ -1,4 +1,4 @@
-import { Dispatch, ReactNode, SetStateAction, useState, useEffect } from "react";
+import { Dispatch, ReactNode, SetStateAction, useState, useEffect, useMemo } from "react";
 import { Plus, Trash2, Wrench, X, AlertTriangle, Volume2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import { MODES, modeAccent } from "@/lib/assistantModes";
 import { END_CALL_WEBHOOK_SAMPLE } from "@/lib/webhookSamples";
 import { END_CALL_WEBHOOK_FIELDS, emptyForm } from "./constants";
 import { 
+  DUPLEX_DEFAULT_BACKEND_MODEL,
   LANGUAGE_CODES, 
   STT_PROVIDERS, 
   TTS_PROVIDERS, 
@@ -36,11 +37,15 @@ import {
 import { 
   applyModeChange, 
   applySttProvider, 
+  buildAssistantPayload,
   applyTtsProvider,
+  getBackendInstructionsError,
+  getBackendModelError,
   getProviderModeError,
   getModelModeError,
   endCallWebhookErrors,
   hydrateForm,
+  knobModelFor,
   normalizeEndCallWebhook,
 } from "./assistantConfig";
 import { AudioChain } from "./AudioChain";
@@ -50,6 +55,7 @@ import { PromptEditor } from "./PromptEditor";
 import { SttSection } from "./SttSection";
 import { TemplatePicker } from "./TemplatePicker";
 import { TtsSection } from "./TtsSection";
+import { WizardProgress } from "./WizardProgress";
 
 interface AssistantFormProps {
   mode: "create" | "edit" | "empty";
@@ -62,6 +68,8 @@ interface AssistantFormProps {
   selectedToolToAdd: string;
   setSelectedToolToAdd: (toolId: string) => void;
   onToggleTool: (toolId: string, attach: boolean) => void;
+  /** Create mode only: which template the form was filled from, so the page can create through it. */
+  onTemplateApplied?: (templateId: string) => void;
 }
 
 /** A titled group of settings, matching the rhythm of the provider stages above it. */
@@ -97,6 +105,7 @@ export function AssistantForm({
   selectedToolToAdd,
   setSelectedToolToAdd,
   onToggleTool,
+  onTemplateApplied,
 }: AssistantFormProps) {
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   
@@ -147,6 +156,9 @@ export function AssistantForm({
 
   const isRealtimeMode = formData.assistant_mode === "realtime";
   const isCascadeMode = formData.assistant_mode === "cascade";
+  const isDuplexMode = formData.assistant_mode === "duplex";
+  // Realtime and duplex models speak for themselves: no transcriber, no speech provider.
+  const speaksItself = isRealtimeMode || isDuplexMode;
 
   // Validate configuration on changes
   useEffect(() => {
@@ -168,12 +180,19 @@ export function AssistantForm({
       }
     }
     
+    if (isDuplexMode) {
+      const backendModelError = getBackendModelError(formData.assistant_llm_config?.backend_model);
+      if (backendModelError) errors.llmBackendModel = backendModelError;
+      const instructionsError = getBackendInstructionsError(formData.assistant_llm_config?.backend_instructions);
+      if (instructionsError) errors.llmBackendInstructions = instructionsError;
+    }
+
     // Validate LLM generation knobs
-    if (formData.assistant_mode === "cascade" && formData.assistant_llm_config?.model) {
+    if ((formData.assistant_mode === "cascade" || isDuplexMode) && formData.assistant_llm_config?.model) {
       const llmConfig = formData.assistant_llm_config;
-      const model = llmConfig.model;
+      const model = knobModelFor(formData.assistant_mode, llmConfig);
       
-      if (llmConfig.temperature !== undefined) {
+      if (!isDuplexMode && llmConfig.temperature !== undefined) {
         const tempError = getLlmKnobError("temperature", model);
         if (tempError) errors.llmTemperature = tempError;
       }
@@ -189,8 +208,8 @@ export function AssistantForm({
       }
     }
     
-    // Validate STT provider/mode compatibility (except in realtime where it's ignored)
-    if (!isRealtimeMode) {
+    // Validate STT provider/mode compatibility (except where the model speaks for itself and it's ignored)
+    if (!speaksItself) {
       const sttProviderError = getProviderModeError(formData.assistant_mode, 'stt', formData.assistant_stt_model);
       if (sttProviderError) {
         errors.sttProvider = sttProviderError;
@@ -220,8 +239,8 @@ export function AssistantForm({
       }
     }
     
-    // Validate TTS provider/mode compatibility (except in realtime where it's ignored)
-    if (!isRealtimeMode) {
+    // Validate TTS provider/mode compatibility (except where the model speaks for itself and it's ignored)
+    if (!speaksItself) {
       const ttsProviderError = getProviderModeError(formData.assistant_mode, 'tts', formData.assistant_tts_model);
       if (ttsProviderError) {
         errors.ttsProvider = ttsProviderError;
@@ -229,7 +248,7 @@ export function AssistantForm({
     }
     
     setValidationErrors(errors);
-  }, [formData, isRealtimeMode]);
+  }, [formData, isDuplexMode, speaksItself]);
 
   // Short labels for the chain diagram. The stage sections build their own, richer summaries; the
   // diagram only has room for "who is doing this job", so it stops at provider plus model.
@@ -243,16 +262,26 @@ export function AssistantForm({
       .filter(Boolean)
       .join(" · "),
     llm: [llmProvider, formData.assistant_llm_config?.model?.trim()].filter(Boolean).join(" · "),
+    backend: formData.assistant_llm_config?.backend_model?.trim() || DUPLEX_DEFAULT_BACKEND_MODEL,
     tts: findProvider(TTS_PROVIDERS, formData.assistant_tts_model)?.label ?? formData.assistant_tts_model,
   };
 
-  const applyTemplate = (configuration: Record<string, unknown>) =>
+  const applyTemplate = (configuration: Record<string, unknown>, templateId: string) => {
     setFormData((prev) => hydrateForm({ ...prev, ...configuration }));
+    onTemplateApplied?.(templateId);
+  };
+
+  // What the guided-setup panel judges: the body a create would send, from the form as it stands.
+  const wizardDraft = useMemo(
+    () => (mode === "create" ? buildAssistantPayload(formData, formData.assistant_end_call_enabled, { creating: true }) : {}),
+    [mode, formData],
+  );
 
   return (
     <ScrollArea className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-4xl space-y-8 p-4 pb-20 md:space-y-10 md:p-8">
         {mode === "create" && <TemplatePicker onApply={applyTemplate} />}
+        {mode === "create" && <WizardProgress draft={wizardDraft} />}
 
         {/* Validation Errors */}
         {Object.keys(validationErrors).length > 0 && (
@@ -316,7 +345,7 @@ export function AssistantForm({
             <RadioGroup
               value={formData.assistant_mode}
               onValueChange={(value) => setFormData((prev) => applyModeChange(prev, value as AssistantMode))}
-              className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+              className="grid grid-cols-1 gap-3 sm:grid-cols-2"
             >
               {MODES.map((option) => {
                 const selected = formData.assistant_mode === option.value;
@@ -362,6 +391,11 @@ export function AssistantForm({
                         <strong>Note:</strong> Full provider flexibility. OpenAI LLM only.
                       </span>
                     )}
+                    {option.value === "duplex" && (
+                      <span className="text-[0.75rem] leading-5 text-muted-foreground">
+                        <strong>Note:</strong> No TTS or STT stage, pre-recorded greeting, filler words or text chat.
+                      </span>
+                    )}
                   </Label>
                 );
               })}
@@ -372,6 +406,7 @@ export function AssistantForm({
               stt={chainLabels.stt}
               llm={chainLabels.llm}
               tts={chainLabels.tts}
+              backend={chainLabels.backend}
             />
           </section>
         </div>
@@ -392,8 +427,10 @@ export function AssistantForm({
           <div className="grid gap-1">
             <h3 className="text-[1.0625rem] font-semibold tracking-tight">Models</h3>
             <p className="max-w-prose text-[0.8125rem] leading-6 text-muted-foreground">
-              {isRealtimeMode
-                ? "One model, in the order the call runs it."
+              {speaksItself
+                ? isDuplexMode
+                  ? "The voice model and the backend model behind it."
+                  : "One model, in the order the call runs it."
                 : "Each stage of the chain above, in the order the call runs them."}{" "}
               Provider keys come from your Provider Keys page.
             </p>
@@ -413,7 +450,7 @@ export function AssistantForm({
 
             <LlmSection
               step={isCascadeMode ? 2 : 1}
-              last={isRealtimeMode}
+              last={speaksItself}
               mode={formData.assistant_mode}
               llmConfig={formData.assistant_llm_config}
               hasTools={attachedToolIds.length > 0 || (formData.assistant_end_call_enabled ?? false)}
@@ -438,11 +475,15 @@ export function AssistantForm({
               />
             )}
 
-            {isRealtimeMode ? (
+            {speaksItself ? (
               <div className="rounded-xl border border-border/60 bg-card/60 px-5 py-1 sm:px-6">
                 <div className="py-5 text-center text-muted-foreground">
                   <Volume2 className="mx-auto mb-2 h-6 w-6 opacity-50" />
-                  <p className="text-sm">In Realtime mode, the assistant's model speaks its own audio, so this stage is not needed.</p>
+                  <p className="text-sm">
+                    {isDuplexMode
+                      ? "In Duplex mode, GPT-Live speaks its own audio, so there is no transcriber or voice stage."
+                      : "In Realtime mode, the assistant's model speaks its own audio, so this stage is not needed."}
+                  </p>
                 </div>
               </div>
             ) : (
@@ -475,12 +516,19 @@ export function AssistantForm({
             label="Filler words"
             inline
             help="Small acknowledgements while the caller is still speaking, so the line does not go silent."
-            note={isRealtimeMode ? "Realtime models speak their own audio, so there is no stage that can add filler words." : undefined}
+            note={
+              isDuplexMode
+                ? "GPT-Live cannot speak a fixed string, so the API refuses filler words in duplex mode."
+                : isRealtimeMode
+                  ? "Realtime models speak their own audio, so there is no stage that can add filler words."
+                  : undefined
+            }
             control={
               <Switch
-                checked={isRealtimeMode ? false : formData.assistant_interaction_config?.filler_words}
+                aria-label="Filler words"
+                checked={speaksItself ? false : formData.assistant_interaction_config?.filler_words}
                 onCheckedChange={(v) => updateInteractionConfig("filler_words", v)}
-                disabled={isRealtimeMode}
+                disabled={speaksItself}
               />
             }
           />
@@ -663,10 +711,13 @@ export function AssistantForm({
               label="Pre-recorded greeting"
               inline
               help="Plays an audio file instead of a model-generated opening line. Only used when the assistant speaks first."
+              note={isDuplexMode ? "GPT-Live cannot play a fixed recording, so the API refuses a pre-recorded greeting in duplex mode. It phrases the greeting itself from the start instruction." : undefined}
               control={
                 <Switch
-                  checked={formData.assistant_greeting_audio?.enabled ?? false}
+                  aria-label="Pre-recorded greeting"
+                  checked={isDuplexMode ? false : (formData.assistant_greeting_audio?.enabled ?? false)}
                   onCheckedChange={(v) => updateGreetingAudio("enabled", v)}
+                  disabled={isDuplexMode}
                 />
               }
             />

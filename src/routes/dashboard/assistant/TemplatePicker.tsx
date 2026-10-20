@@ -11,7 +11,8 @@ import {
 } from "@/services/assistant/assistantService";
 
 interface TemplatePickerProps {
-  onApply: (configuration: Record<string, unknown>) => void;
+  /** `templateId` lets the caller create through the template endpoint instead of plain create. */
+  onApply: (configuration: Record<string, unknown>, templateId: string) => void;
 }
 
 export function TemplatePicker({ onApply }: TemplatePickerProps) {
@@ -29,7 +30,7 @@ export function TemplatePicker({ onApply }: TemplatePickerProps) {
     setApplying(id);
     setError(null);
     try {
-      onApply(condenseTemplateResponse(await callGetTemplateEndpoint(id)));
+      onApply(condenseTemplateResponse(await callGetTemplateEndpoint(id)), id);
     } catch (e) {
       setError((e as Error).message);
     } finally {

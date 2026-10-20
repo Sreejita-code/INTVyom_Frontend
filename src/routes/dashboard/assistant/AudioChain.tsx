@@ -1,4 +1,4 @@
-import { ArrowRight, Brain, Mic, Phone, Volume2 } from "lucide-react";
+import { ArrowRight, Brain, Cpu, Mic, Phone, Volume2 } from "lucide-react";
 
 import { AssistantMode } from "@/types/assistant";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,8 @@ interface AudioChainProps {
   stt: string;
   llm: string;
   tts: string;
+  /** Duplex only: the reasoning model GPT-Live delegates to. */
+  backend?: string;
 }
 
 /** One box in the chain. `dim` marks the caller, who is not something you configure. */
@@ -58,11 +60,13 @@ function Arrow() {
  * off the model rather than sitting in front of it, because the model hears the caller directly and
  * the tap only writes the transcript. Drawn as a fourth box in a row, that reads as a cascade.
  */
-export function AudioChain({ mode, stt, llm, tts }: AudioChainProps) {
+export function AudioChain({ mode, stt, llm, tts, backend }: AudioChainProps) {
   const accent = modeAccent(mode);
 
   const spoken =
-    mode === "realtime"
+    mode === "duplex"
+      ? `Caller and ${llm} talk to each other at the same time, and ${llm} hands reasoning and tools to ${backend}.`
+      : mode === "realtime"
       ? `Caller to ${llm}, which hears, thinks and speaks, and back to the caller.`
       : mode === "cascade"
         ? `Caller to ${stt}, to ${llm}, to ${tts}, and back to the caller.`
@@ -89,12 +93,20 @@ export function AudioChain({ mode, stt, llm, tts }: AudioChainProps) {
 
         <Node
           icon={Brain}
-          role={mode === "realtime" ? "Model — hears, thinks, speaks" : mode === "cascade" ? "Text model" : "Realtime model"}
+          role={
+            mode === "duplex"
+              ? "Voice model — hears and speaks at once"
+              : mode === "realtime"
+                ? "Model — hears, thinks, speaks"
+                : mode === "cascade"
+                  ? "Text model"
+                  : "Realtime model"
+          }
           value={llm}
           accent={accent.card}
         />
 
-        {mode !== "realtime" && (
+        {mode !== "realtime" && mode !== "duplex" && (
           <>
             <Arrow />
             <Node icon={Volume2} role="Voice" value={tts} accent={accent.card} />
@@ -104,6 +116,17 @@ export function AudioChain({ mode, stt, llm, tts }: AudioChainProps) {
         <Arrow />
         <Node icon={Phone} role="Caller" dim />
       </div>
+
+      {mode === "duplex" && (
+        // The backend, drawn as a branch under the voice model: it never hears or speaks to the caller.
+        <div className="flex w-max items-center gap-2 pl-[5.5rem]">
+          <span className="h-4 w-4 shrink-0 self-start rounded-bl-md border-b border-l border-dashed border-border" />
+          <Node icon={Cpu} role="Backend model" value={backend} accent="border-border/60" />
+          <span className="max-w-[18rem] text-[11px] leading-5 text-muted-foreground">
+            Reasoning and tool calls. Its answer goes back to the voice model, which says it.
+          </span>
+        </div>
+      )}
 
       {mode === "pipeline" && (
         // The tap, drawn as a branch under the model rather than a step in the row above it.

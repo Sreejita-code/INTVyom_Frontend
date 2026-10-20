@@ -17,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getStoredUser } from "@/services/storage/storageService";
 import {
+  callApplyTemplateEndpoint,
   callCreateAssistantEndpoint,
   callDeleteAssistantEndpoint,
   callGetAssistantDetailsEndpoint,
@@ -28,11 +29,11 @@ import {
 import { callListToolsEndpoint, condenseListToolsResponse, callToggleToolAttachmentEndpoint } from "@/services/tool/toolService";
 import { callListAudiosEndpoint, condenseListAudiosResponse } from "@/services/audio/audioService";
 import { callGetWebCallTokenEndpoint, condenseWebCallTokenResponse } from "@/services/webCall/webCallService";
-import { AssistantDetail, AssistantItem } from "@/types/assistant";
+import { AssistantDetail, AssistantItem, AssistantMode } from "@/types/assistant";
 import { ToolSummary } from "@/types/tool";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { modeAccent } from "@/lib/assistantModes";
+import { modeAccent, parseAssistantMode } from "@/lib/assistantModes";
 import { extractPlaceholders } from "@/lib/placeholders";
 import { ChatInner } from "./AssistantChat";
 import { AssistantForm } from "./AssistantForm";
@@ -68,6 +69,9 @@ export default function AssistantPage() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [mode, setMode] = useState<"create" | "edit" | "empty">("empty");
+  // The template a new assistant was filled from. Creating then goes through the template's apply
+  // endpoint; the request body is still the whole form, so the saved assistant is the same.
+  const [templateId, setTemplateId] = useState<string | null>(null);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
 
   useEffect(() => {
@@ -202,6 +206,7 @@ export default function AssistantPage() {
     setFormData(emptyForm);
     setInitialFormSnapshot(buildFormSnapshot(emptyForm));
     setAttachedToolIds([]);
+    setTemplateId(null);
     setMode("create");
     setMobileDetailOpen(true);
   };
@@ -213,6 +218,7 @@ export default function AssistantPage() {
     }
 
     setSelectedId(id);
+    setTemplateId(null);
     setMode("edit");
     setMobileDetailOpen(true);
     setDetailLoading(true);
@@ -324,7 +330,9 @@ export default function AssistantPage() {
       }
 
       let json: unknown;
-      if (creating) {
+      if (creating && templateId) {
+        json = await callApplyTemplateEndpoint(templateId, payload);
+      } else if (creating) {
         json = await callCreateAssistantEndpoint(payload);
       } else {
         json = await callUpdateAssistantEndpoint(selectedId, payload);
@@ -341,8 +349,9 @@ export default function AssistantPage() {
 
       if (mode === "create") {
         const result = json as Record<string, any>;
-        if (result.assistant?.external_assistant_id) handleSelectAssistant(result.assistant.external_assistant_id);
-        else if (result.data?.assistant_id) handleSelectAssistant(result.data.assistant_id);
+        // Create answers under `assistant`, template apply under `data`; both are the local mirror.
+        const created = result.assistant?.external_assistant_id ?? result.data?.external_assistant_id ?? result.data?.assistant_id;
+        if (created) handleSelectAssistant(created);
       }
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
@@ -358,14 +367,21 @@ export default function AssistantPage() {
     const hasTools = (formData.assistant_end_call_enabled ?? false) || attachedToolIds.length > 0;
     // Same branch handleSubmit takes, so the snippet cannot show create while the app patches.
     const creating = mode === "create";
+    const fromTemplate = creating && templateId;
     return {
-      id: creating ? "assistant.create" : "assistant.update",
-      title: creating ? "Create an assistant" : "Update this assistant",
-      note: creating
-        ? "The response carries the new assistant_id — keep it, every call endpoint needs it."
-        : "Only the fields you send are merged; an explicit null clears one.",
+      id: fromTemplate ? "assistant.applyTemplate" : creating ? "assistant.create" : "assistant.update",
+      title: fromTemplate ? "Create an assistant from a template" : creating ? "Create an assistant" : "Update this assistant",
+      note: fromTemplate
+        ? "The body replaces the template's keys outright, and the template fills whatever it leaves out. The response carries the new assistant_id."
+        : creating
+          ? "The response carries the new assistant_id — keep it, every call endpoint needs it."
+          : "Only the fields you send are merged; an explicit null clears one.",
       method: creating ? "POST" : "PATCH",
-      path: creating ? "/api/assistant/create" : `/api/assistant/update/${selectedId}`,
+      path: fromTemplate
+        ? `/api/assistant/templates/${templateId}/apply`
+        : creating
+          ? "/api/assistant/create"
+          : `/api/assistant/update/${selectedId}`,
       body: buildAssistantPayload(formData, hasTools, { creating }),
     };
   };
@@ -404,8 +420,16 @@ export default function AssistantPage() {
     }
   };
 
-  const getAssistantMode = (assistant: AssistantItem): "pipeline" | "realtime" | "cascade" =>
-    assistant.assistant_mode === "realtime" ? "realtime" : assistant.assistant_mode === "cascade" ? "cascade" : "pipeline";
+  // `text_only` is a 400 for realtime assistants (one audio model, no text path) and for duplex
+  // (GPT-Live has no text modality), so Chat would only ever answer with an error.
+  const chatRefusedReason =
+    formData.assistant_mode === "duplex"
+      ? "Duplex assistants have no text output, so the API refuses text chat."
+      : formData.assistant_mode === "realtime"
+        ? "Realtime assistants have no text-only path, so the API refuses text chat."
+        : undefined;
+
+  const getAssistantMode = (assistant: AssistantItem): AssistantMode => parseAssistantMode(assistant.assistant_mode);
 
   return (
     <>
@@ -666,7 +690,8 @@ export default function AssistantPage() {
                     <Button
                       variant="secondary"
                       onClick={handleStartChat}
-                      disabled={chatLoading || saving}
+                      disabled={chatLoading || saving || chatRefusedReason !== undefined}
+                      title={chatRefusedReason}
                       className="shadow-lg bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"
                     >
                       {chatLoading
@@ -700,6 +725,7 @@ export default function AssistantPage() {
                 selectedToolToAdd={selectedToolToAdd}
                 setSelectedToolToAdd={setSelectedToolToAdd}
                 onToggleTool={handleToggleTool}
+                onTemplateApplied={setTemplateId}
               />
             </div>
           )}

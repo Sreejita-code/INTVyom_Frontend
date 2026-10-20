@@ -12,6 +12,10 @@ function kindLabel(type: string) {
 
 function lineMetric(line: CallUsageLine) {
   if (line.type === "llm") {
+    // GPT-Live is billed per second of open session and reports no tokens.
+    if (line.sessionDuration && !line.inputTokens && !line.outputTokens) {
+      return `${line.sessionDuration.toFixed(1)}s session`;
+    }
     const parts: string[] = [];
     if (line.inputTokens != null) parts.push(`${line.inputTokens.toLocaleString()} in`);
     if (line.outputTokens != null) parts.push(`${line.outputTokens.toLocaleString()} out`);

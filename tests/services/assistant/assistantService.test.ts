@@ -163,3 +163,20 @@ describe("condenseCallLogsResponse", () => {
     expect(page.logs[1].sip_status_code).toBeNull();
   });
 });
+
+describe("duplex usage lines", () => {
+  it("reads the session seconds GPT-Live is billed on", () => {
+    const page = condenseCallLogsResponse({
+      data: {
+        logs: [
+          {
+            started_at: "2026-10-20T10:00:00Z",
+            usage: { model_usage: [{ type: "llm_usage", provider: "openai", model: "gpt-live-1", session_duration: 61.5 }] },
+          },
+        ],
+      },
+    });
+
+    expect(page.logs[0].usage?.lines[0]).toMatchObject({ model: "gpt-live-1", sessionDuration: 61.5 });
+  });
+});

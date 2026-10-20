@@ -31,7 +31,7 @@ describe("TemplatePicker", () => {
     render(<TemplatePicker onApply={onApply} />);
     fireEvent.click(await screen.findByRole("button", { name: /basic pipeline assistant/i }));
 
-    await waitFor(() => expect(onApply).toHaveBeenCalledWith({ assistant_mode: "pipeline", assistant_tts_model: "sarvam" }));
+    await waitFor(() => expect(onApply).toHaveBeenCalledWith({ assistant_mode: "pipeline", assistant_tts_model: "sarvam" }, "pipeline-basic"));
     expect(getTemplate).toHaveBeenCalledWith("pipeline-basic");
   });
 

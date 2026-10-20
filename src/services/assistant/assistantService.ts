@@ -1,9 +1,21 @@
-import { AssistantCallLogsPage, AssistantItem, AssistantMode, AssistantSummary } from "@/types/assistant";
+import {
+  AssistantCallLogsPage,
+  AssistantItem,
+  AssistantMode,
+  AssistantSummary,
+  WizardFieldRule,
+  WizardNavigation,
+  WizardStatus,
+  WizardStep,
+  WizardStepDetail,
+  WizardStepValidation,
+} from "@/types/assistant";
 import { CallLog, CallTranscript, CallUsage, CallUsageLine } from "@/types/callLog";
 import { ServiceResponse } from "@/types/http";
 import { parseUsd } from "@/lib/formatUsd";
 import { authedFetch } from "@/services/auth/authedFetch";
 import { readJson } from "@/lib/readJson";
+import { parseAssistantMode } from "@/lib/assistantModes";
 
 const ASSISTANT_BASE = `${import.meta.env.VITE_BACKEND_URL}/api/assistant`;
 
@@ -36,12 +48,7 @@ export const condenseListAssistantsResponse = (json: unknown): AssistantSummary[
 
   return (list ?? []).map((item) => {
     const raw = (item || {}) as Record<string, unknown>;
-    const mode: AssistantMode =
-      raw.assistant_mode === "realtime"
-        ? "realtime"
-        : raw.assistant_mode === "cascade"
-          ? "cascade"
-          : "pipeline";
+    const mode: AssistantMode = parseAssistantMode(raw.assistant_mode);
     return {
       ...item,
       assistant_id: String(raw.assistant_id || raw.external_assistant_id || raw._id || raw.id || ""),
@@ -184,6 +191,7 @@ const condenseUsageLine = (raw: unknown): CallUsageLine | null => {
     outputTokens: asFiniteNumber(row.output_tokens),
     charactersCount: asFiniteNumber(row.characters_count),
     audioDuration: asFiniteNumber(row.audio_duration),
+    sessionDuration: asFiniteNumber(row.session_duration),
   };
 };
 
@@ -341,3 +349,129 @@ export async function callAssistantBillableMinutesEndpoint(args: {
 
 export const condenseBillableMinutesResponse = (json: unknown): number =>
   Number((json as { data?: { total_billable_minutes?: unknown } } | null)?.data?.total_billable_minutes ?? 0);
+
+/**
+ * Creates an assistant from a template. The body is shallow-merged over the template's
+ * configuration, key by key, so sending the full create payload yields exactly that assistant; the
+ * template only fills what the body leaves out. Name, description and prompt are never in a
+ * template, so the body must carry all three.
+ */
+export async function callApplyTemplateEndpoint(templateId: string, payload: unknown): Promise<unknown> {
+  const res = await authedFetch(`${ASSISTANT_BASE}/templates/${encodeURIComponent(templateId)}/apply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  const json = await readJson(res);
+  if (!res.ok) throw new Error(saveErrorMessage(json));
+  return json;
+}
+
+// --- Builder wizard -----------------------------------------------------------------------
+// Local-only helpers: they never reach the upstream API. Each takes the draft as a `config` query
+// parameter, a JSON string; the backend treats malformed JSON as `{}` rather than failing.
+
+const WIZARD_BASE = `${ASSISTANT_BASE}/wizard`;
+
+const draftQuery = (draft: unknown, extra: Record<string, string> = {}) =>
+  new URLSearchParams({ ...extra, config: JSON.stringify(draft ?? {}) }).toString();
+
+async function getWizard(path: string, failure: string): Promise<unknown> {
+  const res = await authedFetch(`${WIZARD_BASE}${path}`);
+  const json = await readJson(res);
+  if (!res.ok) throw new Error(json.error || failure);
+  return json;
+}
+
+export const callListWizardStepsEndpoint = (draft: unknown) =>
+  getWizard(`/steps?${draftQuery(draft)}`, "Failed to load the builder steps");
+
+export const callGetWizardStepEndpoint = (stepId: string, draft: unknown) =>
+  getWizard(`/steps/${encodeURIComponent(stepId)}?${draftQuery(draft)}`, "Failed to load the step");
+
+export const callWizardNavigationEndpoint = (currentStep: string, draft: unknown) =>
+  getWizard(`/navigation?${draftQuery(draft, { current_step: currentStep })}`, "Failed to load the next step");
+
+export const callWizardStatusEndpoint = (draft: unknown) =>
+  getWizard(`/status?${draftQuery(draft)}`, "Failed to load the builder progress");
+
+/** Always answers 200: an invalid step is `data.isValid: false`, and an unknown step id is an error in `data.errors`. */
+export async function callValidateWizardStepEndpoint(
+  stepId: string,
+  args: { stepData: unknown; currentConfig: unknown },
+): Promise<unknown> {
+  const res = await authedFetch(`${WIZARD_BASE}/steps/${encodeURIComponent(stepId)}/validate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ step_data: args.stepData, current_config: args.currentConfig }),
+  });
+  const json = await readJson(res);
+  if (!res.ok) throw new Error(json.error || "Failed to validate the step");
+  return json;
+}
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+const condenseWizardStep = (raw: unknown): WizardStep | null => {
+  const node = asRecord(raw);
+  if (typeof node.id !== "string") return null;
+  return {
+    id: node.id,
+    title: asString(node.title) || node.id,
+    description: asString(node.description),
+    fields: Array.isArray(node.fields) ? node.fields.filter((f): f is string => typeof f === "string") : [],
+  };
+};
+
+export const condenseWizardStepsResponse = (json: unknown): WizardStep[] => {
+  const data = asRecord(json).data;
+  return Array.isArray(data) ? data.map(condenseWizardStep).filter((s): s is WizardStep => s !== null) : [];
+};
+
+export const condenseWizardStepResponse = (json: unknown): WizardStepDetail | null => {
+  const data = asRecord(asRecord(json).data);
+  const step = condenseWizardStep(data);
+  if (!step) return null;
+
+  const rules: Record<string, WizardFieldRule> = {};
+  for (const [field, rule] of Object.entries(asRecord(data.validation_rules))) {
+    const node = asRecord(rule);
+    rules[field] = {
+      required: node.required === true,
+      allowedValues: Array.isArray(node.allowed_values) ? node.allowed_values.map(String) : [],
+    };
+  }
+
+  const providers = asRecord(data.suggestions).providers;
+  return {
+    ...step,
+    rules,
+    providers: Array.isArray(providers)
+      ? providers.map((p) => {
+          const node = asRecord(p);
+          return { value: asString(node.value), label: asString(node.label) || asString(node.value), description: asString(node.description) };
+        })
+      : [],
+  };
+};
+
+export const condenseWizardNavigationResponse = (json: unknown): WizardNavigation => {
+  const data = asRecord(asRecord(json).data);
+  return { next: condenseWizardStep(data.next), previous: condenseWizardStep(data.previous) };
+};
+
+export const condenseWizardStatusResponse = (json: unknown): WizardStatus => {
+  const status: WizardStatus = {};
+  for (const [id, done] of Object.entries(asRecord(asRecord(json).data))) status[id] = done === true;
+  return status;
+};
+
+export const condenseWizardValidationResponse = (json: unknown): WizardStepValidation => {
+  const data = asRecord(asRecord(json).data);
+  return {
+    isValid: data.isValid === true,
+    errors: Array.isArray(data.errors) ? data.errors.map(String) : [],
+  };
+};

@@ -15,42 +15,63 @@ import { AssistantDetail, AssistantLlmConfig, AssistantMode, EndCallWebhookTunin
 import { END_CALL_WEBHOOK_FIELDS, emptyForm } from "./constants";
 import {
   CASCADE_LLM_FIELDS,
-  ELEVENLABS_MODELS_WITHOUT_SPEED,
+  DUPLEX_BACKEND_MODELS,
+  DUPLEX_BACKEND_INSTRUCTIONS_MAX,
+  DUPLEX_DEFAULT_BACKEND_MODEL,
+  DUPLEX_DEFAULT_VOICE,
+  DUPLEX_MODEL,
+  DUPLEX_VOICES,
+  ELEVENLABS_VOICE_SETTINGS,
   GEMINI_DEFAULT_MODEL,
   GEMINI_DEFAULT_VOICE,
   OPENAI_CASCADE_MODELS,
   OPENAI_REALTIME_MODELS,
+  OPENAI_REALTIME_VOICES,
   PIPELINE_STT_MODELS,
+  RETIRED_OPENAI_MODELS,
+  SARVAM_TTS_LIMITS,
   STT_PROVIDERS,
   TTS_PROVIDERS,
   defaultConfigFor,
+  elevenLabsReadsSetting,
   findProvider,
   isGeminiModel,
   isGeminiVoice,
   llmInertReason,
+  sarvamTtsModelOf,
   sttInertReason,
 } from "./providerCatalog";
 
 const CASCADE_MODEL_IDS = OPENAI_CASCADE_MODELS.map((m) => m.value);
 const REALTIME_MODEL_IDS = OPENAI_REALTIME_MODELS.map((m) => m.value);
+const DUPLEX_BACKEND_MODEL_IDS = DUPLEX_BACKEND_MODELS.map((m) => m.value);
+const DUPLEX_VOICE_IDS = DUPLEX_VOICES.map((v) => v.value);
+const OPENAI_REALTIME_VOICE_IDS = OPENAI_REALTIME_VOICES.map((v) => v.value);
+
+/** The model whose capabilities the generation knobs are checked against. */
+export const knobModelFor = (mode: AssistantMode, llm: AssistantLlmConfig | undefined): string | undefined =>
+  mode === "duplex" ? llm?.backend_model?.trim() || DUPLEX_DEFAULT_BACKEND_MODEL : llm?.model;
 
 // Validation constants for stricter checking
 const VALID_LLM_PROVIDERS: Record<AssistantMode, string[]> = {
   pipeline: ["openai"],
   realtime: ["openai", "gemini"],
-  cascade: ["openai"]
+  cascade: ["openai"],
+  duplex: ["openai"],
 };
 
 const VALID_STT_PROVIDERS: Record<AssistantMode, string[]> = {
   pipeline: ["sarvam", "native"],
   realtime: ["sarvam", "native", "cartesia", "deepgram", "elevenlabs", "openai"], // All accepted but only sarvam/native run
-  cascade: ["sarvam", "cartesia", "deepgram", "elevenlabs", "openai"]
+  cascade: ["sarvam", "cartesia", "deepgram", "elevenlabs", "openai"],
+  duplex: ["sarvam", "native", "cartesia", "deepgram", "elevenlabs", "openai"], // Stored but ignored
 };
 
 const VALID_TTS_PROVIDERS: Record<AssistantMode, string[]> = {
   pipeline: ["cartesia", "sarvam", "elevenlabs", "mistral"],
   realtime: ["cartesia", "sarvam", "elevenlabs", "mistral"], // Stored but ignored
-  cascade: ["cartesia", "sarvam", "elevenlabs", "mistral"]
+  cascade: ["cartesia", "sarvam", "elevenlabs", "mistral"],
+  duplex: ["cartesia", "sarvam", "elevenlabs", "mistral"], // Stored but ignored
 };
 
 /** Config keys the API types as numbers. Selects hand back strings, so they are coerced here. */
@@ -105,6 +126,8 @@ export const isValidModelForMode = (mode: AssistantMode, provider: string, model
   
   const allowed = mode === "cascade" 
     ? CASCADE_MODEL_IDS 
+    : mode === "duplex"
+    ? [DUPLEX_MODEL]
     : mode === "realtime" && provider === "openai"
     ? REALTIME_MODEL_IDS
     : mode === "pipeline" && provider === "openai"
@@ -125,12 +148,34 @@ export const getModelModeError = (mode: AssistantMode, provider: string, model?:
     return null;
   }
   
+  const replacement = model ? RETIRED_OPENAI_MODELS[model] : undefined;
+  if (replacement) {
+    return `${model} is retired and the API rejects it. Use ${replacement}.`;
+  }
+
   const allowed = mode === "cascade" 
     ? CASCADE_MODEL_IDS 
+    : mode === "duplex"
+    ? [DUPLEX_MODEL]
     : REALTIME_MODEL_IDS;
     
   return `Model "${model}" is not valid for ${mode} mode with ${provider}. Allowed models: ${allowed.join(', ')}.`;
 };
+
+/** Duplex hands reasoning and tools to `backend_model`, which must be a current reasoning model. */
+export const getBackendModelError = (model?: string): string | null => {
+  if (!model) return null;
+  const replacement = RETIRED_OPENAI_MODELS[model];
+  if (replacement) return `${model} is retired and the API rejects it. Use ${replacement}.`;
+  return DUPLEX_BACKEND_MODEL_IDS.includes(model)
+    ? null
+    : `Backend model "${model}" is not a reasoning model duplex can use. Allowed models: ${DUPLEX_BACKEND_MODEL_IDS.join(', ')}.`;
+};
+
+export const getBackendInstructionsError = (instructions?: string): string | null =>
+  instructions && instructions.length > DUPLEX_BACKEND_INSTRUCTIONS_MAX
+    ? `Backend instructions are ${instructions.length} characters; the limit is ${DUPLEX_BACKEND_INSTRUCTIONS_MAX}.`
+    : null;
 
 /**
  * Drops keys the API would reject or misread: empty strings (an omitted language means
@@ -185,6 +230,25 @@ const repairGeminiLlm = (llm: AssistantLlmConfig): AssistantLlmConfig => ({
 /** Model IDs are per-mode and the two families are disjoint, so a mode change re-picks one. */
 const repairLlmForMode = (llm: AssistantLlmConfig | undefined, mode: AssistantMode): AssistantLlmConfig => {
   const next: AssistantLlmConfig = { ...(llm ?? {}) };
+
+  if (mode === "duplex") {
+    // The API replaces the stored config on a switch into duplex, because no model id is valid in
+    // both families, so everything here is rebuilt rather than carried over. `temperature` is a
+    // 400: every backend model is a reasoning model.
+    delete next.temperature;
+    return {
+      ...next,
+      provider: "openai",
+      model: DUPLEX_MODEL,
+      voice: next.voice && DUPLEX_VOICE_IDS.includes(next.voice) ? next.voice : DUPLEX_DEFAULT_VOICE,
+      backend_model: next.backend_model || DUPLEX_DEFAULT_BACKEND_MODEL,
+    };
+  }
+
+  // backend_model and backend_instructions are rejected outside duplex.
+  delete next.backend_model;
+  delete next.backend_instructions;
+
   // Gemini is realtime-only; every other mode needs a text-only response it cannot produce.
   if (mode !== "realtime" && next.provider === "gemini") next.provider = "openai";
 
@@ -198,6 +262,10 @@ const repairLlmForMode = (llm: AssistantLlmConfig | undefined, mode: AssistantMo
     next.model = mode === "cascade" ? "gpt-4.1" : "gpt-realtime-1.5";
   }
   if (next.voice && isGeminiVoice(next.voice)) {
+    next.voice = "marin";
+  }
+  // A voice only GPT-Live has — left over from duplex — is not an OpenAI realtime voice.
+  if (next.voice && DUPLEX_VOICE_IDS.includes(next.voice) && !OPENAI_REALTIME_VOICE_IDS.includes(next.voice)) {
     next.voice = "marin";
   }
   return next;
@@ -227,9 +295,15 @@ export const applyModeChange = (form: AssistantDetail, mode: AssistantMode): Ass
     next.assistant_stt_config = defaultConfigFor(findProvider(STT_PROVIDERS, "sarvam"));
   }
 
-  // Realtime forces filler words off upstream; mirror it so the form does not show a lie.
-  if (mode === "realtime" && next.assistant_interaction_config?.filler_words) {
+  // Realtime forces filler words off upstream; mirror it so the form does not show a lie. Duplex
+  // refuses them outright (400), so they are switched off here for the same reason.
+  if ((mode === "realtime" || mode === "duplex") && next.assistant_interaction_config?.filler_words) {
     next.assistant_interaction_config = { ...next.assistant_interaction_config, filler_words: false };
+  }
+
+  // GPT-Live cannot speak a fixed string, so an enabled recording is a 400 on duplex.
+  if (mode === "duplex" && next.assistant_greeting_audio?.enabled) {
+    next.assistant_greeting_audio = { ...next.assistant_greeting_audio, enabled: false };
   }
 
   return next;
@@ -319,18 +393,53 @@ const pruneTts = (
 ): Record<string, unknown> => {
   const source = clean(config);
   if (provider === "elevenlabs" && source.voice_settings) {
-    const model = String(source.model ?? "eleven_v3");
-    if (ELEVENLABS_MODELS_WITHOUT_SPEED.includes(model)) {
-      const vs = { ...(source.voice_settings as Record<string, unknown>) };
-      delete vs.speed;
-      if (Object.keys(vs).length > 0) {
-        source.voice_settings = vs;
-      } else {
-        delete source.voice_settings;
-      }
+    const model = typeof source.model === "string" ? source.model : undefined;
+    const vs = { ...(source.voice_settings as Record<string, unknown>) };
+    for (const key of ELEVENLABS_VOICE_SETTINGS) {
+      if (!elevenLabsReadsSetting(model, key)) delete vs[key];
+    }
+    if (Object.keys(vs).length > 0) {
+      source.voice_settings = vs;
+    } else {
+      delete source.voice_settings;
     }
   }
+  if (provider === "sarvam" && sarvamTtsModelOf(source) === "bulbul:v4-flash") {
+    // Sarvam fixes temperature at 0.6 on v4-flash, and the API rejects a value.
+    delete source.temperature;
+  }
   return source;
+};
+
+/**
+ * Repairs a Sarvam config after the user changes `model`.
+ *
+ * The two Bulbul models share no speakers, and differ in pace range, sample rates and language
+ * set, so a switch that kept the old values would save into a 400. Anything the new model cannot
+ * take is replaced by a value it can.
+ */
+export const repairTtsConfig = (
+  provider: string,
+  previous: Record<string, unknown> | undefined,
+  next: Record<string, unknown>,
+): Record<string, unknown> => {
+  if (provider !== "sarvam" || sarvamTtsModelOf(previous) === sarvamTtsModelOf(next)) return next;
+
+  const model = sarvamTtsModelOf(next);
+  const limits = SARVAM_TTS_LIMITS[model];
+  const repaired: Record<string, unknown> = { ...next, speaker: limits.defaultSpeaker };
+  const { pace, speech_sample_rate: sampleRate, target_language_code: language } = repaired;
+  if (typeof pace === "number") {
+    repaired.pace = Math.min(limits.pace.max, Math.max(limits.pace.min, pace));
+  }
+  if (sampleRate !== undefined && !limits.sampleRates.includes(Number(sampleRate))) {
+    repaired.speech_sample_rate = 24000;
+  }
+  if (typeof language === "string" && !limits.languages.includes(language)) {
+    repaired.target_language_code = "en-IN";
+  }
+  if (model === "bulbul:v4-flash") delete repaired.temperature;
+  return repaired;
 };
 
 /** Recursively removes `null` values. Empty objects, `false` and `""` all survive — only null goes. */
@@ -363,6 +472,9 @@ export const buildAssistantPayload = (
   const mode = form.assistant_mode;
   const isRealtime = mode === "realtime";
   const isCascade = mode === "cascade";
+  const isDuplex = mode === "duplex";
+  // Realtime and duplex both speak for themselves, so neither runs a TTS or STT stage.
+  const speaksItself = isRealtime || isDuplex;
 
   // Validate provider compatibility before building payload
   const llmError = getProviderModeError(mode, 'llm', form.assistant_llm_config?.provider || "openai");
@@ -382,7 +494,7 @@ export const buildAssistantPayload = (
     llmConfig.model = llm.model.trim();
   }
 
-  if (isRealtime) {
+  if (speaksItself) {
     if (llm.voice?.trim()) {
       if (llm.provider === "openai" && isGeminiVoice(llm.voice)) {
         llmConfig.voice = "marin";
@@ -397,11 +509,18 @@ export const buildAssistantPayload = (
     llmConfig.voice = null;
   }
 
-  if (isCascade) {
+  if (isDuplex) {
+    llmConfig.backend_model = llm.backend_model?.trim() || DUPLEX_DEFAULT_BACKEND_MODEL;
+    // Empty on update is an explicit null so a cleared field clears the stored instructions.
+    llmConfig.backend_instructions = llm.backend_instructions?.trim() || null;
+  }
+
+  if (isCascade || isDuplex) {
     const toolsPresent = hasTools ?? (form.assistant_end_call_enabled ?? false);
+    const knobModel = knobModelFor(mode, llm);
     for (const spec of CASCADE_LLM_FIELDS) {
       const value = (llm as Record<string, any>)[spec.key];
-      const inert = llmInertReason(spec.key, llm.model, toolsPresent, value);
+      const inert = llmInertReason(spec.key, knobModel, toolsPresent, value);
       if (inert) {
         // Explicit null clears stored inert knob in DB on backend update!
         llmConfig[spec.key] = null;
@@ -412,7 +531,7 @@ export const buildAssistantPayload = (
       }
     }
   } else {
-    // In non-cascade modes, explicitly clear cascade generation knobs
+    // In the other modes, explicitly clear the generation knobs
     for (const spec of CASCADE_LLM_FIELDS) {
       llmConfig[spec.key] = null;
     }
@@ -427,14 +546,14 @@ export const buildAssistantPayload = (
     assistant_llm_config: llmConfig,
     assistant_interaction_config: {
       ...form.assistant_interaction_config,
-      ...(isRealtime ? { filler_words: false } : {}),
+      ...(speaksItself ? { filler_words: false } : {}),
     },
     assistant_end_call_enabled: form.assistant_end_call_enabled ?? false,
     assistant_end_call_trigger_phrase: form.assistant_end_call_trigger_phrase?.trim() || "",
     assistant_end_call_agent_message: form.assistant_end_call_agent_message?.trim() || "",
     assistant_end_call_url: form.assistant_end_call_url?.trim() || "",
     assistant_greeting_audio: {
-      enabled: form.assistant_greeting_audio?.enabled ?? false,
+      enabled: isDuplex ? false : (form.assistant_greeting_audio?.enabled ?? false),
       audio_id: form.assistant_greeting_audio?.audio_id ?? "",
     },
   };
@@ -449,7 +568,7 @@ export const buildAssistantPayload = (
     payload.assistant_end_call_webhook = webhook;
   }
 
-  if (!isRealtime) {
+  if (!speaksItself) {
     // Validate STT provider compatibility
     const sttError = getProviderModeError(mode, 'stt', form.assistant_stt_model);
     if (sttError) {
@@ -465,7 +584,7 @@ export const buildAssistantPayload = (
         ? {}
         : clean(pruneStt(form.assistant_stt_model, form.assistant_stt_config));
   } else {
-    // In Realtime mode, STT & TTS stages are not used.
+    // In Realtime and Duplex mode, STT & TTS stages are not used.
     // ponytail: empty objects, not null — backend reads config.language unconditionally
     // and crashes on null ("Cannot read properties of null (reading 'language')").
     payload.assistant_tts_model = null;

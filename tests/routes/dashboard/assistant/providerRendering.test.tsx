@@ -22,7 +22,7 @@ const renderForm = (formData: AssistantDetail) =>
     />,
   );
 
-const MODES: AssistantMode[] = ["pipeline", "realtime", "cascade"];
+const MODES: AssistantMode[] = ["pipeline", "realtime", "cascade", "duplex"];
 
 /**
  * Every provider, in every mode, rendered at its own default config.

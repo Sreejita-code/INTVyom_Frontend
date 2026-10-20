@@ -13,6 +13,8 @@ export interface CallUsageLine {
   outputTokens?: number;
   charactersCount?: number;
   audioDuration?: number;
+  /** Seconds the session was open; what GPT-Live (duplex) is billed on. */
+  sessionDuration?: number;
 }
 
 export interface CallUsage {

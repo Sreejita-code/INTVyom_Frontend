@@ -1,12 +1,14 @@
 import { AssistantMode } from "@/types/assistant";
 
 /**
- * The three runtime modes, described the way the platform actually runs them.
+ * The four runtime modes, described the way the platform actually runs them.
  *
  * Source: the upstream `architecture/runtime-modes.md` contract. The distinction that matters and
  * that the old copy got wrong: in `pipeline` the transcriber is a *parallel tap* used only to write
  * transcripts — the realtime model still hears the raw audio itself — while in `cascade` the
- * transcriber is genuinely the first stage and the only thing the text model ever sees.
+ * transcriber is genuinely the first stage and the only thing the text model ever sees. `duplex`
+ * is different in kind: one full-duplex voice model that can talk while the caller talks, with a
+ * second reasoning model behind it for anything that needs thought or a tool.
  */
 export interface ModeSpec {
   value: AssistantMode;
@@ -41,6 +43,13 @@ export const MODES: ModeSpec[] = [
     pickWhen: "You want per-stage cost visibility and cheap text models.",
     vendors: "OpenAI only",
   },
+  {
+    value: "duplex",
+    title: "Duplex",
+    what: "OpenAI GPT-Live hears and speaks at the same time and decides its own turns. A reasoning model behind it handles thinking and tools.",
+    pickWhen: "You want natural overlap and back-channel \"mm-hm\", and can live without a fixed greeting or filler words.",
+    vendors: "OpenAI GPT-Live only",
+  },
 ];
 
 export function findMode(mode: string | undefined): ModeSpec {
@@ -71,8 +80,18 @@ export const MODE_ACCENT: Record<AssistantMode, { chip: string; card: string; te
     text: "text-mode-cascade",
     ring: "ring-mode-cascade/30",
   },
+  duplex: {
+    chip: "border-mode-duplex/30 bg-mode-duplex/10 text-mode-duplex",
+    card: "border-mode-duplex/50 bg-mode-duplex/[0.07]",
+    text: "text-mode-duplex",
+    ring: "ring-mode-duplex/30",
+  },
 };
 
+/** What the API sends for `assistant_mode`, narrowed. Missing or unknown means `pipeline`, the API default. */
+export const parseAssistantMode = (raw: unknown): AssistantMode =>
+  typeof raw === "string" && raw in MODE_ACCENT ? (raw as AssistantMode) : "pipeline";
+
 export function modeAccent(mode: string | undefined) {
-  return MODE_ACCENT[(mode as AssistantMode) in MODE_ACCENT ? (mode as AssistantMode) : "pipeline"];
+  return MODE_ACCENT[parseAssistantMode(mode)];
 }

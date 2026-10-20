@@ -3,6 +3,7 @@ import { Braces } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { extractPlaceholders } from "@/lib/placeholders";
+import { PromptGuide } from "./PromptGuide";
 
 interface PromptEditorProps {
   prompt: string;
@@ -43,8 +44,11 @@ export function PromptEditor({
             <Label htmlFor="assistant-prompt" className="text-[0.9375rem] font-medium">
               System prompt <span className="text-primary">*</span>
             </Label>
-            <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
-              {prompt.length.toLocaleString()} characters
+            <span className="flex items-center gap-2">
+              <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                {prompt.length.toLocaleString()} characters
+              </span>
+              <PromptGuide />
             </span>
           </div>
           <Textarea

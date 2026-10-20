@@ -5,7 +5,8 @@ import { AssistantDetail, TtsProvider } from "@/types/assistant";
 import { FieldRow } from "./FieldRow";
 import { ProviderFields } from "./ProviderFields";
 import { StageSection, TRIGGER_ONE_LINE } from "./StageSection";
-import { TTS_PROVIDERS, findProvider, ttsInertReason } from "./providerCatalog";
+import { repairTtsConfig } from "./assistantConfig";
+import { TTS_PROVIDERS, findProvider, ttsFieldsFor, ttsInertReason } from "./providerCatalog";
 
 interface TtsSectionProps {
   ttsModel: TtsProvider;
@@ -33,12 +34,17 @@ export function TtsSection({ ttsModel, ttsConfig, onProviderChange, onConfigChan
   const summary = [
     spec?.label ?? ttsModel,
     ttsModel === "elevenlabs" ? config.model || "eleven_v3" : undefined,
+    ttsModel === "sarvam" ? config.model || "bulbul:v3" : undefined,
     voiceLabel || "no voice set",
     rate !== undefined && rate !== 1 ? `${rate}×` : undefined,
   ].filter(Boolean) as string[];
 
-  const visible = spec?.fields.filter((f) => !f.advanced) ?? [];
-  const advanced = spec?.fields.filter((f) => f.advanced) ?? [];
+  const fields = ttsFieldsFor(spec, config);
+  const visible = fields.filter((f) => !f.advanced);
+  const advanced = fields.filter((f) => f.advanced);
+
+  // Changing a Sarvam model changes which speakers, pace, sample rates and languages are valid.
+  const changeConfig = (next: Record<string, unknown>) => onConfigChange(repairTtsConfig(ttsModel, config, next));
 
   const inertReasonFor = (field: any) => ttsInertReason(ttsModel, field.key, config);
 
@@ -56,7 +62,7 @@ export function TtsSection({ ttsModel, ttsConfig, onProviderChange, onConfigChan
           <ProviderFields
             fields={advanced}
             config={config}
-            onChange={onConfigChange}
+            onChange={changeConfig}
             inertReasonFor={inertReasonFor}
           />
         ) : undefined
@@ -89,7 +95,7 @@ export function TtsSection({ ttsModel, ttsConfig, onProviderChange, onConfigChan
       <ProviderFields
         fields={visible}
         config={config}
-        onChange={onConfigChange}
+        onChange={changeConfig}
         inertReasonFor={inertReasonFor}
       />
     </StageSection>

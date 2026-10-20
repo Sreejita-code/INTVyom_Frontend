@@ -54,3 +54,12 @@ describe("passthrough call records", () => {
     expect(condenseCallRecordsResponse(json)).toEqual({ records: [{ id: "r1" }], total: 42 });
   });
 });
+
+describe("condenseCallRecordsResponse with a bare array", () => {
+  it("reads the array the contract documents, counting it as the total", () => {
+    expect(condenseCallRecordsResponse({ data: [{ call_status: "no_answer" }, { call_status: "busy" }] })).toMatchObject({
+      total: 2,
+      records: [{ call_status: "no_answer" }, { call_status: "busy" }],
+    });
+  });
+});

@@ -5,7 +5,11 @@ import {
   applySttProvider,
   buildAssistantPayload,
   endCallWebhookError,
+  getBackendInstructionsError,
+  getBackendModelError,
+  getModelModeError,
   hydrateForm,
+  repairTtsConfig,
 } from "@/routes/dashboard/assistant/assistantConfig";
 import { emptyForm } from "@/routes/dashboard/assistant/constants";
 import { AssistantDetail } from "@/types/assistant";
@@ -156,7 +160,8 @@ describe("buildAssistantPayload", () => {
         form({ assistant_mode: "cascade", assistant_llm_config: { provider: "openai", model, verbosity: "low" } }),
       ).assistant_llm_config;
 
-    expect(withVerbosity("gpt-5.1")).toHaveProperty("verbosity", "low");
+    expect(withVerbosity("gpt-5.2")).toHaveProperty("verbosity", "low");
+    expect(withVerbosity("gpt-6-sol")).toHaveProperty("verbosity", "low");
     expect(withVerbosity("gpt-5.4")).toHaveProperty("verbosity", "low");
     expect(withVerbosity("gpt-4.1")).toHaveProperty("verbosity", null);
   });
@@ -276,16 +281,20 @@ describe("buildAssistantPayload", () => {
     expect(payload.assistant_tts_config).not.toHaveProperty("api_key");
   });
 
-  it("prunes ElevenLabs speed when model is eleven_v3", () => {
+  it("prunes every ElevenLabs setting eleven_v3 does not read, leaving only stability", () => {
     const payload = buildAssistantPayload(
       form({
         assistant_mode: "cascade",
         assistant_tts_model: "elevenlabs",
-        assistant_tts_config: { voice_id: "v1", model: "eleven_v3", voice_settings: { speed: 1.1, use_speaker_boost: true } },
+        assistant_tts_config: {
+          voice_id: "v1",
+          model: "eleven_v3",
+          voice_settings: { stability: 0.4, similarity_boost: 0.7, speed: 1.1, use_speaker_boost: true },
+        },
       }),
     );
 
-    expect(payload.assistant_tts_config.voice_settings).toEqual({ use_speaker_boost: true });
+    expect(payload.assistant_tts_config.voice_settings).toEqual({ stability: 0.4 });
   });
 
   it("keeps ElevenLabs speed on models that support it", () => {
@@ -297,7 +306,7 @@ describe("buildAssistantPayload", () => {
       }),
     );
 
-    expect(payload.assistant_tts_config.voice_settings).toEqual({ speed: 1.1, use_speaker_boost: true });
+    expect(payload.assistant_tts_config.voice_settings).toEqual({ speed: 1.1 });
   });
 });
 
@@ -497,8 +506,17 @@ describe("buildAssistantPayload ElevenLabs speed", () => {
     expect(withModel("eleven_v3_conversational").voice_settings).toEqual({ stability: 0.5 });
   });
 
+  it("drops speed for both v4 models too, which ElevenLabs accepts and ignores", () => {
+    expect(withModel("eleven_v4").voice_settings).toEqual({ stability: 0.5 });
+    expect(withModel("eleven_v4_turbo").voice_settings).toEqual({ stability: 0.5 });
+  });
+
   it("keeps speed for a model that reads it", () => {
     expect(withModel("eleven_turbo_v2_5").voice_settings).toEqual({ speed: 1.2, stability: 0.5 });
+  });
+
+  it("leaves a stored model the table does not know untouched", () => {
+    expect(withModel("eleven_legacy").voice_settings).toEqual({ speed: 1.2, stability: 0.5 });
   });
 });
 
@@ -520,5 +538,229 @@ describe("buildAssistantPayload webhook tuning without a webhook URL", () => {
 
   it("omits it on create", () => {
     expect(buildAssistantPayload(form(leftover), false, { creating: true })).not.toHaveProperty("assistant_end_call_webhook");
+  });
+});
+
+describe("duplex mode", () => {
+  const duplexForm = (overrides: Partial<AssistantDetail> = {}) =>
+    applyModeChange(form({ assistant_mode: "realtime", ...overrides }), "duplex");
+
+  it("rebuilds the LLM config for GPT-Live when entering duplex, dropping a Gemini one", () => {
+    const next = duplexForm({ assistant_llm_config: { provider: "gemini", model: "gemini-3.8-live", voice: "Puck", temperature: 0.7 } });
+
+    expect(next.assistant_llm_config).toMatchObject({
+      provider: "openai",
+      model: "gpt-live-1",
+      voice: "marin",
+      backend_model: "gpt-5.6-luna",
+    });
+    expect(next.assistant_llm_config).not.toHaveProperty("temperature");
+  });
+
+  it("keeps a GPT-Live voice and a chosen backend model across a repair", () => {
+    const next = applyModeChange(
+      form({ assistant_mode: "duplex", assistant_llm_config: { provider: "openai", model: "gpt-live-1", voice: "stone", backend_model: "gpt-6-sol" } }),
+      "duplex",
+    );
+
+    expect(next.assistant_llm_config).toMatchObject({ voice: "stone", backend_model: "gpt-6-sol" });
+  });
+
+  it("turns filler words and the greeting recording off, which duplex refuses with a 400", () => {
+    const next = duplexForm({
+      assistant_interaction_config: { ...emptyForm.assistant_interaction_config, filler_words: true },
+      assistant_greeting_audio: { enabled: true, audio_id: "aud_1" },
+    });
+
+    expect(next.assistant_interaction_config?.filler_words).toBe(false);
+    expect(next.assistant_greeting_audio).toEqual({ enabled: false, audio_id: "aud_1" });
+  });
+
+  it("drops duplex-only fields and a GPT-Live-only voice when leaving duplex", () => {
+    const next = applyModeChange(
+      form({
+        assistant_mode: "duplex",
+        assistant_llm_config: { provider: "openai", model: "gpt-live-1", voice: "vesper", backend_model: "gpt-6-sol", backend_instructions: "be brief" },
+      }),
+      "realtime",
+    );
+
+    expect(next.assistant_llm_config).toMatchObject({ provider: "openai", model: "gpt-realtime-1.5", voice: "marin" });
+    expect(next.assistant_llm_config).not.toHaveProperty("backend_model");
+    expect(next.assistant_llm_config).not.toHaveProperty("backend_instructions");
+  });
+
+  it("sends the GPT-Live config, backend model and instructions, and nothing for speech stages", () => {
+    const payload = buildAssistantPayload(
+      form({
+        assistant_mode: "duplex",
+        assistant_llm_config: {
+          provider: "openai",
+          model: "gpt-live-1",
+          voice: "cedar",
+          backend_model: "gpt-6-luna",
+          backend_instructions: "  Use tools. Answer briefly.  ",
+          reasoning_effort: "low",
+        },
+      }),
+    );
+
+    expect(payload.assistant_mode).toBe("duplex");
+    expect(payload.assistant_llm_config).toMatchObject({
+      provider: "openai",
+      model: "gpt-live-1",
+      voice: "cedar",
+      backend_model: "gpt-6-luna",
+      backend_instructions: "Use tools. Answer briefly.",
+      reasoning_effort: "low",
+    });
+    expect(payload.assistant_stt_config).toEqual({});
+    expect(payload.assistant_tts_config).toEqual({});
+  });
+
+  it("always sends temperature as null, since every backend model is a reasoning model", () => {
+    const payload = buildAssistantPayload(
+      form({
+        assistant_mode: "duplex",
+        assistant_llm_config: { provider: "openai", model: "gpt-live-1", temperature: 0.9 },
+      }),
+    );
+
+    expect(payload.assistant_llm_config).toHaveProperty("temperature", null);
+  });
+
+  it("checks the knobs against the backend model, not gpt-live-1", () => {
+    const payload = buildAssistantPayload(
+      form({
+        assistant_mode: "duplex",
+        assistant_llm_config: { provider: "openai", model: "gpt-live-1", backend_model: "gpt-6-sol", reasoning_effort: "minimal", verbosity: "low" },
+      }),
+    );
+
+    expect(payload.assistant_llm_config).toHaveProperty("reasoning_effort", null);
+    expect(payload.assistant_llm_config).toHaveProperty("verbosity", "low");
+  });
+
+  it("forces the greeting recording and filler words off even if the form still holds them", () => {
+    const payload = buildAssistantPayload(
+      form({
+        assistant_mode: "duplex",
+        assistant_interaction_config: { ...emptyForm.assistant_interaction_config, filler_words: true },
+        assistant_greeting_audio: { enabled: true, audio_id: "aud_1" },
+      }),
+    );
+
+    expect(payload.assistant_interaction_config.filler_words).toBe(false);
+    expect(payload.assistant_greeting_audio.enabled).toBe(false);
+  });
+
+  it("clears empty backend instructions on update with null, and omits them on create", () => {
+    const duplex = form({ assistant_mode: "duplex", assistant_llm_config: { provider: "openai", model: "gpt-live-1", backend_instructions: "   " } });
+
+    expect(buildAssistantPayload(duplex).assistant_llm_config).toHaveProperty("backend_instructions", null);
+    expect(buildAssistantPayload(duplex, undefined, { creating: true }).assistant_llm_config).not.toHaveProperty("backend_instructions");
+  });
+
+  it("never sends backend_model or backend_instructions outside duplex", () => {
+    const payload = buildAssistantPayload(
+      form({
+        assistant_mode: "cascade",
+        assistant_llm_config: { provider: "openai", model: "gpt-4.1", backend_model: "gpt-6-sol", backend_instructions: "x" },
+      }),
+    );
+
+    expect(payload.assistant_llm_config).not.toHaveProperty("backend_model");
+    expect(payload.assistant_llm_config).not.toHaveProperty("backend_instructions");
+  });
+
+  it("accepts only gpt-live-1 as the voice model", () => {
+    expect(getModelModeError("duplex", "openai", "gpt-live-1")).toBeNull();
+    expect(getModelModeError("duplex", "openai", "gpt-realtime-1.5")).toMatch(/gpt-live-1/);
+  });
+
+  it("accepts a current reasoning model as backend and refuses a chat model", () => {
+    expect(getBackendModelError("gpt-5.6-luna")).toBeNull();
+    expect(getBackendModelError("gpt-6-sol")).toBeNull();
+    expect(getBackendModelError("gpt-4.1")).toMatch(/not a reasoning model/);
+  });
+
+  it("caps backend instructions at 4000 characters", () => {
+    expect(getBackendInstructionsError("x".repeat(4000))).toBeNull();
+    expect(getBackendInstructionsError("x".repeat(4001))).toMatch(/4000/);
+  });
+
+  it("round-trips a stored duplex assistant through hydrate and payload", () => {
+    const stored = {
+      assistant_name: "Duplex",
+      assistant_mode: "duplex",
+      assistant_llm_config: { provider: "openai", model: "gpt-live-1", voice: "marin", backend_model: "gpt-5.6-luna", api_key: "sk-****" },
+    };
+    const hydrated = hydrateForm(stored);
+
+    expect(hydrated.assistant_mode).toBe("duplex");
+    expect(hydrated.assistant_llm_config).toEqual({ provider: "openai", model: "gpt-live-1", voice: "marin", backend_model: "gpt-5.6-luna" });
+  });
+});
+
+describe("retired OpenAI models", () => {
+  it("names the replacement for gpt-5.1 and gpt-5.4-nano", () => {
+    expect(getModelModeError("cascade", "openai", "gpt-5.1")).toMatch(/gpt-6-sol/);
+    expect(getModelModeError("cascade", "openai", "gpt-5.4-nano")).toMatch(/gpt-6-luna/);
+    expect(getBackendModelError("gpt-5.1")).toMatch(/gpt-6-sol/);
+  });
+
+  it("accepts the gpt-6 replacements in cascade", () => {
+    expect(getModelModeError("cascade", "openai", "gpt-6-sol")).toBeNull();
+    expect(getModelModeError("cascade", "openai", "gpt-6-luna")).toBeNull();
+  });
+
+  it("accepts the 2.1 realtime models", () => {
+    expect(getModelModeError("realtime", "openai", "gpt-realtime-2.1")).toBeNull();
+    expect(getModelModeError("pipeline", "openai", "gpt-realtime-2.1-mini")).toBeNull();
+  });
+});
+
+describe("Sarvam Bulbul model switch", () => {
+  it("picks a v4-flash speaker, clamps pace and sample rate, and drops temperature", () => {
+    const next = repairTtsConfig(
+      "sarvam",
+      { model: "bulbul:v3", speaker: "shubh" },
+      { model: "bulbul:v4-flash", speaker: "shubh", pace: 2.6, speech_sample_rate: 48000, temperature: 0.3, target_language_code: "hi-IN" },
+    );
+
+    expect(next).toMatchObject({ model: "bulbul:v4-flash", speaker: "shubh_hi_customer", pace: 2, speech_sample_rate: 24000, target_language_code: "hi-IN" });
+    expect(next).not.toHaveProperty("temperature");
+  });
+
+  it("returns to a v3 speaker and resets an IN22 language the model cannot speak", () => {
+    const next = repairTtsConfig(
+      "sarvam",
+      { model: "bulbul:v4-flash", speaker: "shubh_hi_customer" },
+      { model: "bulbul:v3", speaker: "shubh_hi_customer", target_language_code: "ur-IN", pace: 0.5 },
+    );
+
+    expect(next).toMatchObject({ model: "bulbul:v3", speaker: "shubh", target_language_code: "en-IN", pace: 0.5 });
+  });
+
+  it("leaves a config alone when the model did not change", () => {
+    const config = { model: "bulbul:v3", speaker: "priya", pace: 1.2 };
+    expect(repairTtsConfig("sarvam", config, { ...config, pace: 1.4 })).toEqual({ ...config, pace: 1.4 });
+  });
+
+  it("never touches another provider's config", () => {
+    const next = { voice_id: "v1" };
+    expect(repairTtsConfig("cartesia", { voice_id: "v0" }, next)).toBe(next);
+  });
+
+  it("never sends temperature on v4-flash", () => {
+    const payload = buildAssistantPayload(
+      form({
+        assistant_mode: "pipeline",
+        assistant_tts_model: "sarvam",
+        assistant_tts_config: { model: "bulbul:v4-flash", speaker: "shubh_hi_customer", temperature: 0.3 },
+      }),
+    );
+
+    expect(payload.assistant_tts_config).not.toHaveProperty("temperature");
   });
 });

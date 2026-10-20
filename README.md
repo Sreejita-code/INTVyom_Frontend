@@ -252,7 +252,7 @@ Identity is the **API key** issued at signup and returned by `POST /api/auth/log
 | Page | Route | Description |
 |---|---|---|
 | **Make a Call** | `/dashboard/make-call` | Initiate an outbound AI voice call, a passthrough call, or join a meeting |
-| **Assistants** | `/dashboard/assistant` | Configure AI assistant (realtime, pipeline or cascade mode) |
+| **Assistants** | `/dashboard/assistant` | Configure AI assistant (realtime, pipeline, cascade or duplex mode) |
 | **Tools** | `/dashboard/tools` | Utility tools and actions |
 | **Audio Library** | `/dashboard/audio-library` | Upload and manage audio files |
 | **Call Logs** | `/dashboard/call-logs` | Browse call history, recordings, and estimated USD cost |
@@ -379,7 +379,7 @@ node .agents/skills/run-intvoicekit-frontend/driver.mjs shot /dashboard/tools 37
 ## Assistant Editor
 
 `/dashboard/assistant` draws the audio path as a chain that **redraws when the mode changes**, then
-renders only the stages that mode actually runs. The three modes have different *shapes*, not just
+renders only the stages that mode actually runs. The four modes have different *shapes*, not just
 different settings, so nothing is drawn greyed-out to stand in for a stage that does not exist:
 
 | Mode | Chain | Stages rendered |
@@ -387,6 +387,7 @@ different settings, so nothing is drawn greyed-out to stand in for a stage that 
 | `realtime` | Caller → model (hears, thinks, speaks) → Caller | Realtime model only |
 | `pipeline` | Caller → realtime model → voice → Caller, with a transcript tap hanging off the model | Realtime model (with the tap nested inside it), then Voice |
 | `cascade` | Caller → transcriber → text model → voice → Caller | All three, numbered 1–3 |
+| `duplex` | Caller ↔ GPT-Live (hears and speaks at once), with the backend model hanging off it | Voice model only |
 
 The pipeline distinction is the one worth keeping straight: its transcriber is a **parallel tap**.
 The realtime model hears the caller's audio directly; the tap only decides what the saved transcript
@@ -404,7 +405,8 @@ says. Drawing it as a fourth box in the row would read as a cascade, so it is dr
 | `ConfigField.tsx` / `ProviderFields.tsx` | Render a spec against a stored config. One level of nesting is supported, for ElevenLabs `voice_settings`. |
 | `AudioChain.tsx` | The chain diagram. Presentational only — it reads the same values the stages do. |
 | `PromptEditor.tsx` | System prompt, opening line, and the `{{placeholders}}` they ask for. |
-| `TemplatePicker.tsx` / `GettingStarted.tsx` | Start-from-a-template and the empty-state guide. |
+| `TemplatePicker.tsx` / `GettingStarted.tsx` | Start-from-a-template (a new assistant is then created through `POST /templates/{id}/apply`) and the empty-state guide. |
+| `WizardProgress.tsx` | Create-mode panel over the `/wizard/*` helper endpoints: steps, completion, rules and a per-step check. Advisory; it never writes to the form. |
 | `src/lib/assistantModes.ts` | Mode copy and the per-mode accent classes. Every mode chip in the app reads from here. |
 | `src/lib/placeholders.ts` | `extractPlaceholders` / `expandDottedKeys`, shared by the editor and the call pages. |
 
@@ -435,7 +437,17 @@ Stored in `assistant_mode` (`AssistantMode` in `src/types/assistant.ts`):
   response a half-cascade needs.
 - `cascade` — three separately chosen stages, and the only mode that reads the seven LLM
   generation knobs (`temperature`, `max_output_tokens`, `reasoning_effort`, `service_tier`,
-  `verbosity`, `tool_choice`, `parallel_tool_calls`).
+  `verbosity`, `tool_choice`, `parallel_tool_calls`) — duplex reads them too, minus `temperature`.
+- `duplex` — OpenAI GPT-Live (`gpt-live-1`) hears and speaks at once; a reasoning
+  `backend_model` (default `gpt-5.6-luna`, plus `backend_instructions` up to 4000 characters) does
+  the thinking and tool calls. No TTS/STT stage. The API refuses filler words, a pre-recorded
+  greeting and `text_only` web calls here, so the editor switches the first two off and disables
+  Chat. Switching into or out of duplex replaces the stored LLM config, so the form rebuilds it.
+
+`gpt-5.1` and `gpt-5.4-nano` are retired: a stored one stays visible so it can be moved, but the
+editor names the replacement (`gpt-6-sol` / `gpt-6-luna`) instead of letting the save fail. The
+Sarvam TTS `model` (`bulbul:v3` / `bulbul:v4-flash`) changes the speaker roster, pace range, sample
+rates and language set, and ElevenLabs only receives the `voice_settings` its model reads.
 
 ### Things the editor has to get right
 

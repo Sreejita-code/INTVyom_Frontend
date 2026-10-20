@@ -171,9 +171,9 @@ is `src/index.css`. Add those layers when a real need arrives, not before.
 
 Pre-existing, not regressions — compare against these before claiming a
 regression. Measured 2026-09-12; refreshed 2026-09-22 (after the API-contract alignment work)
-and again on 2026-10-20.
+and again on 2026-10-20 (after `agent-tracking/plans/2026-10-20-api-docs-sync`).
 
-- `npm run test` — 44 files, 314 tests, all pass. `tests/lib/apiSnippet.test.ts > renders
+- `npm run test` — 46 files, 388 tests, all pass. `tests/lib/apiSnippet.test.ts > renders
   Python the interpreter compiles` skips its check where `python3` is not installed.
 - `npm run typecheck` — clean on any filesystem (the two case collisions that used to break
   Windows checkouts were fixed on 2026-09-22).

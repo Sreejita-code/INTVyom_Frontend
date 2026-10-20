@@ -42,6 +42,7 @@
     --mode-realtime: 172 66% 50%;
     --mode-pipeline: 205 90% 60%;
     --mode-cascade: 38 92% 55%;
+    --mode-duplex: 292 70% 68%;
 
     --sidebar-background: 222 47% 5%;
     --sidebar-foreground: 210 20% 75%;

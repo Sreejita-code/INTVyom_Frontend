@@ -48,7 +48,9 @@ const STATUS_STYLES: Record<string, string> = {
     completed: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
     failed: "bg-destructive/10 text-destructive border-destructive/20",
     busy: "bg-amber-500/10 text-amber-500 border-amber-500/20",
-    "no-answer": "bg-muted/50 text-muted-foreground border-border/50",
+    no_answer: "bg-muted/50 text-muted-foreground border-border/50",
+    timeout: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+    rejected: "bg-destructive/10 text-destructive border-destructive/20",
     ringing: "bg-blue-500/10 text-blue-400 border-blue-500/20",
 };
 
@@ -207,7 +209,9 @@ export default function PassthroughCallRecordsPage() {
                                 <SelectItem value="completed">Completed</SelectItem>
                                 <SelectItem value="failed">Failed</SelectItem>
                                 <SelectItem value="busy">Busy</SelectItem>
-                                <SelectItem value="no-answer">No Answer</SelectItem>
+                                <SelectItem value="no_answer">No Answer</SelectItem>
+                                <SelectItem value="timeout">Timed Out</SelectItem>
+                                <SelectItem value="rejected">Rejected</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

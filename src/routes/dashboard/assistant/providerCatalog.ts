@@ -10,6 +10,8 @@
  * line here comes from the upstream pitfalls list, not from guesswork.
  */
 
+import { SARVAM_V4_FLASH_SPEAKERS } from "./sarvamSpeakers";
+
 export type ControlKind = "select" | "text" | "number" | "slider" | "switch";
 
 export interface FieldOption {
@@ -167,6 +169,8 @@ export const OPENAI_REALTIME_MODELS: FieldOption[] = [
   { value: "gpt-realtime-1.5", label: "gpt-realtime-1.5", hint: "Default. Current realtime model." },
   { value: "gpt-realtime", label: "gpt-realtime", hint: "Previous generation." },
   { value: "gpt-realtime-2", label: "gpt-realtime-2", hint: "Next-gen realtime model." },
+  { value: "gpt-realtime-2.1", label: "gpt-realtime-2.1", hint: "Newest realtime model." },
+  { value: "gpt-realtime-2.1-mini", label: "gpt-realtime-2.1-mini", hint: "Newest generation, cheaper and faster." },
   { value: "gpt-realtime-2025-08-28", label: "gpt-realtime-2025-08-28", hint: "Realtime snapshot." },
   { value: "gpt-realtime-mini", label: "gpt-realtime-mini", hint: "Cheaper and faster, less capable." },
 ];
@@ -226,12 +230,37 @@ export const OPENAI_REALTIME_VOICES: FieldOption[] = [
   { value: "marin", label: "marin", hint: "Default." },
   { value: "cedar", label: "cedar" },
   { value: "alloy", label: "alloy" },
+  { value: "ash", label: "ash" },
+  { value: "coral", label: "coral" },
   { value: "echo", label: "echo" },
+  { value: "sage", label: "sage" },
   { value: "shimmer", label: "shimmer" },
   { value: "verse", label: "verse" },
   { value: "sol", label: "sol" },
   { value: "ballad", label: "ballad" },
 ];
+
+// --- Duplex (GPT-Live) --------------------------------------------------------------------
+
+/** The only model duplex runs. Fixed by the API, so the form shows it rather than offering a choice. */
+export const DUPLEX_MODEL = "gpt-live-1";
+
+/** GPT-Live voices. `aster` was removed upstream in livekit-agents 1.8.8. */
+export const DUPLEX_DEFAULT_VOICE = "marin";
+export const DUPLEX_VOICES: FieldOption[] = [
+  { value: "marin", label: "marin", hint: "Default." },
+  { value: "beacon", label: "beacon" },
+  { value: "cedar", label: "cedar" },
+  { value: "cinder", label: "cinder" },
+  { value: "stone", label: "stone" },
+  { value: "vesper", label: "vesper" },
+];
+
+/** The model GPT-Live hands reasoning and tool calls to. Every one is a reasoning model. */
+export const DUPLEX_DEFAULT_BACKEND_MODEL = "gpt-5.6-luna";
+
+/** `assistant_llm_config.backend_instructions` is capped at this many characters. */
+export const DUPLEX_BACKEND_INSTRUCTIONS_MAX = 4000;
 
 /**
  * Checks if a model is a reasoning model
@@ -250,7 +279,10 @@ export const getLlmKnobError = (key: string, model?: string, hasTools?: boolean,
     if (!isReasoningModel(id)) {
       return `${id} is a chat model and rejects reasoning effort — use temperature to control variation.`;
     }
-    if (hasTools && ["gpt-5.2", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano"].includes(id)) {
+    if (val === "minimal" && id.startsWith("gpt-6")) {
+      return `${id} does not accept minimal reasoning effort — use none, low, medium, high or xhigh.`;
+    }
+    if (hasTools && ["gpt-5.2", "gpt-5.4", "gpt-5.4-mini"].includes(id)) {
       return `${id} rejects reasoning effort when function tools are attached — reasoning.effort will be cleared automatically.`;
     }
   }
@@ -277,16 +309,31 @@ export const OPENAI_CASCADE_MODELS: FieldOption[] = [
   { value: "gpt-5", label: "gpt-5", hint: "Reasoning model — uses reasoning effort, ignores temperature." },
   { value: "gpt-5-mini", label: "gpt-5-mini", hint: "Reasoning, smaller and cheaper." },
   { value: "gpt-5-nano", label: "gpt-5-nano", hint: "Reasoning, cheapest." },
-  { value: "gpt-5.1", label: "gpt-5.1", hint: "Reasoning model." },
   { value: "gpt-5.2", label: "gpt-5.2", hint: "Reasoning model." },
   { value: "gpt-5.4", label: "gpt-5.4", hint: "Reasoning model." },
   { value: "gpt-5.4-mini", label: "gpt-5.4-mini", hint: "Reasoning, smaller." },
-  { value: "gpt-5.4-nano", label: "gpt-5.4-nano", hint: "Reasoning, cheapest of the 5.4 line." },
   { value: "gpt-5.5", label: "gpt-5.5", hint: "Reasoning model." },
   { value: "gpt-5.6-sol", label: "gpt-5.6-sol", hint: "Reasoning model." },
   { value: "gpt-5.6-terra", label: "gpt-5.6-terra", hint: "Reasoning model." },
   { value: "gpt-5.6-luna", label: "gpt-5.6-luna", hint: "Reasoning model." },
+  { value: "gpt-6-luna", label: "gpt-6-luna", hint: "Reasoning model. Replaces gpt-5.4-nano." },
+  { value: "gpt-6-sol", label: "gpt-6-sol", hint: "Reasoning model. Replaces gpt-5.1." },
 ];
+
+/**
+ * Models the API now answers with a 400 that names the replacement. OpenAI retires both on
+ * 2027-04-01. An assistant that already stores one stays editable — the form keeps showing the
+ * stored value — but it cannot be saved until the model is moved.
+ */
+export const RETIRED_OPENAI_MODELS: Record<string, string> = {
+  "gpt-5.1": "gpt-6-sol",
+  "gpt-5.4-nano": "gpt-6-luna",
+};
+
+/** Backend models for duplex: the reasoning models, which is every cascade model from gpt-5 up. */
+export const DUPLEX_BACKEND_MODELS: FieldOption[] = OPENAI_CASCADE_MODELS.filter(
+  (m) => m.value.startsWith("gpt-5") || m.value.startsWith("gpt-6"),
+).map((m) => (m.value === DUPLEX_DEFAULT_BACKEND_MODEL ? { ...m, hint: "Default. Reasoning model." } : m));
 
 /**
  * Reasoning models: they take `reasoning_effort` and are answered with a 400 if sent
@@ -294,8 +341,9 @@ export const OPENAI_CASCADE_MODELS: FieldOption[] = [
  */
 const REASONING_MODELS = new Set([
   "gpt-5", "gpt-5-mini", "gpt-5-nano",
-  "gpt-5.1", "gpt-5.2", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano",
+  "gpt-5.2", "gpt-5.4", "gpt-5.4-mini",
   "gpt-5.5", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
+  "gpt-6-luna", "gpt-6-sol",
 ]);
 
 /** The gpt-5.x chat snapshots (if any). */
@@ -770,8 +818,30 @@ export const getSttModelError = (
 
 // --- TTS ----------------------------------------------------------------------------------
 
-/** ElevenLabs models with no speed control; a stored `speed` is dropped before the call. */
-export const ELEVENLABS_MODELS_WITHOUT_SPEED = ["eleven_v3", "eleven_v3_conversational"];
+/**
+ * The `voice_settings` each ElevenLabs model reads. ElevenLabs itself accepts and ignores the rest,
+ * but this API answers a setting the model ignores with a 400 (a 422 upstream), so the form greys
+ * the control and `buildAssistantPayload` drops the key. A model not listed here (a stored legacy
+ * id) is treated as reading everything, so nothing is stripped from a row this table cannot judge.
+ */
+export const ELEVENLABS_VOICE_SETTINGS = ["stability", "similarity_boost", "style", "speed", "use_speaker_boost"] as const;
+
+export const ELEVENLABS_SETTINGS_BY_MODEL: Record<string, readonly string[]> = {
+  eleven_v3: ["stability"],
+  eleven_v3_conversational: ["stability", "use_speaker_boost"],
+  eleven_v4: ["stability", "similarity_boost"],
+  eleven_v4_turbo: ["stability", "similarity_boost"],
+  eleven_turbo_v2_5: ["stability", "similarity_boost", "speed"],
+  eleven_flash_v2_5: ["stability", "similarity_boost", "speed"],
+  eleven_multilingual_v2: ELEVENLABS_VOICE_SETTINGS,
+};
+
+export const ELEVENLABS_DEFAULT_MODEL = "eleven_v3";
+
+export const elevenLabsReadsSetting = (model: string | undefined, key: string): boolean =>
+  (ELEVENLABS_SETTINGS_BY_MODEL[model || ELEVENLABS_DEFAULT_MODEL] ?? ELEVENLABS_VOICE_SETTINGS).includes(key);
+
+// --- Sarvam Bulbul ------------------------------------------------------------------------
 
 export const SARVAM_BULBUL_V3_SPEAKERS = [
   "aayan", "aditya", "advait", "amelia", "amit", "ashutosh", "dev", "ishita",
@@ -780,16 +850,49 @@ export const SARVAM_BULBUL_V3_SPEAKERS = [
   "simran", "sophia", "suhani", "sumit", "tanya", "varun",
 ] as const;
 
+export const SARVAM_DEFAULT_TTS_MODEL = "bulbul:v3";
+export const SARVAM_V4_FLASH = "bulbul:v4-flash";
+
+/**
+ * Every Bulbul model speaks the 11 codes in `LANGUAGE_CODES`; only v4-flash speaks the 12 IN22 codes,
+ * and only on a Sarvam subscription that enables them — which this form cannot check.
+ */
+export const SARVAM_TTS_LIMITS = {
+  [SARVAM_DEFAULT_TTS_MODEL]: {
+    pace: { min: 0.3, max: 3 },
+    sampleRates: [8000, 16000, 22050, 24000, 32000, 44100, 48000] as readonly number[],
+    languages: LANGUAGE_CODES as readonly string[],
+    speakers: SARVAM_BULBUL_V3_SPEAKERS as readonly string[],
+    defaultSpeaker: "shubh",
+  },
+  [SARVAM_V4_FLASH]: {
+    pace: { min: 0.5, max: 2 },
+    sampleRates: [8000, 16000, 22050, 24000] as readonly number[],
+    languages: SARVAM_LANGUAGES as readonly string[],
+    speakers: SARVAM_V4_FLASH_SPEAKERS as readonly string[],
+    defaultSpeaker: "shubh_hi_customer",
+  },
+} as const;
+
+/** A PATCH that sends no `model` is judged against the stored one, and no stored one means v3. */
+export const sarvamTtsModelOf = (config: Record<string, unknown> = {}): keyof typeof SARVAM_TTS_LIMITS =>
+  config.model === SARVAM_V4_FLASH ? SARVAM_V4_FLASH : SARVAM_DEFAULT_TTS_MODEL;
+
+/** Why a TTS control is dead for the current model, or `undefined` when the model reads it. */
 export const ttsInertReason = (
   provider: string,
   key: string,
   config: Record<string, unknown> = {},
 ): string | undefined => {
-  if (provider === "elevenlabs" && key === "speed") {
-    const model = String(config.model ?? "eleven_v3");
-    if (ELEVENLABS_MODELS_WITHOUT_SPEED.includes(model)) {
-      return `${model} has no speed control. Switch to eleven_multilingual_v2, eleven_turbo_v2_5, or eleven_flash_v2_5 to adjust speed.`;
+  if (provider === "elevenlabs" && (ELEVENLABS_VOICE_SETTINGS as readonly string[]).includes(key)) {
+    const model = String(config.model || ELEVENLABS_DEFAULT_MODEL);
+    if (!elevenLabsReadsSetting(model, key)) {
+      const readers = Object.keys(ELEVENLABS_SETTINGS_BY_MODEL).filter((m) => elevenLabsReadsSetting(m, key));
+      return `${model} does not read ${key} and the API rejects it. Models that do: ${readers.join(", ")}.`;
     }
+  }
+  if (provider === "sarvam" && key === "temperature" && sarvamTtsModelOf(config) === SARVAM_V4_FLASH) {
+    return `${SARVAM_V4_FLASH} does not take temperature — Sarvam fixes it at 0.6. Switch to ${SARVAM_DEFAULT_TTS_MODEL} to tune it.`;
   }
   return undefined;
 };
@@ -860,8 +963,19 @@ export const TTS_PROVIDERS: ProviderSpec[] = [
   {
     value: "sarvam",
     label: "Sarvam",
-    tagline: "Bulbul v3. Native Indic pronunciation across 12 languages.",
+    tagline: "Bulbul v3 and v4-flash. Native Indic pronunciation.",
     fields: [
+      {
+        key: "model",
+        label: "Model",
+        control: "select",
+        fallback: SARVAM_DEFAULT_TTS_MODEL,
+        options: [
+          { value: SARVAM_DEFAULT_TTS_MODEL, label: SARVAM_DEFAULT_TTS_MODEL, hint: "Default. 30 speakers, full tuning." },
+          { value: SARVAM_V4_FLASH, label: SARVAM_V4_FLASH, hint: "Faster and cheaper. 224 speakers, tighter limits." },
+        ],
+        help: "The two Bulbul models share no speakers, so changing this picks a new speaker and clamps pace, sample rate and language to the model's limits.",
+      },
       {
         key: "speaker",
         label: "Speaker",
@@ -943,6 +1057,8 @@ export const TTS_PROVIDERS: ProviderSpec[] = [
         options: [
           { value: "eleven_v3", label: "eleven_v3", hint: "Default. Most expressive." },
           { value: "eleven_v3_conversational", label: "eleven_v3_conversational", hint: "v3 tuned for conversation." },
+          { value: "eleven_v4", label: "eleven_v4", hint: "Reads stability and similarity only." },
+          { value: "eleven_v4_turbo", label: "eleven_v4_turbo", hint: "v4 with lower latency." },
           { value: "eleven_multilingual_v2", label: "eleven_multilingual_v2" },
           { value: "eleven_turbo_v2_5", label: "eleven_turbo_v2_5", hint: "Lower latency." },
           { value: "eleven_flash_v2_5", label: "eleven_flash_v2_5", hint: "Lowest latency." },
@@ -1022,6 +1138,53 @@ export const TTS_PROVIDERS: ProviderSpec[] = [
     ],
   },
 ];
+
+/**
+ * A provider's fields with the model-dependent parts resolved against the current config.
+ *
+ * Only Sarvam needs it: the two Bulbul models have different speaker rosters, pace ranges, sample
+ * rates and language sets, none of which a static `FieldSpec` can express.
+ */
+export const ttsFieldsFor = (spec: ProviderSpec | undefined, config: Record<string, unknown> = {}): FieldSpec[] => {
+  if (!spec) return [];
+  if (spec.value !== "sarvam") return spec.fields;
+
+  const model = sarvamTtsModelOf(config);
+  const limits = SARVAM_TTS_LIMITS[model];
+  return spec.fields.map((field) => {
+    switch (field.key) {
+      case "speaker":
+        return {
+          ...field,
+          fallback: limits.defaultSpeaker,
+          options: asOptions(limits.speakers),
+          help:
+            model === SARVAM_V4_FLASH
+              ? "The Sarvam speaker that voices this assistant. Names read voice, language, style (v4-flash roster, 224 voices)."
+              : field.help,
+          warn:
+            model === SARVAM_V4_FLASH
+              ? "v3 speakers (e.g. shubh) and v2 speakers (e.g. anushka) are not available on bulbul:v4-flash and will cause call setup errors."
+              : field.warn,
+        };
+      case "target_language_code":
+        return {
+          ...field,
+          options: asOptions(limits.languages),
+          warn:
+            model === SARVAM_V4_FLASH
+              ? "The 12 IN22 codes (as-IN, ur-IN, …) only work on a Sarvam subscription that enables them. That cannot be checked here."
+              : field.warn,
+        };
+      case "pace":
+        return { ...field, min: limits.pace.min, max: limits.pace.max };
+      case "speech_sample_rate":
+        return { ...field, options: field.options?.filter((o) => limits.sampleRates.includes(Number(o.value))) };
+      default:
+        return field;
+    }
+  });
+};
 
 // --- Mode rules ---------------------------------------------------------------------------
 // Mirrors the backend allowlists. The form uses these to filter selects and to repair the

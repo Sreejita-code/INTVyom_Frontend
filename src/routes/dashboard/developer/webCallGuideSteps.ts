@@ -141,7 +141,7 @@ function upsert(prev: Line[], line: Line): Line[] {
 const REACT_TEXT = `// npm i livekit-client @livekit/components-react
 
 // Same room, no microphone and no speaker: ask for the token with text_only: true and the
-// assistant answers in text instead of voice. Realtime assistants reject text_only with a 400.
+// assistant answers in text instead of voice. Realtime and duplex assistants reject text_only with a 400.
 
 import { useEffect, useState } from "react";
 import { LiveKitRoom, useChat, useRoomContext } from "@livekit/components-react";
@@ -164,7 +164,7 @@ async function getChatToken() {
     }),
   });
   const body = await res.text();
-  // A realtime assistant rejects text_only with a 400, and json.data is then undefined.
+  // A realtime or duplex assistant rejects text_only with a 400, and json.data is then undefined.
   if (!res.ok) throw new Error(body || res.statusText);
   return JSON.parse(body).data.token as string;
 }
@@ -262,7 +262,7 @@ const res = await fetch(BACKEND_URL + "/api/web-call/get-token", {
   }),
 });
 const body = await res.text();
-// 400 on text_only against a realtime assistant, 404 unknown assistant, 503 at capacity — the
+// 400 on text_only against a realtime or duplex assistant, 404 unknown assistant, 503 at capacity — the
 // body carries the reason, and data is undefined in every one of those cases.
 if (!res.ok) throw new Error(body || res.statusText);
 const { data } = JSON.parse(body); // { token, room_name, agent_dispatch }

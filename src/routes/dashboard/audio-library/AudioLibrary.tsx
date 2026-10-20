@@ -122,7 +122,7 @@ export default function AudioLibrary() {
     try {
       const { ok, json } = await callUploadAudioEndpoint(formData);
       
-      if (!ok) throw new Error((json as { message?: string })?.message || "Upload failed");
+      if (!ok) throw new Error((json as { error?: string; message?: string })?.error || (json as { message?: string })?.message || "Upload failed");
 
       toast({ title: "Success", description: "Audio uploaded successfully." });
       setMode("empty");

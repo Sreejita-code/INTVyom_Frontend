@@ -199,3 +199,77 @@ describe("AssistantForm end-call webhook tuning", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(/timeout.*1.*120/i);
   });
 });
+
+describe("AssistantForm duplex mode", () => {
+  const duplex = (overrides: Partial<AssistantDetail> = {}) =>
+    renderForm({ ...applyModeChange(emptyForm, "duplex"), ...overrides });
+
+  it("offers Duplex as a fourth mode", () => {
+    duplex();
+
+    expect(screen.getByRole("radio", { name: /duplex/i })).toBeChecked();
+    expect(screen.getAllByRole("radio")).toHaveLength(4);
+  });
+
+  it("draws the voice model and no transcriber or voice stage", () => {
+    duplex();
+
+    expect(screen.getByRole("heading", { name: "Voice model" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Speech to text" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Voice" })).not.toBeInTheDocument();
+    expect(screen.getByText(/there is no transcriber or voice stage/i)).toBeInTheDocument();
+  });
+
+  it("shows gpt-live-1 as the fixed model, with the GPT-Live voice and the backend settings", () => {
+    duplex();
+
+    const panel = stage("Voice model");
+    expect(panel.getByRole("textbox", { name: "Model" })).toHaveValue("gpt-live-1");
+    expect(panel.getByRole("combobox", { name: "Voice" })).toHaveTextContent("marin");
+    expect(panel.getByRole("combobox", { name: "Backend model" })).toHaveTextContent("gpt-5.6-luna");
+    expect(panel.getByRole("textbox", { name: "Backend instructions" })).toBeInTheDocument();
+  });
+
+  it("has no temperature knob, because every backend model is a reasoning model", () => {
+    duplex();
+
+    expect(screen.queryByRole("slider", { name: "Temperature" })).not.toBeInTheDocument();
+    expect(stage("Voice model").getByRole("combobox", { name: "Reasoning effort" })).toBeInTheDocument();
+  });
+
+  it("disables filler words and the pre-recorded greeting, which duplex refuses", () => {
+    duplex();
+
+    expect(screen.getByRole("switch", { name: /filler words/i })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: /pre-recorded greeting/i })).toBeDisabled();
+  });
+
+  it("keeps a stored retired backend model visible and says what replaces it", () => {
+    duplex({
+      assistant_llm_config: { provider: "openai", model: "gpt-live-1", voice: "marin", backend_model: "gpt-5.1" },
+    });
+
+    expect(stage("Voice model").getByRole("combobox", { name: "Backend model" })).toHaveTextContent("gpt-5.1");
+    expect(screen.getAllByText(/gpt-5\.1 is retired and the API rejects it\. Use gpt-6-sol/).length).toBeGreaterThan(0);
+  });
+
+  it("flags backend instructions over the 4000 character limit", () => {
+    duplex({
+      assistant_llm_config: { provider: "openai", model: "gpt-live-1", voice: "marin", backend_instructions: "x".repeat(4001) },
+    });
+
+    expect(screen.getAllByText(/limit is 4000/).length).toBeGreaterThan(0);
+  });
+});
+
+describe("AssistantForm retired cascade model", () => {
+  it("keeps a stored gpt-5.4-nano selectable so it can be moved, and names the replacement", () => {
+    renderForm({
+      ...applyModeChange(emptyForm, "cascade"),
+      assistant_llm_config: { provider: "openai", model: "gpt-5.4-nano" },
+    });
+
+    expect(stage("Text model").getByRole("combobox", { name: "Model" })).toHaveTextContent("gpt-5.4-nano");
+    expect(screen.getAllByText(/gpt-5\.4-nano is retired and the API rejects it\. Use gpt-6-luna/).length).toBeGreaterThan(0);
+  });
+});

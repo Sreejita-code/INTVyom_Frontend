@@ -1,6 +1,6 @@
 import type { CallLog } from "./callLog";
 
-export type AssistantMode = "pipeline" | "realtime" | "cascade";
+export type AssistantMode = "pipeline" | "realtime" | "cascade" | "duplex";
 
 export type TtsProvider = "cartesia" | "sarvam" | "elevenlabs" | "mistral";
 
@@ -29,8 +29,9 @@ export interface AssistantSummary {
 }
 
 /**
- * The LLM block. `provider`, `model` and `voice` apply everywhere; the seven generation knobs
- * below them are stored in every mode but only read in cascade.
+ * The LLM block. `provider`, `model` and `voice` apply everywhere; the generation knobs below
+ * them are stored in every mode but only read in cascade and duplex (where they are checked
+ * against `backend_model`, and `temperature` is rejected).
  */
 export interface AssistantLlmConfig {
   provider?: string;
@@ -43,6 +44,10 @@ export interface AssistantLlmConfig {
   verbosity?: string;
   tool_choice?: string;
   parallel_tool_calls?: boolean;
+  /** Duplex only: the reasoning model GPT-Live hands reasoning and tool calls to. */
+  backend_model?: string;
+  /** Duplex only: instructions for the backend model, up to 4000 characters. */
+  backend_instructions?: string;
 }
 
 /** Union of all four providers' TTS fields — which ones are valid depends on the provider. */
@@ -146,4 +151,37 @@ export interface AssistantCallLogsPage {
 
 export interface WebCallTokenPayload {
   token?: string;
+}
+
+/** One step of the guided builder. `id` is one of mode, llm, tts, stt, interaction, advanced. */
+export interface WizardStep {
+  id: string;
+  title: string;
+  description: string;
+  /** The create fields this step fills in. */
+  fields: string[];
+}
+
+export interface WizardFieldRule {
+  required: boolean;
+  allowedValues: string[];
+}
+
+export interface WizardStepDetail extends WizardStep {
+  rules: Record<string, WizardFieldRule>;
+  /** Provider hints for the draft's mode. */
+  providers: { value: string; label: string; description: string }[];
+}
+
+export interface WizardNavigation {
+  next: WizardStep | null;
+  previous: WizardStep | null;
+}
+
+/** Step id to completed. Steps the draft's mode does not run are absent or false. */
+export type WizardStatus = Record<string, boolean>;
+
+export interface WizardStepValidation {
+  isValid: boolean;
+  errors: string[];
 }

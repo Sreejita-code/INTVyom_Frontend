@@ -71,6 +71,7 @@ export default {
           pipeline: "hsl(var(--mode-pipeline))",
           realtime: "hsl(var(--mode-realtime))",
           cascade: "hsl(var(--mode-cascade))",
+          duplex: "hsl(var(--mode-duplex))",
         },
       },
       borderRadius: {
