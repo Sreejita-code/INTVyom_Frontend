@@ -1,6 +1,13 @@
-# INTVOICEKIT Frontend
+# VoiceKit Frontend
 
-React + Vite frontend for the INTVOICEKIT AI voice assistant dashboard. Manages assistants, phone numbers, call logs, analytics, integrations, and audio libraries with a dark neon-cyber UI.
+React + Vite frontend for the VoiceKit AI voice assistant dashboard. Manages assistants, phone numbers, call logs, analytics, integrations, and audio libraries with a dark neon-cyber UI.
+
+> **Naming.** The product is **VoiceKit**. The legacy `INTVOICEKIT` spelling survives in three
+> identifiers that are not safe to rename casually: the npm package name
+> (`intvoicekit-frontend`), the Docker container name, and the `intvoicekit_*` `localStorage`
+> keys (`intvoicekit_auth`, `intvoicekit_onboarding_dismissed`,
+> `intvoicekit.sidebar.collapsed`). Renaming the storage keys signs people out and drops their
+> saved session and UI preferences.
 
 ## Requirements
 
@@ -18,7 +25,7 @@ React + Vite frontend for the INTVOICEKIT AI voice assistant dashboard. Manages 
 | **Data Fetching** | Plain `fetch` behind `src/services/` — TanStack Query is mounted in `App.tsx` but not yet used by any page |
 | **Forms** | Controlled React state — no form library |
 | **Styling** | Tailwind CSS 3.4, `tailwindcss-animate`, `tailwind-merge` + `clsx` |
-| **UI Components** | shadcn/ui (24 Radix-based primitives) |
+| **UI Components** | shadcn/ui (27 Radix-based primitives) |
 | **Charts** | Recharts |
 | **Animation** | Framer Motion |
 | **Real-time Voice** | LiveKit (`@livekit/components-react`) |
@@ -48,15 +55,20 @@ Routes are defined in `src/App.tsx` using a nested layout pattern:
   /dashboard/inbound-context → Inbound context rules
   /dashboard/make-call     → Make an outbound call
   /dashboard/passthrough-call-records → Passthrough call records
-  /dashboard/api-keys      → API key management
-  /dashboard/integration   → Third-party integrations (Gemini API keys, etc.)
+  /dashboard/developer     → Your VoiceKit API key, request snippets, web-call guide
+  /dashboard/api-keys      → Redirects to /dashboard/developer (renamed route)
+  /dashboard/integration   → Third-party provider keys (Gemini API keys, etc.)
 
 *                          → 404 Not Found
 ```
 
+A renamed page keeps its old path as a redirect (`<Navigate>` in `src/App.tsx`) rather than a 404,
+so old bookmarks and screenshots keep working. `/dashboard/api-keys` is the current example.
+
 The `DashboardLayout` (`src/routes/dashboard/DashboardLayout.tsx`) provides:
-- Collapsible sidebar navigation (desktop)
+- Collapsible sidebar navigation (desktop), fed by `src/routes/dashboard/navItems.ts`
 - Sheet-based navigation (mobile, < 768px)
+- Command palette (`⌘K`, `src/routes/dashboard/CommandPalette.tsx`) over the same nav items
 - User avatar + logout
 - Watermark background
 - `<Outlet />` for nested route content
@@ -69,41 +81,57 @@ records this repo's deviations from it.
 ```
 INTVyom_Frontend/
 ├── AGENTS.md                     # Repo rules for AI coding agents — read first
+├── CLAUDE.md                     # One line: "@AGENTS.md" — imports the rules, never copies them
 ├── .agents/skills/               # Agent skill definitions (single source of truth)
 │   ├── plan-before-implement/SKILL.md     # Read → baseline → propose → ask → implement
 │   ├── react-service-structure/SKILL.md   # Canonical folder layout + README standard
 │   ├── ui-design-system/SKILL.md          # Visual + responsive quality bar
 │   └── run-intvoicekit-frontend/              # SKILL.md + driver.mjs (Playwright)
 ├── .claude/skills/               # Directory symlinks into .agents/skills/ — never edit directly
+├── agent-tracking/               # Scope, plan, research, screenshots and reports per agent task
+│   ├── INDEX.md
+│   ├── plans/<slug>/             # scope.md, plan.md, progress.md
+│   ├── research/<slug>.md
+│   └── reports/<slug>.md
 ├── public/                       # Static assets (served as-is)
 │   ├── logos/                    # TTS provider logos (cartesia, elevenlabs, sarvam)
 │   ├── robots.txt                # Crawler allowlist
 │   └── placeholder.svg
 ├── src/                          # Application source
 │   ├── routes/                   # One directory per top-level route, with a barrel index.ts
-│   │   ├── Index/                # Landing page
-│   │   ├── Auth/                 # Login page
+│   │   ├── Index/                # Landing page (IndexPage.tsx)
+│   │   ├── Auth/                 # Login / signup page
 │   │   ├── NotFound/             # 404 page
-│   │   └── dashboard/            # App shell (DashboardLayout) + nested pages
+│   │   └── dashboard/            # App shell + nested pages
 │   │       ├── DashboardLayout.tsx  # Sidebar shell + mobile nav
+│   │       ├── DashboardSidebar.tsx # Sidebar items, sections, user menu
+│   │       ├── CommandPalette.tsx    # ⌘K palette over navItems.ts
+│   │       ├── navItems.ts           # Sidebar labels, helpers, keywords, paths
 │   │       ├── assistant/        # Assistant editor — split into:
 │   │       │                     #   Assistant.tsx (page), AssistantForm.tsx (editor body),
-│   │       │                     #   Llm/Stt/TtsSection.tsx + StageSection.tsx (the rail),
+│   │       │                     #   LlmSection/SttSection/TtsSection.tsx (the rail),
+│   │       │                     #   StageSection.tsx + FieldRow.tsx (one stage, one row),
 │   │       │                     #   ConfigField.tsx, ProviderFields.tsx (spec renderers),
+│   │       │                     #   AudioChain.tsx (the chain diagram),
+│   │       │                     #   PromptEditor.tsx, TemplatePicker.tsx, GettingStarted.tsx,
+│   │       │                     #   BillableMinutesLookup.tsx,
 │   │       │                     #   providerCatalog.ts (all providers), assistantConfig.ts,
 │   │       │                     #   AssistantChat.tsx (LiveKit chat modal),
 │   │       │                     #   useAssistantList.ts, useChatTranscriptions.ts, constants.ts
-│   │       ├── tools/            # Tools & utilities
+│   │       ├── tools/            # Tools & utilities (+ staticReturn.ts, toolWebhookSample.ts)
 │   │       ├── audio-library/    # Audio file library
 │   │       ├── call-logs/        # Call history — CallLogs.tsx + CallLogCost.tsx
 │   │       ├── analytics/        # Dashboard analytics & charts
 │   │       ├── phone-number/     # Phone number management
-│   │       ├── inbound/          # Inbound route config
-│   │       ├── inbound-context/  # Inbound context rules
-│   │       ├── integrations/     # Third-party integrations
-│   │       ├── make-call/        # Outbound call interface
+│   │       ├── inbound/          # Inbound route config (+ InboundNumberPicker.tsx)
+│   │       ├── inbound-context/  # Inbound context rules (+ HeaderEditor, StrategyRow,
+│   │       │                     #   contextStrategySamples, headerDiff, strategyValidation)
+│   │       ├── integrations/     # Third-party provider keys
+│   │       ├── make-call/        # Outbound call interface (+ MeetingCallTab.tsx, meetingUrl.ts)
 │   │       ├── passthrough-call-records/  # Passthrough call records
-│   │       └── api-keys/         # API key management
+│   │       └── developer/        # Your VoiceKit API key + request snippets
+│   │                             #   (Developer.tsx, WebCallClientGuide.tsx,
+│   │                             #    developerActions.ts, webCallGuideSteps.ts)
 │   ├── services/                 # One module per backend API domain (call/condense pattern)
 │   │   ├── analytics/analyticsService.ts
 │   │   ├── assistant/assistantService.ts
@@ -113,6 +141,7 @@ INTVyom_Frontend/
 │   │   ├── inbound/inboundService.ts
 │   │   ├── inboundContext/inboundContextService.ts
 │   │   ├── integration/integrationService.ts
+│   │   ├── meetingCall/meetingCallService.ts
 │   │   ├── passthroughCall/passthroughCallService.ts
 │   │   ├── call/callService.ts
 │   │   ├── webCall/webCallService.ts
@@ -123,27 +152,40 @@ INTVyom_Frontend/
 │   ├── components/
 │   │   ├── common/               # App-aware, domain-agnostic; shared by 3+ routes
 │   │   │   ├── MasterDetailShell.tsx   # Two-pane list/detail layout with mobile toggle
-│   │   │   └── EmptyState.tsx          # "Nothing selected yet" detail-pane panel
-│   │   └── ui/                   # 24 shadcn/ui primitives (button, card, dialog,
+│   │   │   ├── EmptyState.tsx          # "Nothing selected yet" detail-pane panel
+│   │   │   ├── CopyIdButton.tsx        # Copy-to-clipboard button
+│   │   │   ├── ApiSnippet.tsx          # Copyable API request snippet
+│   │   │   ├── JsonSample.tsx          # Sample JSON payload block
+│   │   │   └── MetadataEditor.tsx      # Call metadata rows + raw JSON toggle
+│   │   └── ui/                   # 27 shadcn/ui primitives (button, card, dialog,
 │   │                             #   table, select, tooltip, toast, ...) — CLI-generated
 │   ├── hooks/
-│   │   └── use-toast.ts          # Toast notification reducer
+│   │   ├── use-toast.ts          # Toast notification reducer
+│   │   ├── useCopyToClipboard.ts # Clipboard write with a "copied" window
+│   │   └── usePersistedFlag.ts   # Boolean flag kept in localStorage
 │   ├── lib/
 │   │   ├── utils.ts              # cn() (clsx + tailwind-merge)
-│   │   └── formatUsd.ts          # parse/format estimated USD costs from the API
+│   │   ├── readJson.ts           # res.json() → { error } instead of a SyntaxError
+│   │   ├── toastError.ts         # Turn an API error into a toast message
+│   │   ├── formatUsd.ts          # parse/format estimated USD costs from the API
+│   │   ├── formatUrl.ts          # Pretty-print a URL for display
+│   │   ├── apiSnippet.ts         # Build the copyable request snippets
+│   │   ├── assistantModes.ts     # Per-mode copy and accent classes
+│   │   ├── callMetadata.ts       # Metadata payload helpers
+│   │   ├── placeholders.ts       # extractPlaceholders / expandDottedKeys
+│   │   └── webhookSamples.ts     # Sample webhook payloads
 │   ├── App.tsx                   # Root component (providers + routes)
 │   ├── index.css                 # Tailwind directives + design tokens
 │   ├── main.tsx                  # Application entry point
 │   └── vite-env.d.ts             # Vite type declarations
 ├── tests/                        # Vitest suites, mirroring source paths
 │   ├── setup.ts                  # Test env setup (matchMedia, ResizeObserver mocks)
-│   ├── components/common/        # MasterDetailShell, EmptyState
-│   ├── routes/dashboard/analytics/Analytics.test.tsx
-│   ├── routes/dashboard/assistant/useAssistantList.test.tsx
-│   ├── routes/dashboard/call-logs/CallLogCost.test.tsx
-│   ├── services/analytics/analyticsService.test.ts
-│   ├── services/assistant/assistantService.test.ts
-│   └── lib/formatUsd.test.ts
+│   ├── components/common/        # MasterDetailShell, EmptyState, JsonSample, CopyIdButton
+│   ├── hooks/                    # usePersistedFlag
+│   ├── lib/                      # apiSnippet, callMetadata, formatUrl, formatUsd,
+│   │                             #   placeholders, readJson
+│   ├── routes/                   # Auth, dashboard shell, and one directory per page
+│   └── services/                 # One suite per service module
 ├── dist/                         # Production build output
 ├── Dockerfile                    # Multi-stage: Node build → nginx serve
 ├── docker-compose.yml            # Single frontend service
@@ -152,14 +194,15 @@ INTVyom_Frontend/
 ├── .env                          # Live env vars (git-ignored)
 ├── .env.example                  # Env var template
 ├── package.json
-├── bun.lockb                     # Bun lockfile
+├── package-lock.json             # Committed lockfile (npm)
+├── bun.lockb                     # Stale Bun lockfile — not used by CI or Docker
 ├── components.json               # shadcn/ui configuration
 ├── tailwind.config.ts            # Tailwind theme (neon colors, animations)
 ├── postcss.config.js             # Tailwind + Autoprefixer
 ├── tsconfig.json                 # Root TS config (project references)
 ├── tsconfig.app.json             # TS config for src/ and tests/
 ├── tsconfig.node.json            # TS config for Vite configs
-├── vite.config.ts                # Vite bundler config (@ alias → ./src)
+├── vite.config.ts                # Vite bundler config (@ alias → ./src, port 8080)
 ├── vitest.config.ts              # Vitest config (jsdom, path alias)
 └── eslint.config.js              # ESLint flat config
 ```
@@ -208,26 +251,42 @@ Identity is the **API key** issued at signup and returned by `POST /api/auth/log
 
 | Page | Route | Description |
 |---|---|---|
-| **Make a Call** | `/dashboard/make-call` | Initiate an outbound AI voice call |
-| **Assistant** | `/dashboard/assistant` | Configure AI assistant (realtime, pipeline or cascade mode) |
+| **Make a Call** | `/dashboard/make-call` | Initiate an outbound AI voice call, a passthrough call, or join a meeting |
+| **Assistants** | `/dashboard/assistant` | Configure AI assistant (realtime, pipeline or cascade mode) |
 | **Tools** | `/dashboard/tools` | Utility tools and actions |
 | **Audio Library** | `/dashboard/audio-library` | Upload and manage audio files |
 | **Call Logs** | `/dashboard/call-logs` | Browse call history, recordings, and estimated USD cost |
 | **Analytics** | `/dashboard/analytics` | Usage metrics, charts, and breakdowns |
-| **Phone Number** | `/dashboard/phone-number` | Manage purchased phone numbers |
+| **Phone Numbers** | `/dashboard/phone-number` | Manage purchased phone numbers |
 | **Inbound Routes** | `/dashboard/inbound` | Configure inbound call routing |
-| **Inbound Context** | `/dashboard/inbound-context` | Set inbound context rules |
-| **Passthrough Records** | `/dashboard/passthrough-call-records` | Passthrough call records |
-| **API Keys** | `/dashboard/api-keys` | Manage API credentials |
-| **Integration** | `/dashboard/integration` | Third-party integrations (e.g., Gemini API key) |
+| **Inbound Rules** | `/dashboard/inbound-context` | Look up caller details before the assistant answers |
+| **Passthrough Calls** | `/dashboard/passthrough-call-records` | Calls where a person, not an assistant, spoke to the caller |
+| **Your VoiceKit API key** | `/dashboard/developer` | The key your own code sends, request snippets, and the web-call guide |
+| **Provider Keys** | `/dashboard/integration` | Keys for voice and model providers (OpenAI, Gemini, ElevenLabs, ...) |
+
+The sidebar labels in `src/routes/dashboard/navItems.ts` are the source of truth for these names;
+`/dashboard/api-keys` redirects to `/dashboard/developer`.
+
+## The Developer page
+
+`/dashboard/developer` is where a developer finds the credential their own code sends:
+
+- **Your VoiceKit API key** — the `api_key` issued at signup, shown masked, with a "show my real
+  key" toggle and a copy button. The copy button in the snippet is a deliberate footgun: it swaps
+  the placeholder for the live key, and the UI says so before it does.
+- **Copyable request snippets** — every action the dashboard performs, shown as a real HTTP
+  request (`src/lib/apiSnippet.ts`).
+- **Web-call guide** — how to receive a web call in the browser, step by step
+  (`WebCallClientGuide.tsx` + `webCallGuideSteps.ts`).
 
 ## Design System
 
 - **Theme:** Dark mode only with HSL CSS variables defined in `src/index.css`
 - **Primary:** Teal/cyan (`hsl(172 66% 50%)`) with neon glow effects
 - **Background:** Very dark slate (`hsl(222 47% 6%)`)
-- **Components:** 24 shadcn/ui primitives in `src/components/ui/`, plus
-  `MasterDetailShell` and `EmptyState` in `src/components/common/`
+- **Components:** 27 shadcn/ui primitives in `src/components/ui/`, plus six shared components in
+  `src/components/common/` (`MasterDetailShell`, `EmptyState`, `CopyIdButton`, `ApiSnippet`,
+  `JsonSample`, `MetadataEditor`)
 - **CSS Utilities:** `neon-border`, `neon-glow`, `glass` (frosted glass), `watermark`, `status-chip`, `page-shell`, `page-padding`, `content-max`
 - **Animations:** `accordion-down`, `accordion-up`, `pulse-neon` (Tailwind config)
 - **Font:** System font stack with Inter
@@ -265,6 +324,7 @@ Dev server runs on `http://localhost:8080` (configured in `vite.config.ts`).
 |---|---|
 | `npm run dev` | Start local dev server |
 | `npm run build` | Type-check (`tsc -b`) then production build to `dist/` |
+| `npm run build:dev` | Development-mode build (keeps the Vite dev overlay tooling) |
 | `npm run typecheck` | Type-check only, no build output |
 | `npm run preview` | Preview production build locally |
 | `npm run lint` | Run ESLint |
@@ -338,10 +398,13 @@ says. Drawing it as a fourth box in the row would read as a cascade, so it is dr
 |---|---|
 | `providerCatalog.ts` | Every provider, model ID, language list and field spec, plus the `help` / `warn` copy shown under each control. Adding a provider is one entry here. |
 | `assistantConfig.ts` | Pure form ⇄ API translation: `hydrateForm`, `buildAssistantPayload`, and the `applyModeChange` / `applySttProvider` / `applyTtsProvider` repairs. |
-| `ConfigField.tsx` / `ProviderFields.tsx` | Render a spec against a stored config. One level of nesting is supported, for ElevenLabs `voice_settings`. |
+| `LlmSection.tsx` / `SttSection.tsx` / `TtsSection.tsx` | The three stage sections on the rail. Each one decides which providers and fields its stage offers, and hands the result to `StageSection`. |
 | `StageSection.tsx` | One stage on the rail (or, with `nested`, a side channel hanging off the stage above), with its live summary chips and Advanced accordion. Also exports `TRIGGER_ONE_LINE`. |
+| `FieldRow.tsx` | One labelled control row — label and help beside the control, or `wide` for values that are long by nature. |
+| `ConfigField.tsx` / `ProviderFields.tsx` | Render a spec against a stored config. One level of nesting is supported, for ElevenLabs `voice_settings`. |
 | `AudioChain.tsx` | The chain diagram. Presentational only — it reads the same values the stages do. |
 | `PromptEditor.tsx` | System prompt, opening line, and the `{{placeholders}}` they ask for. |
+| `TemplatePicker.tsx` / `GettingStarted.tsx` | Start-from-a-template and the empty-state guide. |
 | `src/lib/assistantModes.ts` | Mode copy and the per-mode accent classes. Every mode chip in the app reads from here. |
 | `src/lib/placeholders.ts` | `extractPlaceholders` / `expandDottedKeys`, shared by the editor and the call pages. |
 
@@ -475,6 +538,32 @@ assistant filter does not apply to that card: the endpoint takes no `assistant_i
 No other analytics cards were added because no upstream endpoint exposes call outcomes, answer rate or
 cost. Computing those client-side means paging every call record — the same mistake that makes the
 billable endpoint slow.
+
+## Agent workflow
+
+`AGENTS.md` is the single source of truth for how agents work in this repo: the skills to load,
+the folder layout, the naming conventions, and the measured baseline. `CLAUDE.md` contains one
+line — `@AGENTS.md` — so Claude Code imports those rules instead of keeping a second copy that
+can drift.
+
+Read `AGENTS.md` before changing anything. It also documents the workflow every non-trivial
+change follows (read → baseline → propose → **ask the user** → implement one step at a time →
+verify → sync the docs), and where the work is recorded:
+
+```
+agent-tracking/
+├── INDEX.md                    # one row per task
+├── plans/<slug>/scope.md       # the request, as asked, plus the answers
+├── plans/<slug>/plan.md        # the approved plan
+├── plans/<slug>/progress.md    # the step log
+├── research/<slug>.md          # what was read, measured, ruled out
+├── screenshots/<slug>/         # browser output
+└── reports/<slug>.md           # the deliverable
+```
+
+The repo-local skills in `.agents/skills/` (`plan-before-implement`,
+`react-service-structure`, `ui-design-system`, `run-intvoicekit-frontend`) are symlinked into
+`.claude/skills/`. Edit `.agents/`, never the mirror.
 
 ## Production Deployment (Docker)
 
