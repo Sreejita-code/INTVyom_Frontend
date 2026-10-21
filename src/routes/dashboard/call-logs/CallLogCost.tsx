@@ -3,7 +3,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { formatUsd } from "@/lib/formatUsd";
 import { CallUsage, CallUsageLine } from "@/types/callLog";
 
-function kindLabel(type: string) {
+function kindLabel({ type, role }: CallUsageLine) {
+  if (role === "voice") return "Voice · GPT-Live";
+  if (role === "backend") return "Backend model";
   if (type === "llm") return "LLM";
   if (type === "tts") return "TTS";
   if (type === "stt") return "STT";
@@ -54,11 +56,12 @@ export default function CallLogCost({ usage }: { usage: CallUsage | null }) {
         <ul className="space-y-2">
           {usage.lines.map((line, index) => {
             const metric = lineMetric(line);
-            const amount = formatUsd(line.estimatedCostUsd) ?? "—";
+            // Upstream leaves `estimated_cost_usd` off an entry it has no rate for, rather than sending 0.
+            const amount = formatUsd(line.estimatedCostUsd) ?? "No rate";
             return (
               <li key={`${line.type}-${line.model}-${index}`} className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="text-xs font-medium">{kindLabel(line.type)}</div>
+                  <div className="text-xs font-medium">{kindLabel(line)}</div>
                   <div className="truncate text-[11px] text-muted-foreground">
                     {[line.provider, line.model].filter(Boolean).join(" · ") || "Unknown model"}
                   </div>

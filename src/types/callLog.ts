@@ -5,7 +5,10 @@ export interface CallTranscript {
 }
 
 export interface CallUsageLine {
+  /** `llm`, `tts`, `stt`. Duplex's `voice_llm_usage` and `backend_llm_usage` are both `llm`, told apart by `role`. */
   type: string;
+  /** Duplex calls recorded from upstream 1.7.0 only: GPT-Live (`voice`) or its backend model (`backend`). */
+  role?: "voice" | "backend";
   provider: string;
   model: string;
   estimatedCostUsd: number | null;

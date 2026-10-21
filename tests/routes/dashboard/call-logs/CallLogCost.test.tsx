@@ -43,4 +43,24 @@ describe("CallLogCost", () => {
     expect(screen.getByText("10,123 in · 143 out")).toBeInTheDocument();
     expect(screen.queryByText("Pricing incomplete")).not.toBeInTheDocument();
   });
+
+  it("labels a duplex call's voice and backend rows and flags an unpriced one", () => {
+    const duplex: CallUsage = {
+      estimatedCostUsd: 0.1,
+      pricingComplete: false,
+      usageFinalized: true,
+      lines: [
+        { type: "llm", role: "voice", provider: "openai", model: "gpt-live-1", estimatedCostUsd: 0.1, sessionDuration: 120 },
+        { type: "llm", role: "backend", provider: "openai", model: "gpt-9", estimatedCostUsd: null, inputTokens: 1000, outputTokens: 300 },
+      ],
+    };
+    render(<CallLogCost usage={duplex} />);
+    fireEvent.click(screen.getByRole("button", { name: "$0.10" }));
+    expect(screen.getByText("Voice · GPT-Live")).toBeInTheDocument();
+    expect(screen.getByText("Backend model")).toBeInTheDocument();
+    expect(screen.getByText("120.0s session")).toBeInTheDocument();
+    expect(screen.getByText("1,000 in · 300 out")).toBeInTheDocument();
+    expect(screen.getByText("No rate")).toBeInTheDocument();
+    expect(screen.getByText("Pricing incomplete")).toBeInTheDocument();
+  });
 });

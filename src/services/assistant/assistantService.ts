@@ -181,9 +181,11 @@ const asString = (value: unknown): string =>
 const condenseUsageLine = (raw: unknown): CallUsageLine | null => {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Record<string, unknown>;
-  const typeRaw = asString(row.type);
+  const typeRaw = asString(row.type).replace(/_usage$/, "");
+  const role = typeRaw === "voice_llm" ? "voice" : typeRaw === "backend_llm" ? "backend" : undefined;
   return {
-    type: typeRaw.replace(/_usage$/, "") || "other",
+    type: role ? "llm" : typeRaw || "other",
+    role,
     provider: asString(row.provider),
     model: asString(row.model),
     estimatedCostUsd: parseUsd(row.estimated_cost_usd),

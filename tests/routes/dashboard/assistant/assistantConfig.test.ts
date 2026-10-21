@@ -764,3 +764,37 @@ describe("Sarvam Bulbul model switch", () => {
     expect(payload.assistant_tts_config).not.toHaveProperty("temperature");
   });
 });
+
+describe("Gemini realtime generation knobs (upstream 1.7.0)", () => {
+  const REFUSED = ["reasoning_effort", "verbosity", "service_tier", "tool_choice", "parallel_tool_calls"];
+
+  const geminiPayload = (llm: Record<string, unknown>) =>
+    buildAssistantPayload(
+      form({ assistant_mode: "realtime", assistant_llm_config: { provider: "gemini", model: "gemini-3.8-live", ...llm } }),
+    ).assistant_llm_config;
+
+  it("sends the two knobs Gemini reads", () => {
+    expect(geminiPayload({ temperature: 0.4, max_output_tokens: 300 })).toMatchObject({
+      temperature: 0.4,
+      max_output_tokens: 300,
+    });
+  });
+
+  it("sends the knobs it does not read as null, even when a stored row holds them", () => {
+    const llm = geminiPayload({
+      reasoning_effort: "low",
+      verbosity: "low",
+      service_tier: "priority",
+      tool_choice: "required",
+      parallel_tool_calls: true,
+    });
+    for (const key of REFUSED) expect(llm).toHaveProperty(key, null);
+  });
+
+  it("clears every knob on OpenAI realtime, as before", () => {
+    const llm = buildAssistantPayload(
+      form({ assistant_mode: "realtime", assistant_llm_config: { provider: "openai", model: "gpt-realtime-1.5", temperature: 0.4 } }),
+    ).assistant_llm_config;
+    expect(llm).toMatchObject({ temperature: null, max_output_tokens: null });
+  });
+});

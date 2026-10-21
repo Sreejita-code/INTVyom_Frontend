@@ -15,6 +15,7 @@ import { AssistantDetail, AssistantLlmConfig, AssistantMode, EndCallWebhookTunin
 import { END_CALL_WEBHOOK_FIELDS, emptyForm } from "./constants";
 import {
   CASCADE_LLM_FIELDS,
+  GEMINI_KNOB_KEYS,
   DUPLEX_BACKEND_MODELS,
   DUPLEX_BACKEND_INSTRUCTIONS_MAX,
   DUPLEX_DEFAULT_BACKEND_MODEL,
@@ -531,9 +532,13 @@ export const buildAssistantPayload = (
       }
     }
   } else {
-    // In the other modes, explicitly clear the generation knobs
+    // In the other modes, explicitly clear the generation knobs. Gemini realtime refuses five of
+    // them (400), so a stored one is cleared with null; the two it reads are sent as set.
+    const keeps = isRealtime && llm.provider === "gemini" ? GEMINI_KNOB_KEYS : [];
     for (const spec of CASCADE_LLM_FIELDS) {
-      llmConfig[spec.key] = null;
+      const value = (llm as Record<string, unknown>)[spec.key];
+      const set = keeps.includes(spec.key) && value !== undefined && value !== null && value !== "";
+      llmConfig[spec.key] = set ? (NUMERIC_KEYS.has(spec.key) ? Number(value) : value) : null;
     }
   }
 

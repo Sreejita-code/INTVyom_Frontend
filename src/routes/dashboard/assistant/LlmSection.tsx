@@ -10,6 +10,7 @@ import { FieldRow } from "./FieldRow";
 import { StageSection, TRIGGER_ONE_LINE } from "./StageSection";
 import {
   CASCADE_LLM_FIELDS,
+  GEMINI_KNOB_KEYS,
   DUPLEX_BACKEND_INSTRUCTIONS_MAX,
   DUPLEX_BACKEND_MODELS,
   DUPLEX_DEFAULT_BACKEND_MODEL,
@@ -71,7 +72,7 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
   const isGemini = provider === "gemini";
   // Cascade and duplex both read the generation knobs, but duplex checks them against the backend
   // model and rejects temperature (every backend model is a reasoning model).
-  const readsKnobs = isCascade || isDuplex;
+  const readsKnobs = isCascade || isDuplex || (isRealtime && isGemini);
 
   const models = isCascade ? OPENAI_CASCADE_MODELS : OPENAI_REALTIME_MODELS;
   const defaultModel = isCascade
@@ -95,7 +96,8 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
   
   // Generation knob validation
   const knobErrors: string[] = [];
-  if (readsKnobs && knobModel) {
+  // Gemini has its own two knobs and no model family to check them against.
+  if ((isCascade || isDuplex) && knobModel) {
     if (!isDuplex && llmConfig?.temperature !== undefined) {
       const tempError = getLlmKnobError("temperature", knobModel, hasTools, llmConfig?.temperature);
       if (tempError) knobErrors.push(tempError);
@@ -118,13 +120,18 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
     isRealtime ? llmConfig?.voice || (isGemini ? "Puck" : "marin") : undefined,
     isDuplex ? llmConfig?.voice || DUPLEX_DEFAULT_VOICE : undefined,
     isDuplex ? `backend ${backendModel}` : undefined,
+    isRealtime && isGemini ? `temp ${llmConfig?.temperature ?? "default"}` : undefined,
     isCascade ? (reasoning ? `effort ${llmConfig?.reasoning_effort ?? "unset"}` : `temp ${llmConfig?.temperature ?? 0.8}`) : undefined,
   ].filter(Boolean) as string[];
 
   const inertReasonFor = (key: string) => llmInertReason(key, knobModel, hasTools, (llmConfig as Record<string, any>)?.[key]);
 
   // Duplex has no temperature knob at all, rather than a greyed one.
-  const knobs = isDuplex ? CASCADE_LLM_FIELDS.filter((f) => f.key !== "temperature") : CASCADE_LLM_FIELDS;
+  const knobs = isDuplex
+    ? CASCADE_LLM_FIELDS.filter((f) => f.key !== "temperature")
+    : isRealtime && isGemini
+      ? CASCADE_LLM_FIELDS.filter((f) => GEMINI_KNOB_KEYS.includes(f.key))
+      : CASCADE_LLM_FIELDS;
   const visibleKnobs = knobs.filter((f) => !f.advanced);
   const advancedKnobs = knobs.filter((f) => f.advanced);
 

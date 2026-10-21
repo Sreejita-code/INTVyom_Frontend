@@ -39,4 +39,21 @@ describe("JsonSample", () => {
     rerender(<JsonSample title="Sample" value={{}} defaultOpen />);
     expect(container.querySelector("details")).toHaveAttribute("open");
   });
+
+  it("switches between variants with a row of chips", () => {
+    render(
+      <JsonSample
+        title="Samples"
+        defaultOpen
+        variants={[
+          { id: "a", label: "Alpha", value: { shape: "first" } },
+          { id: "b", label: "Beta", value: { shape: "second" } },
+        ]}
+      />,
+    );
+    expect(screen.getByText(/"first"/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Beta" }));
+    expect(screen.getByText(/"second"/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Beta" })).toHaveAttribute("aria-pressed", "true");
+  });
 });

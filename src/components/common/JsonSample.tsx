@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { Check, ChevronRight, Copy } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,10 @@ import { cn } from "@/lib/utils";
 interface JsonSampleProps {
   /** What the block shows, e.g. "What we POST to this URL". */
   title: string;
-  /** Rendered with `JSON.stringify(value, null, 2)`. */
-  value: unknown;
+  /** Rendered with `JSON.stringify(value, null, 2)`. Ignored when `variants` is given. */
+  value?: unknown;
+  /** Several samples of one contract, picked with a row of chips; the first is shown first. */
+  variants?: { id: string; label: string; value: unknown }[];
   /** The part of the contract the shape alone does not say — retries, fallback, placeholders. */
   note?: ReactNode;
   defaultOpen?: boolean;
@@ -24,10 +26,12 @@ interface JsonSampleProps {
  * focusable and announced as expandable without any ARIA of our own. The copy button lives in
  * the body — inside `<summary>` it would be an interactive element inside an interactive one.
  */
-export const JsonSample = ({ title, value, note, defaultOpen, className }: JsonSampleProps) => {
+export const JsonSample = ({ title, value, variants, note, defaultOpen, className }: JsonSampleProps) => {
   const { copied, copy } = useCopyToClipboard(1500);
   const { toast } = useToast();
-  const json = JSON.stringify(value, null, 2);
+  const [variantId, setVariantId] = useState(variants?.[0]?.id);
+  const shown = variants?.find((v) => v.id === variantId) ?? variants?.[0];
+  const json = JSON.stringify(shown ? shown.value : value, null, 2);
 
   const copyJson = async () => {
     const ok = await copy(json);
@@ -37,18 +41,37 @@ export const JsonSample = ({ title, value, note, defaultOpen, className }: JsonS
   return (
     <details
       open={defaultOpen}
-      className={cn("group rounded-lg border border-border/60 bg-muted/20", className)}
+      className={cn("group min-w-0 max-w-full rounded-lg border border-border/60 bg-muted/20", className)}
     >
       <summary className="flex cursor-pointer list-none items-center gap-2 [&::-webkit-details-marker]:hidden rounded-lg px-3 py-2 text-[0.8125rem] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <ChevronRight className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
         <span className="min-w-0 break-words">{title}</span>
       </summary>
 
-      <div className="space-y-3 border-t border-border/60 p-3">
+      <div className="min-w-0 space-y-3 border-t border-border/60 p-3">
         {note && (
           <p className="max-w-prose text-pretty break-words text-xs leading-6 text-muted-foreground">
             {note}
           </p>
+        )}
+
+        {variants && variants.length > 1 && (
+          // Scrolls sideways inside itself on a phone rather than wrapping the page wider.
+          <div role="group" aria-label="Sample" className="flex gap-2 overflow-x-auto pb-1">
+            {variants.map((v) => (
+              <Button
+                key={v.id}
+                type="button"
+                variant={v.id === shown?.id ? "secondary" : "outline"}
+                size="sm"
+                aria-pressed={v.id === shown?.id}
+                onClick={() => setVariantId(v.id)}
+                className="h-7 shrink-0 px-3 text-xs"
+              >
+                {v.label}
+              </Button>
+            ))}
+          </div>
         )}
 
         <div className="relative">

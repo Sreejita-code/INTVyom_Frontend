@@ -22,7 +22,7 @@ import { AssistantDetail, AssistantMode, EndCallWebhookTuning, SttProvider, TtsP
 import { ToolSummary } from "@/types/tool";
 import { cn } from "@/lib/utils";
 import { MODES, modeAccent } from "@/lib/assistantModes";
-import { END_CALL_WEBHOOK_SAMPLE } from "@/lib/webhookSamples";
+import { END_CALL_WEBHOOK_SAMPLES } from "@/lib/webhookSamples";
 import { END_CALL_WEBHOOK_FIELDS, emptyForm } from "./constants";
 import { 
   DUPLEX_DEFAULT_BACKEND_MODEL,
@@ -75,7 +75,7 @@ interface AssistantFormProps {
 /** A titled group of settings, matching the rhythm of the provider stages above it. */
 function SettingsPanel({ title, blurb, children }: { title: string; blurb: string; children: ReactNode }) {
   return (
-    <section className="grid gap-4 pt-2">
+    <section className="grid grid-cols-[minmax(0,1fr)] gap-4 pt-2">
       <div className="grid gap-1">
         <h3 className="text-[1.0625rem] font-semibold tracking-tight">{title}</h3>
         <p className="text-[0.8125rem] leading-6 text-muted-foreground">{blurb}</p>
@@ -783,12 +783,16 @@ export function AssistantForm({
 
           <JsonSample
             title="See what we POST to this URL"
-            value={END_CALL_WEBHOOK_SAMPLE}
+            variants={END_CALL_WEBHOOK_SAMPLES}
             note={
               <>
                 Sent once when the call reaches a terminal state. Answer <code className="font-mono">200</code> first and
                 do your own processing afterwards — a slow reply holds the call's teardown open. Delivery is retried, so
                 key on <code className="font-mono">data.room_name</code> and ignore a payload you have already stored.
+                Pick a mode below: the <code className="font-mono">usage</code> block differs by mode, and a call nobody
+                answered carries none. A duplex call lists GPT-Live and its backend model as two
+                {" "}<code className="font-mono">model_usage</code> entries, each with its own{" "}
+                <code className="font-mono">estimated_cost_usd</code>.
               </>
             }
           />

@@ -371,7 +371,10 @@ export const isReasoningModel = (model?: string) => REASONING_MODELS.has(model?.
 export const isGpt5Generation = (model?: string) =>
   isReasoningModel(model) || GPT5_CHAT_ALIASES.includes(model?.trim() ?? "");
 
-/** Cascade-only generation knobs. Stored in every mode, read only in cascade. */
+/** The only two generation knobs Gemini Live reads; the API refuses the other five in Gemini realtime. */
+export const GEMINI_KNOB_KEYS = ["temperature", "max_output_tokens"];
+
+/** Generation knobs. Cascade and duplex read all of them, Gemini realtime only `GEMINI_KNOB_KEYS`, every other mode none. */
 export const CASCADE_LLM_FIELDS: FieldSpec[] = [
   {
     key: "temperature",
@@ -430,7 +433,7 @@ export const CASCADE_LLM_FIELDS: FieldSpec[] = [
       { value: "flex", label: "flex", hint: "gpt-5 generation only. Cheaper, can queue under load." },
       { value: "priority", label: "priority", hint: "Dearest, most consistent latency." },
     ],
-    help: "OpenAI's processing and billing tier. Priority buys steadier latency; flex trades latency for cost (gpt-5 models only).",
+    help: "OpenAI's processing and billing tier. Priority buys steadier latency; flex trades latency for cost (gpt-5 models only). Priced into the call estimate: flex is half and fast or priority double the token rate. In duplex it scales the backend model only, never the per-minute GPT-Live voice.",
     advanced: true,
   },
   {

@@ -180,3 +180,37 @@ describe("duplex usage lines", () => {
     expect(page.logs[0].usage?.lines[0]).toMatchObject({ model: "gpt-live-1", sessionDuration: 61.5 });
   });
 });
+
+describe("duplex usage entries from upstream 1.7.0", () => {
+  const usage = (model_usage: unknown[], unpriced: unknown[] = []) =>
+    condenseCallLogsResponse({
+      data: { logs: [{ started_at: "2026-10-21T10:00:00Z", usage: { model_usage, unpriced_model_usage: unpriced } }] },
+    }).logs[0].usage;
+
+  it("tells GPT-Live and its backend model apart while keeping both as LLM lines", () => {
+    const lines = usage([
+      { type: "voice_llm_usage", provider: "openai", model: "gpt-live-1", session_duration: 120, estimated_cost_usd: "0.1000" },
+      { type: "backend_llm_usage", provider: "openai", model: "gpt-6-luna", input_tokens: 1000, output_tokens: 300, estimated_cost_usd: "0.00025" },
+    ])?.lines;
+
+    expect(lines?.[0]).toMatchObject({ type: "llm", role: "voice", sessionDuration: 120, estimatedCostUsd: 0.1 });
+    expect(lines?.[1]).toMatchObject({ type: "llm", role: "backend", inputTokens: 1000, estimatedCostUsd: 0.00025 });
+  });
+
+  it("leaves a duplex call recorded before 1.7.0 as two plain LLM lines", () => {
+    const lines = usage([
+      { type: "llm_usage", provider: "openai", model: "gpt-live-1", session_duration: 60 },
+      { type: "llm_usage", provider: "openai", model: "gpt-6-luna", input_tokens: 10 },
+    ])?.lines;
+    expect(lines?.map((l) => l.role)).toEqual([undefined, undefined]);
+  });
+
+  it("reports an entry with no rate as unpriced, not as zero", () => {
+    const u = usage(
+      [{ type: "backend_llm_usage", provider: "openai", model: "gpt-9", input_tokens: 5 }],
+      [{ type: "backend_llm_usage", model: "gpt-9" }],
+    );
+    expect(u?.lines[0].estimatedCostUsd).toBeNull();
+    expect(u?.pricingComplete).toBe(false);
+  });
+});
