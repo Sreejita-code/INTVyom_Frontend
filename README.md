@@ -406,6 +406,7 @@ says. Drawing it as a fourth box in the row would read as a cascade, so it is dr
 | `AudioChain.tsx` | The chain diagram. Presentational only — it reads the same values the stages do. |
 | `PromptEditor.tsx` | System prompt, opening line, and the `{{placeholders}}` they ask for. |
 | `TemplatePicker.tsx` / `GettingStarted.tsx` | Start-from-a-template (a new assistant is then created through `POST /templates/{id}/apply`) and the empty-state guide. |
+| `pricing.ts` / `PriceBadge.tsx` | List price of every model the editor offers, from the platform Pricing reference (the API has no pricing endpoint). Shown on each dropdown row and, once chosen, in full under the select. Add a model to a catalog list and `tests/.../pricing.test.ts` fails until it is priced here. |
 | `WizardProgress.tsx` | Create-mode panel over the `/wizard/*` helper endpoints: steps, completion, rules and a per-step check. Advisory; it never writes to the form. |
 | `src/lib/assistantModes.ts` | Mode copy and the per-mode accent classes. Every mode chip in the app reads from here. |
 | `src/lib/placeholders.ts` | `extractPlaceholders` / `expandDottedKeys`, shared by the editor and the call pages. |

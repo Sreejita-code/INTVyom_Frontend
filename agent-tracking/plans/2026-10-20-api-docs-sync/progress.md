@@ -24,3 +24,9 @@ All steps done. Nothing committed.
 - Tool name pattern `^[a-z][a-z0-9_]*$`, max 100 / description 500 not enforced client-side.
 - Analytics and tool response keys are loosely typed in the contract: UNVERIFIED against a live backend.
 - `text_only` Chat is also refused for realtime assistants upstream; only duplex is guarded.
+
+## 2026-10-21 follow-up
+
+- "Replaces ..." hints removed from the gpt-6 rows.
+- Pricing glimpse: `pricing.ts` (list prices + checked dates from the platform Pricing reference), `PriceBadge.tsx` (row price mark, tier dots, note under the select). Wired into LlmSection, ConfigField (STT/TTS model selects) and the TTS provider select. Test fails if an offered model has no price.
+- Verified: 48 files / 402 tests, typecheck clean, lint 82 (= baseline), build ok, assistant route sweep 0 failing; browser shots at 375 and 1440 with no overflow or console errors.

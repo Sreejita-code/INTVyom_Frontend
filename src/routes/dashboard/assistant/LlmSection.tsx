@@ -3,6 +3,7 @@ import { Brain, AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { OptionRow, PRICED_ITEM_CLASS, PriceNote } from "./PriceBadge";
 import { AssistantLlmConfig, AssistantMode } from "@/types/assistant";
 import { ConfigField } from "./ConfigField";
 import { FieldRow } from "./FieldRow";
@@ -14,6 +15,7 @@ import {
   DUPLEX_DEFAULT_BACKEND_MODEL,
   DUPLEX_DEFAULT_VOICE,
   DUPLEX_MODEL,
+  DUPLEX_VOICE_PRICE,
   DUPLEX_VOICES,
   FieldOption,
   OPENAI_CASCADE_MODELS,
@@ -205,7 +207,7 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
             <SelectTrigger aria-label="Provider" className={TRIGGER_ONE_LINE}>
               <SelectValue placeholder="Select a provider" />
             </SelectTrigger>
-            <SelectContent className="max-w-[min(24rem,calc(100vw-2rem))]">
+            <SelectContent className="max-w-[min(28rem,calc(100vw-2rem))]">
               <SelectItem value="openai">
                 <span className="flex flex-col gap-1 py-0.5">
                   <span className="text-sm">OpenAI</span>
@@ -243,6 +245,7 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
           label="Model"
           help="Google Gemini Live model. Non-Live models (such as gemini-2.5-flash) are rejected by the backend at save."
           control={
+            <>
             <Select
               value={model}
               onValueChange={(v) => onChange({ model: v })}
@@ -250,28 +253,26 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
               <SelectTrigger aria-label="Model" className={TRIGGER_ONE_LINE}>
                 <SelectValue placeholder="Select a Gemini Live model" />
               </SelectTrigger>
-              <SelectContent className="max-w-[min(24rem,calc(100vw-2rem))]">
+              <SelectContent className="max-w-[min(28rem,calc(100vw-2rem))]">
                 {GEMINI_LIVE_MODELS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    <span className="flex flex-col gap-1 py-0.5">
-                      <span className="font-mono text-sm">{option.label}</span>
-                      {option.hint && (
-                        <span data-tagline className="text-xs leading-5 text-muted-foreground">
-                          {option.hint}
-                        </span>
-                      )}
-                    </span>
-                  </SelectItem>
+                  <SelectItem key={option.value} value={option.value} className={PRICED_ITEM_CLASS}><OptionRow option={option} mono /></SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            <PriceNote price={GEMINI_LIVE_MODELS.find((m) => m.value === model)?.price} />
+            </>
           }
         />
       ) : isDuplex ? (
         <FieldRow
           label="Model"
           help="GPT-Live is the only model duplex runs, so there is nothing to choose."
-          control={<Input aria-label="Model" value={DUPLEX_MODEL} readOnly disabled className="font-mono text-sm" />}
+          control={
+            <>
+              <Input aria-label="Model" value={DUPLEX_MODEL} readOnly disabled className="font-mono text-sm" />
+              <PriceNote price={DUPLEX_VOICE_PRICE} />
+            </>
+          }
         />
       ) : (
         <FieldRow
@@ -282,25 +283,19 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
               : "Pipeline and realtime run OpenAI's realtime models. Chat models such as gpt-4.1 belong to cascade mode and are rejected here."
           }
           control={
-            <Select value={model} onValueChange={(v) => onChange({ model: v })}>
-              <SelectTrigger aria-label="Model" className={TRIGGER_ONE_LINE}>
-                <SelectValue placeholder="Select a model" />
-              </SelectTrigger>
-              <SelectContent className="max-w-[min(24rem,calc(100vw-2rem))]">
-                {withStoredOption(models, llmConfig?.model?.trim()).map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    <span className="flex flex-col gap-1 py-0.5">
-                      <span className="font-mono text-sm">{option.label}</span>
-                      {option.hint && (
-                        <span data-tagline className="text-xs leading-5 text-muted-foreground">
-                          {option.hint}
-                        </span>
-                      )}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <>
+              <Select value={model} onValueChange={(v) => onChange({ model: v })}>
+                <SelectTrigger aria-label="Model" className={TRIGGER_ONE_LINE}>
+                  <SelectValue placeholder="Select a model" />
+                </SelectTrigger>
+                <SelectContent className="max-w-[min(28rem,calc(100vw-2rem))]">
+                  {withStoredOption(models, llmConfig?.model?.trim()).map((option) => (
+                    <SelectItem key={option.value} value={option.value} className={PRICED_ITEM_CLASS}><OptionRow option={option} mono /></SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <PriceNote price={models.find((m) => m.value === model)?.price} />
+            </>
           }
         />
       )}
@@ -321,7 +316,7 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
               <SelectTrigger aria-label="Voice" className={TRIGGER_ONE_LINE}>
                 <SelectValue placeholder="Select a voice" />
               </SelectTrigger>
-              <SelectContent className="max-w-[min(24rem,calc(100vw-2rem))]">
+              <SelectContent className="max-w-[min(28rem,calc(100vw-2rem))]">
                 {(isDuplex ? DUPLEX_VOICES : isGemini ? GEMINI_LIVE_VOICES : OPENAI_REALTIME_VOICES).map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     <span className="flex flex-col gap-1 py-0.5">
@@ -346,25 +341,19 @@ export function LlmSection({ mode, llmConfig, onChange, step, last, hasTools }: 
             label="Backend model"
             help="The reasoning model GPT-Live hands thinking and tool calls to. Its answer comes back to GPT-Live, which says it in its own voice. The generation knobs below are checked against this model."
             control={
-              <Select value={backendModel} onValueChange={(v) => onChange({ backend_model: v })}>
-                <SelectTrigger aria-label="Backend model" className={TRIGGER_ONE_LINE}>
-                  <SelectValue placeholder="Select a backend model" />
-                </SelectTrigger>
-                <SelectContent className="max-w-[min(24rem,calc(100vw-2rem))]">
-                  {withStoredOption(DUPLEX_BACKEND_MODELS, backendModel).map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      <span className="flex flex-col gap-1 py-0.5">
-                        <span className="font-mono text-sm">{option.label}</span>
-                        {option.hint && (
-                          <span data-tagline className="text-xs leading-5 text-muted-foreground">
-                            {option.hint}
-                          </span>
-                        )}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <>
+                <Select value={backendModel} onValueChange={(v) => onChange({ backend_model: v })}>
+                  <SelectTrigger aria-label="Backend model" className={TRIGGER_ONE_LINE}>
+                    <SelectValue placeholder="Select a backend model" />
+                  </SelectTrigger>
+                  <SelectContent className="max-w-[min(28rem,calc(100vw-2rem))]">
+                    {withStoredOption(DUPLEX_BACKEND_MODELS, backendModel).map((option) => (
+                      <SelectItem key={option.value} value={option.value} className={PRICED_ITEM_CLASS}><OptionRow option={option} mono /></SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <PriceNote price={DUPLEX_BACKEND_MODELS.find((m) => m.value === backendModel)?.price} />
+              </>
             }
           />
           <FieldRow

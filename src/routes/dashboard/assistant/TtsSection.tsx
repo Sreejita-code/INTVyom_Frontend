@@ -3,6 +3,7 @@ import { Volume2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AssistantDetail, TtsProvider } from "@/types/assistant";
 import { FieldRow } from "./FieldRow";
+import { PRICED_ITEM_CLASS, PriceMark, PriceNote } from "./PriceBadge";
 import { ProviderFields } from "./ProviderFields";
 import { StageSection, TRIGGER_ONE_LINE } from "./StageSection";
 import { repairTtsConfig } from "./assistantConfig";
@@ -72,23 +73,29 @@ export function TtsSection({ ttsModel, ttsConfig, onProviderChange, onConfigChan
         label="Provider"
         help={`${spec?.tagline} The provider key comes from your Provider Keys page.`}
         control={
-          <Select value={ttsModel} onValueChange={(v) => onProviderChange(v as TtsProvider)}>
-            <SelectTrigger aria-label="Provider" className={TRIGGER_ONE_LINE}>
-              <SelectValue placeholder="Select a provider" />
-            </SelectTrigger>
-            <SelectContent className="max-w-[min(24rem,calc(100vw-2rem))]">
-              {TTS_PROVIDERS.map((provider) => (
-                <SelectItem key={provider.value} value={provider.value}>
-                  <span className="flex flex-col gap-1 py-0.5">
-                    <span className="text-sm">{provider.label}</span>
-                    <span data-tagline className="text-xs leading-5 text-muted-foreground">
-                      {provider.tagline}
+          <>
+            <Select value={ttsModel} onValueChange={(v) => onProviderChange(v as TtsProvider)}>
+              <SelectTrigger aria-label="Provider" className={TRIGGER_ONE_LINE}>
+                <SelectValue placeholder="Select a provider" />
+              </SelectTrigger>
+              <SelectContent className="max-w-[min(28rem,calc(100vw-2rem))]">
+                {TTS_PROVIDERS.map((provider) => (
+                  <SelectItem key={provider.value} value={provider.value} className={PRICED_ITEM_CLASS}>
+                    <span className="flex w-full min-w-0 items-start justify-between gap-4">
+                      <span className="flex min-w-0 flex-col gap-1 py-0.5">
+                        <span className="text-sm">{provider.label}</span>
+                        <span data-tagline className="text-xs leading-5 text-muted-foreground">
+                          {provider.tagline}
+                        </span>
+                      </span>
+                      {provider.price && <PriceMark price={provider.price} />}
                     </span>
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <PriceNote price={spec?.price} />
+          </>
         }
       />
 

@@ -4,6 +4,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { FieldRow } from "./FieldRow";
+import { OptionRow, PRICED_ITEM_CLASS, PriceNote } from "./PriceBadge";
 import { TRIGGER_ONE_LINE } from "./StageSection";
 import { FieldSpec } from "./providerCatalog";
 
@@ -82,29 +83,25 @@ export function ConfigField({ spec, value, onChange, inertReason }: ConfigFieldP
 
       case "select":
         return (
-          <Select
-            value={current === undefined || current === null ? "" : String(current) || EMPTY_OPTION}
-            onValueChange={(next) => onChange(next === EMPTY_OPTION ? "" : next)}
-            disabled={disabled}
-          >
-            <SelectTrigger aria-label={spec.label} className={TRIGGER_ONE_LINE}>
-              <SelectValue placeholder={spec.placeholder ?? "Select"} />
-            </SelectTrigger>
-            <SelectContent className="max-w-[min(22rem,calc(100vw-2rem))]">
-              {spec.options?.map((option) => (
-                <SelectItem key={option.value} value={option.value || EMPTY_OPTION}>
-                  <span className="flex flex-col gap-1 py-0.5">
-                    <span className={cn("text-sm", spec.mono && "font-mono")}>{option.label}</span>
-                    {option.hint && (
-                      <span data-tagline className="text-xs leading-5 text-muted-foreground">
-                        {option.hint}
-                      </span>
-                    )}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <>
+            <Select
+              value={current === undefined || current === null ? "" : String(current) || EMPTY_OPTION}
+              onValueChange={(next) => onChange(next === EMPTY_OPTION ? "" : next)}
+              disabled={disabled}
+            >
+              <SelectTrigger aria-label={spec.label} className={TRIGGER_ONE_LINE}>
+                <SelectValue placeholder={spec.placeholder ?? "Select"} />
+              </SelectTrigger>
+              <SelectContent className="max-w-[min(28rem,calc(100vw-2rem))]">
+                {spec.options?.map((option) => (
+                  <SelectItem key={option.value} value={option.value || EMPTY_OPTION} className={PRICED_ITEM_CLASS}>
+                    <OptionRow option={option} mono={spec.mono} />
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <PriceNote price={spec.options?.find((option) => option.value === String(current ?? ""))?.price} />
+          </>
         );
 
       default:

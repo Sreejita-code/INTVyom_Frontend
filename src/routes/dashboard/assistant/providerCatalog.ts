@@ -10,6 +10,16 @@
  * line here comes from the upstream pitfalls list, not from guesswork.
  */
 
+import {
+  DUPLEX_VOICE_PRICE,
+  GEMINI_PRICES,
+  PINNED_TTS_PRICE,
+  REALTIME_PRICES,
+  STT_PRICES,
+  TEXT_PRICES,
+  TTS_PRICES,
+  type PriceTag,
+} from "./pricing";
 import { SARVAM_V4_FLASH_SPEAKERS } from "./sarvamSpeakers";
 
 export type ControlKind = "select" | "text" | "number" | "slider" | "switch";
@@ -18,7 +28,12 @@ export interface FieldOption {
   value: string;
   label: string;
   hint?: string;
+  /** List price, shown on the row and, once chosen, under the select. */
+  price?: PriceTag;
 }
+
+const priced = (prices: Record<string, PriceTag>, options: FieldOption[]): FieldOption[] =>
+  options.map((option) => ({ ...option, price: prices[option.value] }));
 
 export interface FieldSpec {
   key: string;
@@ -48,6 +63,8 @@ export interface ProviderSpec {
   /** One line under the provider select, describing the provider as a whole. */
   tagline: string;
   fields: FieldSpec[];
+  /** For a provider whose synthesis model is pinned, so there is no model select to carry it. */
+  price?: PriceTag;
 }
 
 // --- Language sets ------------------------------------------------------------------------
@@ -165,7 +182,7 @@ export const getLanguageCodeError = (provider: string, code: string): string | n
  * Realtime model IDs — `pipeline` (text-only modality) and `realtime` + OpenAI.
  * Disjoint from the cascade list: sending a chat model here is a 400.
  */
-export const OPENAI_REALTIME_MODELS: FieldOption[] = [
+export const OPENAI_REALTIME_MODELS: FieldOption[] = priced(REALTIME_PRICES, [
   { value: "gpt-realtime-1.5", label: "gpt-realtime-1.5", hint: "Default. Current realtime model." },
   { value: "gpt-realtime", label: "gpt-realtime", hint: "Previous generation." },
   { value: "gpt-realtime-2", label: "gpt-realtime-2", hint: "Next-gen realtime model." },
@@ -173,7 +190,7 @@ export const OPENAI_REALTIME_MODELS: FieldOption[] = [
   { value: "gpt-realtime-2.1-mini", label: "gpt-realtime-2.1-mini", hint: "Newest generation, cheaper and faster." },
   { value: "gpt-realtime-2025-08-28", label: "gpt-realtime-2025-08-28", hint: "Realtime snapshot." },
   { value: "gpt-realtime-mini", label: "gpt-realtime-mini", hint: "Cheaper and faster, less capable." },
-];
+]);
 
 /**
  * Gemini Live models for Realtime mode. Mirrors the backend's `GEMINI_LIVE_MODELS`.
@@ -183,7 +200,7 @@ export const OPENAI_REALTIME_MODELS: FieldOption[] = [
 export const GEMINI_DEFAULT_MODEL = "gemini-3.8-live";
 export const GEMINI_DEFAULT_VOICE = "Puck";
 
-export const GEMINI_LIVE_MODELS: FieldOption[] = [
+export const GEMINI_LIVE_MODELS: FieldOption[] = priced(GEMINI_PRICES, [
   {
     value: GEMINI_DEFAULT_MODEL,
     label: GEMINI_DEFAULT_MODEL,
@@ -204,7 +221,7 @@ export const GEMINI_LIVE_MODELS: FieldOption[] = [
     label: "gemini-2.5-flash-native-audio-preview-12-2025",
     hint: "Previous generation.",
   },
-];
+]);
 
 export const isGeminiModel = (model?: string): boolean =>
   GEMINI_LIVE_MODELS.some((m) => m.value === model);
@@ -300,7 +317,7 @@ export const getLlmKnobError = (key: string, model?: string, hasTools?: boolean,
 };
 
 /** Chat models for the cascade LLM stage. Sending one of these in pipeline mode is a 400. */
-export const OPENAI_CASCADE_MODELS: FieldOption[] = [
+export const OPENAI_CASCADE_MODELS: FieldOption[] = priced(TEXT_PRICES, [
   { value: "gpt-4.1", label: "gpt-4.1", hint: "Default. General-purpose, not a reasoning model." },
   { value: "gpt-4.1-mini", label: "gpt-4.1-mini", hint: "Cheaper and faster." },
   { value: "gpt-4.1-nano", label: "gpt-4.1-nano", hint: "Cheapest of the 4.1 line." },
@@ -316,9 +333,9 @@ export const OPENAI_CASCADE_MODELS: FieldOption[] = [
   { value: "gpt-5.6-sol", label: "gpt-5.6-sol", hint: "Reasoning model." },
   { value: "gpt-5.6-terra", label: "gpt-5.6-terra", hint: "Reasoning model." },
   { value: "gpt-5.6-luna", label: "gpt-5.6-luna", hint: "Reasoning model." },
-  { value: "gpt-6-luna", label: "gpt-6-luna", hint: "Reasoning model. Replaces gpt-5.4-nano." },
-  { value: "gpt-6-sol", label: "gpt-6-sol", hint: "Reasoning model. Replaces gpt-5.1." },
-];
+  { value: "gpt-6-luna", label: "gpt-6-luna", hint: "Reasoning model." },
+  { value: "gpt-6-sol", label: "gpt-6-sol", hint: "Reasoning model." },
+]);
 
 /**
  * Models the API now answers with a 400 that names the replacement. OpenAI retires both on
@@ -1249,3 +1266,23 @@ export const defaultConfigFor = (spec?: ProviderSpec): Record<string, any> => {
   }
   return config;
 };
+
+// --- Prices -------------------------------------------------------------------------------
+// Attached last, once every provider's model options exist, so the specs above stay readable.
+
+export { DUPLEX_VOICE_PRICE };
+
+for (const [providers, prices] of [
+  [STT_PROVIDERS, STT_PRICES],
+  [TTS_PROVIDERS, TTS_PRICES],
+] as const) {
+  for (const provider of providers) {
+    for (const option of provider.fields.find((f) => f.key === "model")?.options ?? []) {
+      option.price = prices[`${provider.value}:${option.value}`];
+    }
+  }
+}
+
+for (const provider of TTS_PROVIDERS) {
+  provider.price = PINNED_TTS_PRICE[provider.value];
+}

@@ -273,3 +273,24 @@ describe("AssistantForm retired cascade model", () => {
     expect(screen.getAllByText(/gpt-5\.4-nano is retired and the API rejects it\. Use gpt-6-luna/).length).toBeGreaterThan(0);
   });
 });
+
+describe("AssistantForm pricing glimpse", () => {
+  it("shows the chosen cascade model's full price under the select", () => {
+    renderForm({ ...applyModeChange(emptyForm, "cascade"), assistant_llm_config: { provider: "openai", model: "gpt-4.1-mini" } });
+
+    expect(stage("Text model").getByText(/Input \$0\.40 · cached input \$0\.10 · output \$1\.60 per 1M tokens/)).toBeInTheDocument();
+    expect(stage("Text model").getAllByRole("img", { name: /Relative cost 2 of 4/ }).length).toBeGreaterThan(0);
+  });
+
+  it("shows the GPT-Live session rate on the fixed duplex model", () => {
+    renderForm(applyModeChange(emptyForm, "duplex"));
+
+    expect(stage("Voice model").getByText(/\$0\.05 per minute of open session/)).toBeInTheDocument();
+  });
+
+  it("prices a stored retired model as nothing rather than guessing", () => {
+    renderForm({ ...applyModeChange(emptyForm, "cascade"), assistant_llm_config: { provider: "openai", model: "gpt-5.4-nano" } });
+
+    expect(stage("Text model").queryByText(/List price, checked/)).not.toBeInTheDocument();
+  });
+});
