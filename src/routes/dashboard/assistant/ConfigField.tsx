@@ -1,12 +1,21 @@
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { FieldRow } from "./FieldRow";
 import { OptionRow, PRICED_ITEM_CLASS, PriceNote } from "./PriceBadge";
 import { TRIGGER_ONE_LINE } from "./StageSection";
-import { FieldSpec } from "./providerCatalog";
+import { FieldOption, FieldSpec } from "./providerCatalog";
+
+/** Consecutive options with the same `group` under one heading; ungrouped options stand alone. */
+const groupOptions = (options: FieldOption[] = []): { group?: string; items: FieldOption[] }[] =>
+  options.reduce<{ group?: string; items: FieldOption[] }[]>((acc, option) => {
+    const last = acc[acc.length - 1];
+    if (last && last.group === option.group) last.items.push(option);
+    else acc.push({ group: option.group, items: [option] });
+    return acc;
+  }, []);
 
 /**
  * Stands in for an option whose real value is the empty string.
@@ -93,11 +102,23 @@ export function ConfigField({ spec, value, onChange, inertReason }: ConfigFieldP
                 <SelectValue placeholder={spec.placeholder ?? "Select"} />
               </SelectTrigger>
               <SelectContent className="max-w-[min(28rem,calc(100vw-2rem))]">
-                {spec.options?.map((option) => (
-                  <SelectItem key={option.value} value={option.value || EMPTY_OPTION} className={PRICED_ITEM_CLASS}>
-                    <OptionRow option={option} mono={spec.mono} />
-                  </SelectItem>
-                ))}
+                {groupOptions(spec.options).map(({ group, items }) => {
+                  const rows = items.map((option) => (
+                    <SelectItem key={option.value} value={option.value || EMPTY_OPTION} className={PRICED_ITEM_CLASS}>
+                      <OptionRow option={option} mono={spec.mono} />
+                    </SelectItem>
+                  ));
+                  return group ? (
+                    <SelectGroup key={group}>
+                      <SelectLabel className="pl-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                        {group} · {items.length}
+                      </SelectLabel>
+                      {rows}
+                    </SelectGroup>
+                  ) : (
+                    rows
+                  );
+                })}
               </SelectContent>
             </Select>
             <PriceNote price={spec.options?.find((option) => option.value === String(current ?? ""))?.price} />

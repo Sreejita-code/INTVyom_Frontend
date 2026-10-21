@@ -20,6 +20,7 @@ import {
   TTS_PRICES,
   type PriceTag,
 } from "./pricing";
+import { friendlyLanguage, friendlySpeaker } from "@/lib/optionNames";
 import { SARVAM_V4_FLASH_SPEAKERS } from "./sarvamSpeakers";
 
 export type ControlKind = "select" | "text" | "number" | "slider" | "switch";
@@ -30,6 +31,8 @@ export interface FieldOption {
   hint?: string;
   /** List price, shown on the row and, once chosen, under the select. */
   price?: PriceTag;
+  /** Options sharing a group sit under one heading in the list. Consecutive only; sort first. */
+  group?: string;
 }
 
 const priced = (prices: Record<string, PriceTag>, options: FieldOption[]): FieldOption[] =>
@@ -123,17 +126,21 @@ export const LANGUAGE_CODES = [
   "mr-IN", "gu-IN", "kn-IN", "ml-IN", "pa-IN", "od-IN",
 ] as const;
 
-const asOptions = (codes: readonly string[]): FieldOption[] =>
-  codes.map((value) => ({ value, label: value }));
+/** The code is the value the API takes; the language is spelled out above it, the code beneath. */
+const languageOptions = (codes: readonly string[]): FieldOption[] =>
+  codes.map((value) => ({ value, label: friendlyLanguage(value), hint: value }));
 
 /**
- * Same, but with the language spelled out. Only ElevenLabs needs it: "ben" on its own is not a
- * language anyone recognises at a glance, where "hi-IN" is. `Intl.DisplayNames` canonicalizes
- * ISO 639-3 on the way in, so it names these codes without a lookup table of our own.
+ * Speakers by name, in language groups, voices A to Z inside each. The id stays the value; it is
+ * also the hint, so a developer matching a log line or the docs can still find it.
  */
-const languageNames = new Intl.DisplayNames(["en"], { type: "language" });
-const asNamedOptions = (codes: readonly string[]): FieldOption[] =>
-  codes.map((value) => ({ value, label: `${value} — ${languageNames.of(value) ?? value}` }));
+const speakerOptions = (ids: readonly string[]): FieldOption[] =>
+  ids
+    .map((value) => {
+      const { label, language } = friendlySpeaker(value);
+      return { value, label, hint: value, group: language };
+    })
+    .sort((a, b) => (a.group ?? "").localeCompare(b.group ?? "") || a.label.localeCompare(b.label));
 
 // --- Validation Utilities -------------------------------------------------------------------
 
@@ -501,7 +508,7 @@ export const STT_PROVIDERS: ProviderSpec[] = [
         fallback: "unknown",
         options: [
           { value: "unknown", label: "Auto-detect", hint: "Recommended. Detects the language per utterance." },
-          ...asOptions(SARVAM_LANGUAGES),
+          ...languageOptions(SARVAM_LANGUAGES),
         ],
         help: "Auto-detect handles a caller who switches language mid-sentence. Pinning a code locks every utterance to it.",
         warn: "The full list below is the saaras roster. Auto-detect is the safest choice when the caller may switch language.",
@@ -543,7 +550,7 @@ export const STT_PROVIDERS: ProviderSpec[] = [
         label: "Language",
         control: "select",
         fallback: "en",
-        options: asOptions(CARTESIA_LANGUAGES),
+        options: languageOptions(CARTESIA_LANGUAGES),
         help: "The one language this assistant transcribes. Unset means English.",
         warn: "Cartesia cannot auto-detect. A caller who switches language is mis-transcribed for the rest of the call — use Sarvam or Deepgram multi if that is likely. ISO 639-1 codes only (en, hi); en-US is rejected.",
       },
@@ -575,7 +582,7 @@ export const STT_PROVIDERS: ProviderSpec[] = [
         fallback: "multi",
         options: [
           { value: "multi", label: "multi (auto-detect)", hint: "Detects the language per segment." },
-          ...asOptions(BCP47_LANGUAGES),
+          ...languageOptions(BCP47_LANGUAGES),
         ],
         help: "Pin one language, or use multi to detect per segment. Leaving it unset auto-detects on nova-3 and flux-general-multi; flux-general-en cannot detect and stays on en-US.",
         warn: "Multi is billed at a higher per-minute rate than a pinned language. On the flux models this is only a hint, and only flux-general-multi reads it.",
@@ -622,7 +629,7 @@ export const STT_PROVIDERS: ProviderSpec[] = [
         fallback: "",
         options: [
           { value: "", label: "Auto-detect", hint: "Recommended. Detects among ~190 languages." },
-          ...asNamedOptions(ELEVENLABS_LANGUAGES),
+          ...languageOptions(ELEVENLABS_LANGUAGES),
         ],
         help: "Leave on auto-detect, or pin one language. Auto-detect is what this provider is for — ~190 languages, no configuration.",
         warn: "ElevenLabs uses ISO 639-3 codes (eng, hin), unlike every other provider here. A BCP-47 code such as en-US is rejected by Scribe outright and the call transcribes nothing.",
@@ -665,7 +672,7 @@ export const STT_PROVIDERS: ProviderSpec[] = [
         label: "Language",
         control: "select",
         fallback: "en",
-        options: asOptions(OPENAI_STT_LANGUAGES),
+        options: languageOptions(OPENAI_STT_LANGUAGES),
         help: "The one language this assistant transcribes. Leaving it unset turns auto-detect on.",
         warn: "ISO 639-1 codes only (en, hi) — a BCP-47 code such as hi-IN is rejected and the call auto-detects instead.",
       },
@@ -937,7 +944,7 @@ export const TTS_PROVIDERS: ProviderSpec[] = [
         label: "Language",
         control: "select",
         fallback: "en",
-        options: asOptions(CARTESIA_LANGUAGES),
+        options: languageOptions(CARTESIA_LANGUAGES),
         help: "Pronunciation rules for the text being spoken. It does not translate anything — the assistant still writes whatever the prompt tells it to.",
       },
       {
@@ -1002,7 +1009,7 @@ export const TTS_PROVIDERS: ProviderSpec[] = [
         control: "select",
         fallback: "shubh",
         required: true,
-        options: asOptions(SARVAM_BULBUL_V3_SPEAKERS),
+        options: speakerOptions(SARVAM_BULBUL_V3_SPEAKERS),
         help: "The Sarvam speaker that voices this assistant (Bulbul v3 roster).",
         warn: "v2 speakers (e.g. anushka, manisha, vidya) are not available on bulbul:v3 and will cause call setup errors.",
       },
@@ -1011,7 +1018,7 @@ export const TTS_PROVIDERS: ProviderSpec[] = [
         label: "Target language",
         control: "select",
         fallback: "en-IN",
-        options: asOptions(LANGUAGE_CODES),
+        options: languageOptions(LANGUAGE_CODES),
         help: "The language Bulbul speaks in.",
         warn: "Assistants created before this field was fixed have bn-IN stored and will speak Bengali. Set it explicitly once to correct them.",
       },
@@ -1177,7 +1184,7 @@ export const ttsFieldsFor = (spec: ProviderSpec | undefined, config: Record<stri
         return {
           ...field,
           fallback: limits.defaultSpeaker,
-          options: asOptions(limits.speakers),
+          options: speakerOptions(limits.speakers),
           help:
             model === SARVAM_V4_FLASH
               ? "The Sarvam speaker that voices this assistant. Names read voice, language, style (v4-flash roster, 224 voices)."
@@ -1190,7 +1197,7 @@ export const ttsFieldsFor = (spec: ProviderSpec | undefined, config: Record<stri
       case "target_language_code":
         return {
           ...field,
-          options: asOptions(limits.languages),
+          options: languageOptions(limits.languages),
           warn:
             model === SARVAM_V4_FLASH
               ? "The 12 IN22 codes (as-IN, ur-IN, …) only work on a Sarvam subscription that enables them. That cannot be checked here."

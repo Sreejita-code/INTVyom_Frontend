@@ -113,7 +113,7 @@ must be able to install, run, and navigate it from `README.md` alone.
   inside the routes that need it (`assistant`, `make-call`).
 - `src/types/` — one module per domain (analytics, assistant, audio, auth, callLog, http,
   inbound, inboundContext, integration, meetingCall, passthroughCall, sip, tool).
-- `src/lib/` — pure helpers only: `apiSnippet`, `assistantModes`, `callMetadata`, `formatUrl`,
+- `src/lib/` — pure helpers only: `apiSnippet`, `assistantModes`, `callMetadata`, `formatUrl`, `optionNames`,
   `formatUsd`, `placeholders`, `readJson`, `toastError`, `utils`, `webhookSamples`. No fetch
   calls, no `localStorage`, no `import.meta.env`.
 - `src/hooks/` — hooks shared by two or more routes or shells: `use-toast`, `useCopyToClipboard`,
@@ -173,7 +173,7 @@ Pre-existing, not regressions — compare against these before claiming a
 regression. Measured 2026-09-12; refreshed 2026-09-22 (after the API-contract alignment work)
 and again on 2026-10-21 (after `agent-tracking/plans/2026-10-21-feature-gemini-duplex-cost-sync`).
 
-- `npm run test` — 49 files, 416 tests, all pass. `tests/lib/apiSnippet.test.ts > renders
+- `npm run test` — 51 files, 426 tests, all pass. `tests/lib/apiSnippet.test.ts > renders
   Python the interpreter compiles` skips its check where `python3` is not installed.
 - `npm run typecheck` — clean on any filesystem (the two case collisions that used to break
   Windows checkouts were fixed on 2026-09-22).
