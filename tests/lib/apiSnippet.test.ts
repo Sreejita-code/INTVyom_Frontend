@@ -141,6 +141,12 @@ describe("authorization header", () => {
   });
 });
 
+const parses = (command: string, args: string[], source: string) => {
+  const result = spawnSync(command, args, { input: source, encoding: "utf8" });
+  if (result.error) return null; // interpreter not installed on this machine
+  return { ok: result.status === 0, stderr: result.stderr };
+};
+
 describe("generated snippets parse", () => {
   // A snippet that does not run is worse than none. A prompt with an apostrophe and a double
   // quote is the shape that breaks naive shell quoting, so it is the one worth parsing.
@@ -150,12 +156,6 @@ describe("generated snippets parse", () => {
       assistant_prompt: "You're \"Sarah\" from Acme; say hi.\nLine two.",
       metadata: { vip: true, note: null, tags: ["a", "b"] },
     },
-  };
-
-  const parses = (command: string, args: string[], source: string) => {
-    const result = spawnSync(command, args, { input: source, encoding: "utf8" });
-    if (result.error) return null; // interpreter not installed on this machine
-    return { ok: result.status === 0, stderr: result.stderr };
   };
 
   it("renders a cURL command bash accepts", () => {
@@ -183,5 +183,83 @@ describe("generated snippets parse", () => {
     if (!result) return;
     expect(result.stderr).toBe("");
     expect(result.ok).toBe(true);
+  });
+});
+
+describe("multipart, stream and binary snippets", () => {
+  const sttSpec: RequestSpec = {
+    id: "stt.transcribe",
+    title: "Transcribe",
+    method: "POST",
+    path: "/api/stt/transcribe",
+    form: {
+      fields: { provider: "sarvam", model: undefined, language: "" },
+      file: { field: "file", filename: "recording.webm" },
+    },
+  };
+  const llmStream: RequestSpec = {
+    id: "llm.chat",
+    title: "Chat",
+    method: "POST",
+    path: "/api/llm/chat",
+    body: { messages: [{ role: "user", content: "hi" }], stream: true },
+    response: "stream",
+  };
+  const ttsBinary: RequestSpec = {
+    id: "tts.synthesize",
+    title: "Speak",
+    method: "POST",
+    path: "/api/tts/synthesize",
+    body: { text: "hello", response_format: "audio" },
+    response: "binary",
+  };
+
+  it("curl sends a form with -F parts and never a JSON content-type", () => {
+    const snippet = renderCurl(sttSpec, options);
+    expect(snippet).toContain("-F 'file=@recording.webm'");
+    expect(snippet).toContain("-F 'provider=sarvam'");
+    expect(snippet).not.toContain("-F 'model=");
+    expect(snippet).not.toContain("-F 'language=");
+    expect(snippet).not.toContain("Content-Type");
+  });
+
+  it("python passes the file with files= and the fields with data=", () => {
+    const snippet = renderPython(sttSpec, options);
+    expect(snippet).toContain('files={"file": open("recording.webm", "rb")}');
+    expect(snippet).toContain('data={"provider": "sarvam"}');
+  });
+
+  it("node builds FormData with the file read from disk", () => {
+    const snippet = renderNode(sttSpec, options);
+    expect(snippet).toContain("new FormData()");
+    expect(snippet).toContain('await openAsBlob("recording.webm")');
+    expect(snippet).toContain('form.append("provider", "sarvam")');
+  });
+
+  it("python streams lines when the response is a stream", () => {
+    const snippet = renderPython(llmStream, options);
+    expect(snippet).toContain("stream=True");
+    expect(snippet).toContain("response.iter_lines()");
+  });
+
+  it("node reads the stream body chunk by chunk", () => {
+    expect(renderNode(llmStream, options)).toContain("response.body.getReader()");
+  });
+
+  it("curl writes a binary response to a file", () => {
+    expect(renderCurl(ttsBinary, options)).toContain("-o 'speech.wav'");
+  });
+
+  it("python and node save a binary response instead of printing JSON", () => {
+    expect(renderPython(ttsBinary, options)).toContain('open("speech.wav", "wb")');
+    expect(renderPython(ttsBinary, options)).not.toContain("response.json()");
+    expect(renderNode(ttsBinary, options)).toContain('writeFile("speech.wav"');
+  });
+
+  it("generated multipart and stream snippets still parse", () => {
+    const bash = parses("bash", ["-n"], renderCurl(sttSpec, options));
+    if (bash) expect(bash.ok).toBe(true);
+    const node = parses("node", ["--check", "--input-type=module"], renderNode(llmStream, options));
+    if (node) expect(node.ok).toBe(true);
   });
 });

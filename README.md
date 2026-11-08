@@ -48,6 +48,9 @@ Routes are defined in `src/App.tsx` using a nested layout pattern:
   /dashboard/assistant     → AI assistant configuration
   /dashboard/tools         → Tools & utilities
   /dashboard/audio-library → Audio file library
+  /dashboard/stt           → Speech to text: record or upload, try the API, copy the code
+  /dashboard/llm           → LLM chat: try a conversation, streamed or not, copy the code
+  /dashboard/tts           → Text to speech: try a voice, copy the code
   /dashboard/call-logs     → Call history logs
   /dashboard/analytics     → Charts and metrics
   /dashboard/phone-number  → Phone number management
@@ -180,7 +183,7 @@ INTVyom_Frontend/
 │   └── vite-env.d.ts             # Vite type declarations
 ├── tests/                        # Vitest suites, mirroring source paths
 │   ├── setup.ts                  # Test env setup (matchMedia, ResizeObserver mocks)
-│   ├── components/common/        # MasterDetailShell, EmptyState, JsonSample, CopyIdButton
+│   ├── components/common/        # MasterDetailShell, EmptyState, JsonSample, CopyIdButton, PlaygroundShell, EndpointReference, SnippetPanel
 │   ├── hooks/                    # usePersistedFlag
 │   ├── lib/                      # apiSnippet, callMetadata, formatUrl, formatUsd,
 │   │                             #   placeholders, readJson
@@ -255,6 +258,9 @@ Identity is the **API key** issued at signup and returned by `POST /api/auth/log
 | **Assistants** | `/dashboard/assistant` | Configure AI assistant (realtime, pipeline, cascade or duplex mode) |
 | **Tools** | `/dashboard/tools` | Utility tools and actions |
 | **Audio Library** | `/dashboard/audio-library` | Upload and manage audio files |
+| **Speech to Text** | `/dashboard/stt` | Standalone STT: record or upload audio, see the transcript and cost; Try it, Code and Reference tabs |
+| **LLM Chat** | `/dashboard/llm` | Standalone LLM: send messages, stream or not, see usage and cost; Try it, Code and Reference tabs |
+| **Text to Speech** | `/dashboard/tts` | Standalone TTS: synthesize text, play or download audio; Try it, Code and Reference tabs |
 | **Call Logs** | `/dashboard/call-logs` | Browse call history, recordings, and estimated USD cost |
 | **Analytics** | `/dashboard/analytics` | Usage metrics, charts, and breakdowns |
 | **Phone Numbers** | `/dashboard/phone-number` | Manage purchased phone numbers |
@@ -285,7 +291,7 @@ The sidebar labels in `src/routes/dashboard/navItems.ts` are the source of truth
 - **Primary:** Teal/cyan (`hsl(172 66% 50%)`) with neon glow effects
 - **Background:** Very dark slate (`hsl(222 47% 6%)`)
 - **Components:** 27 shadcn/ui primitives in `src/components/ui/`, plus six shared components in
-  `src/components/common/` (`MasterDetailShell`, `EmptyState`, `CopyIdButton`, `ApiSnippet`,
+  `src/components/common/` (`MasterDetailShell`, `EmptyState`, `CopyIdButton`, `ApiSnippet`, `PlaygroundShell`, `EndpointReference`, `SnippetPanel`, `UsageSummary`, `ApiErrorPanel`, `ProviderKeyField`, `AssistantPicker`,
   `JsonSample`, `MetadataEditor`)
 - **CSS Utilities:** `neon-border`, `neon-glow`, `glass` (frosted glass), `watermark`, `status-chip`, `page-shell`, `page-padding`, `content-max`
 - **Animations:** `accordion-down`, `accordion-up`, `pulse-neon` (Tailwind config)

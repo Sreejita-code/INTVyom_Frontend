@@ -1,9 +1,8 @@
 import { ReactNode, useState } from "react";
-import { Check, Code2, Copy } from "lucide-react";
+import { Code2 } from "lucide-react";
 
 import { Button, ButtonProps } from "@/components/ui/button";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
   Sheet,
   SheetContent,
@@ -13,19 +12,17 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import {
   API_KEY_PLACEHOLDER,
   RequestSpec,
-  SNIPPET_LANGUAGES,
-  SNIPPET_LANGUAGE_LABELS,
   SnippetLanguage,
   buildRequestUrl,
   renderSnippet,
 } from "@/lib/apiSnippet";
 import { getStoredUser } from "@/services/storage/storageService";
+import { SnippetPanel } from "@/components/common/SnippetPanel";
 
 interface ApiSnippetButtonProps extends Pick<ButtonProps, "variant" | "size" | "className"> {
   /** Builds the request from the values currently on screen. */
@@ -126,46 +123,15 @@ export const ApiSnippetButton = ({
         {/* With a footer the whole body scrolls as one column; without one the snippet keeps
             growing to fill the sheet, the way it did before the footer existed. */}
         <div className={footer ? "flex-1 min-h-0 overflow-y-auto" : "contents"}>
-        <Tabs
-          value={language}
-          onValueChange={(value) => setLanguage(value as SnippetLanguage)}
-          className={footer ? "flex flex-col" : "flex-1 min-h-0 flex flex-col"}
-        >
-          <div className="flex items-center justify-between gap-2 px-4 md:px-6 pt-4">
-            <TabsList>
-              {SNIPPET_LANGUAGES.map((item) => (
-                <TabsTrigger key={item} value={item}>
-                  {SNIPPET_LANGUAGE_LABELS[item]}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-            <Button variant="outline" size="sm" onClick={copySnippet}>
-              {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
-              {copied ? "Copied" : "Copy"}
-            </Button>
-          </div>
-
-          {SNIPPET_LANGUAGES.map((item) => (
-            <TabsContent
-              key={item}
-              value={item}
-              className={`mt-4 px-4 md:px-6 pb-4 data-[state=inactive]:hidden${
-                footer ? "" : " flex-1 min-h-0"
-              }`}
-            >
-              <ScrollArea
-                className={`rounded-lg border border-border bg-background ${
-                  footer ? "h-[24rem]" : "h-full"
-                }`}
-              >
-                <pre className="p-4 text-xs font-mono leading-relaxed text-foreground">
-                  {renderSnippet(item, spec, options)}
-                </pre>
-                <ScrollBar orientation="horizontal" />
-              </ScrollArea>
-            </TabsContent>
-          ))}
-        </Tabs>
+        <SnippetPanel
+          spec={spec}
+          options={options}
+          language={language}
+          onLanguageChange={setLanguage}
+          copied={copied}
+          onCopy={copySnippet}
+          fill={!footer}
+        />
 
         {footer ? (
           <div className="border-t border-border p-4 md:p-6 space-y-3">

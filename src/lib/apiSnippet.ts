@@ -18,6 +18,19 @@ export interface RequestSpec {
   path: string;
   query?: Record<string, QueryValue>;
   body?: unknown;
+  /**
+   * A multipart upload. Replaces `body`: each defined field becomes a form part, and `file` names a
+   * local file the snippet reads from disk (`curl -F`, `files=` in Python, `FormData` in Node).
+   */
+  form?: {
+    fields: Record<string, string | undefined>;
+    file?: { field: string; filename: string };
+  };
+  /**
+   * How the response is consumed: `json` (default), `stream` (read line by line as Server-Sent Events),
+   * or `binary` (written to a file).
+   */
+  response?: "json" | "stream" | "binary";
   /** One line of context shown above the snippet tabs. */
   note?: string;
 }
@@ -46,7 +59,14 @@ export function buildRequestUrl(spec: RequestSpec, options: SnippetOptions): str
   return search ? `${origin}${spec.path}?${search}` : `${origin}${spec.path}`;
 }
 
-const hasBody = (spec: RequestSpec) => spec.body !== undefined;
+/** A JSON body. A multipart form is sent through `spec.form` instead, so it never counts here. */
+const hasBody = (spec: RequestSpec) => spec.body !== undefined && !spec.form;
+
+/** Form parts with unset fields dropped, in declaration order. */
+const formParts = (spec: RequestSpec): [string, string][] =>
+  Object.entries(spec.form?.fields ?? {}).filter(
+    (entry): entry is [string, string] => entry[1] !== undefined && entry[1] !== "",
+  );
 
 /**
  * What `JSON.stringify` would actually put on the wire. Keys whose value is `undefined` are
@@ -81,6 +101,12 @@ export function renderCurl(spec: RequestSpec, options: SnippetOptions): string {
   const lines = [`curl -X ${spec.method} "${buildRequestUrl(spec, options)}"`];
   for (const [name, value] of headerEntries(spec, options)) lines.push(`  -H "${name}: ${value}"`);
   if (hasBody(spec)) lines.push(`  -d ${shellQuote(jsonBody(spec))}`);
+  if (spec.form) {
+    const file = spec.form.file;
+    if (file) lines.push(`  -F ${shellQuote(`${file.field}=@${file.filename}`)}`);
+    for (const [name, value] of formParts(spec)) lines.push(`  -F ${shellQuote(`${name}=${value}`)}`);
+  }
+  if (spec.response === "binary") lines.push(`  -o ${shellQuote(binaryFilename(spec))}`);
   return lines.join(" \\\n");
 }
 
@@ -118,6 +144,20 @@ function pythonParams(spec: RequestSpec): string | null {
   return `{${body}}`;
 }
 
+/** The file the binary response is saved to. The API serves WAV for TTS by default. */
+const binaryFilename = (_spec: RequestSpec) => "speech.wav";
+
+/** Python file-like parts: `files=` for the upload, `data=` for the plain fields. */
+function pythonForm(spec: RequestSpec): { files: string | null; data: string | null } {
+  const parts = formParts(spec);
+  const data = parts.length
+    ? `{${parts.map(([name, value]) => `${JSON.stringify(name)}: ${JSON.stringify(value)}`).join(", ")}}`
+    : null;
+  const file = spec.form?.file;
+  const files = file ? `{${JSON.stringify(file.field)}: open(${JSON.stringify(file.filename)}, "rb")}` : null;
+  return { files, data };
+}
+
 export function renderPython(spec: RequestSpec, options: SnippetOptions): string {
   const call = spec.method.toLowerCase();
   const params = pythonParams(spec);
@@ -131,15 +171,28 @@ export function renderPython(spec: RequestSpec, options: SnippetOptions): string
   if (hasBody(spec)) {
     args.push(`    json=${pythonLiteral(wireBody(spec), "    ")}`);
   }
-  return [
+  if (spec.form) {
+    const form = pythonForm(spec);
+    if (form.files) args.push(`    files=${form.files}`);
+    if (form.data) args.push(`    data=${form.data}`);
+  }
+  if (spec.response === "stream") args.push("    stream=True");
+  const lines = [
     "import requests",
     "",
     `response = requests.${call}(`,
     `${args.join(",\n")},`,
     ")",
     "response.raise_for_status()",
-    "print(response.json())",
-  ].join("\n");
+  ];
+  if (spec.response === "stream") {
+    lines.push("for line in response.iter_lines():", "    if line:", "        print(line.decode())");
+  } else if (spec.response === "binary") {
+    lines.push(`with open("${binaryFilename(spec)}", "wb") as out:`, "    out.write(response.content)");
+  } else {
+    lines.push("print(response.json())");
+  }
+  return lines.join("\n");
 }
 
 export function renderNode(spec: RequestSpec, options: SnippetOptions): string {
@@ -149,13 +202,48 @@ export function renderNode(spec: RequestSpec, options: SnippetOptions): string {
   if (hasBody(spec)) {
     init.push(`  body: JSON.stringify(${indentRest(jsonBody(spec), "  ")})`);
   }
+  const prelude: string[] = [];
+  if (spec.form) {
+    prelude.push("const form = new FormData();");
+    const file = spec.form.file;
+    if (file) {
+      prelude.push(`form.append(${JSON.stringify(file.field)}, await openAsBlob(${JSON.stringify(file.filename)}), ${JSON.stringify(file.filename)});`);
+    }
+    for (const [name, value] of formParts(spec)) {
+      prelude.push(`form.append(${JSON.stringify(name)}, ${JSON.stringify(value)});`);
+    }
+    init.push("  body: form");
+  }
+  const consume =
+    spec.response === "stream"
+      ? [
+          "const reader = response.body.getReader();",
+          "const decoder = new TextDecoder();",
+          "for (;;) {",
+          "  const { value, done } = await reader.read();",
+          "  if (done) break;",
+          "  process.stdout.write(decoder.decode(value, { stream: true }));",
+          "}",
+        ]
+      : spec.response === "binary"
+        ? [
+            `await writeFile("${binaryFilename(spec)}", Buffer.from(await response.arrayBuffer()));`,
+          ]
+        : ["console.log(await response.json());"];
+  const imports = [
+    ...(spec.form?.file ? ['import { openAsBlob } from "node:fs";'] : []),
+    ...(spec.response === "binary" ? ['import { writeFile } from "node:fs/promises";'] : []),
+    ...(spec.form || spec.response === "binary" ? [""] : []),
+  ];
   return [
+    ...imports,
+    ...prelude,
     `const response = await fetch("${buildRequestUrl(spec, options)}", {`,
     `${init.join(",\n")},`,
     "});",
     "",
     "if (!response.ok) throw new Error(await response.text());",
-    "console.log(await response.json());",
+    ...consume,
   ].join("\n");
 }
 

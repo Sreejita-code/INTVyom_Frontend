@@ -34,6 +34,9 @@ const ROUTES = [
   "/dashboard/passthrough-call-records",
   "/dashboard/developer",
   "/dashboard/integration",
+  "/dashboard/stt",
+  "/dashboard/llm",
+  "/dashboard/tts",
   "/no-such-page",
 ];
 

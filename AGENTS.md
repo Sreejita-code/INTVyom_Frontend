@@ -97,10 +97,11 @@ must be able to install, run, and navigate it from `README.md` alone.
   only; treat as third-party. Filenames are kebab-case because the CLI generates them.
 - `src/components/common/` — app-aware but domain-agnostic components, shared by 3 or more
   routes: `MasterDetailShell`, `EmptyState`, `CopyIdButton`, `ApiSnippet`, `JsonSample`,
-  `MetadataEditor`. **Extraction bar: used by 3 or more routes.** Two copies is not duplication
+  `MetadataEditor`, and the standalone-API pages' parts `PlaygroundShell`, `EndpointReference`,
+  `SnippetPanel`, `UsageSummary`, `ApiErrorPanel`, `ProviderKeyField`, `AssistantPicker`. **Extraction bar: used by 3 or more routes.** Two copies is not duplication
   worth an abstraction.
 - `src/services/<upstream>/<upstream>Service.ts` — one module per backend API domain:
-  `analytics`, `assistant`, `audio`, `auth` (`authService` + `authedFetch`), `call`, `inbound`,
+  `analytics`, `assistant`, `audio`, `auth` (`authService` + `authedFetch`), `call`, `inbound`, `llm`, `stt`, `tts`,
   `inboundContext`, `integration`, `meetingCall`, `passthroughCall`, `sip`, `tool`, `webCall`,
   plus `storage/storageService.ts` (browser storage). Each service exports:
   - `call<X>Endpoint(...)` — performs the `fetch` against `import.meta.env.VITE_BACKEND_URL`,
@@ -112,9 +113,9 @@ must be able to install, run, and navigate it from `README.md` alone.
   normal pair; the room lifecycle itself is driven by `@livekit/components-react`
   inside the routes that need it (`assistant`, `make-call`).
 - `src/types/` — one module per domain (analytics, assistant, audio, auth, callLog, http,
-  inbound, inboundContext, integration, meetingCall, passthroughCall, sip, tool).
-- `src/lib/` — pure helpers only: `apiSnippet`, `assistantModes`, `callMetadata`, `formatUrl`, `optionNames`,
-  `formatUsd`, `placeholders`, `readJson`, `toastError`, `utils`, `webhookSamples`. No fetch
+  inbound, inboundContext, integration, llm, meetingCall, passthroughCall, sip, stt, tool, tts).
+- `src/lib/` — pure helpers only: `apiError`, `apiSnippet`, `assistantModes`, `callMetadata`, `formatUrl`, `optionNames`,
+  `formatUsd`, `placeholders`, `readJson`, `sseEvents`, `toastError`, `utils`, `webhookSamples`. No fetch
   calls, no `localStorage`, no `import.meta.env`.
 - `src/hooks/` — hooks shared by two or more routes or shells: `use-toast`, `useCopyToClipboard`,
   `usePersistedFlag`. Single-route hooks live with their route.

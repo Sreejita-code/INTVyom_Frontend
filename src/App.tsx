@@ -19,6 +19,9 @@ import Analytics from "./routes/dashboard/analytics";
 import MakeCall from "./routes/dashboard/make-call";
 import PassthroughCallRecords from "./routes/dashboard/passthrough-call-records";
 import AudioLibrary from "./routes/dashboard/audio-library";
+import Stt from "./routes/dashboard/stt";
+import Llm from "./routes/dashboard/llm";
+import Tts from "./routes/dashboard/tts";
 import NotFound from "./routes/NotFound";
 
 const queryClient = new QueryClient();
@@ -46,6 +49,9 @@ const App = () => (
               <Route path="make-call" element={<MakeCall />} />
               <Route path="passthrough-call-records" element={<PassthroughCallRecords />} />
               <Route path="developer" element={<Developer />} />
+              <Route path="stt" element={<Stt />} />
+              <Route path="llm" element={<Llm />} />
+              <Route path="tts" element={<Tts />} />
               {/* Renamed route; the old path is still bookmarked. */}
               <Route path="api-keys" element={<Navigate to="/dashboard/developer" replace />} />
               <Route path="integration" element={<Integrations />} />

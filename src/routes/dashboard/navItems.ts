@@ -11,6 +11,9 @@ import {
   Music,
   Terminal,
   Database,
+  Mic,
+  MessageSquare,
+  Volume2,
 } from "lucide-react";
 
 export interface NavItem {
@@ -33,6 +36,9 @@ export const navItems: NavItem[] = [
   { label: "Call Logs", helper: "Every call, recording and cost", keywords: "call logs history recordings cost", icon: List, path: "/dashboard/call-logs", section: "History" },
   { label: "Analytics", helper: "Minutes, usage and trends", keywords: "analytics metrics charts usage minutes", icon: BarChart3, path: "/dashboard/analytics", section: "History" },
   { label: "Passthrough Calls", helper: "Calls where a person, not an assistant, spoke to the caller", keywords: "passthrough direct sip no assistant records", icon: Database, path: "/dashboard/passthrough-call-records", section: "History" },
+  { label: "Speech to Text", helper: "Turn a recording or file into text, with cost", keywords: "stt speech to text transcribe audio record voice", icon: Mic, path: "/dashboard/stt", section: "Developers" },
+  { label: "LLM Chat", helper: "Send a conversation to a model, with usage and cost", keywords: "llm chat completion model gpt gemini stream text", icon: MessageSquare, path: "/dashboard/llm", section: "Developers" },
+  { label: "Text to Speech", helper: "Turn text into speech, with usage and cost", keywords: "tts text to speech synthesize voice audio speak", icon: Volume2, path: "/dashboard/tts", section: "Developers" },
   { label: "Your VoiceKit API key", helper: "The key your own code sends", keywords: "api key voicekit user id account id credential developer token livekit", icon: Terminal, path: "/dashboard/developer", section: "Developers" },
   { label: "Provider Keys", helper: "Keys for voice and model providers", keywords: "integration provider openai gemini elevenlabs cartesia sarvam deepgram mistral key", icon: Blocks, path: "/dashboard/integration", section: "Developers" },
 ];
