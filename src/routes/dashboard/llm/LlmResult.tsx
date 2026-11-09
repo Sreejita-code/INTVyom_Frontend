@@ -16,10 +16,16 @@ interface LlmResultProps {
   result: LlmResult | null;
   stream: StreamState | null;
   error: ApiError | null;
+  onUseSample?: () => void;
 }
 
 /** The reply: either the finished JSON result or the live stream, with its raw events on request. */
-export function LlmResultView({ result, stream, error }: LlmResultProps) {
+export function LlmResultView({
+  result,
+  stream,
+  error,
+  onUseSample,
+}: LlmResultProps) {
   const [showRaw, setShowRaw] = useState(false);
 
   if (error) return <ApiErrorPanel error={error} />;
@@ -27,14 +33,26 @@ export function LlmResultView({ result, stream, error }: LlmResultProps) {
   if (stream) {
     return (
       <div className="space-y-4">
-        <div aria-live="polite" className="whitespace-pre-wrap rounded-lg border border-border p-4 text-sm text-foreground min-h-24">
+        <div
+          aria-live="polite"
+          className="whitespace-pre-wrap rounded-lg border border-border p-4 text-sm text-foreground min-h-24"
+        >
           {stream.text}
         </div>
-        {stream.status === "finished" ? <p className="text-sm text-muted-foreground">Stream finished.</p> : null}
-        {stream.status === "stopped" ? (
-          <p className="text-sm text-muted-foreground">Stopped. The text above is cut off.</p>
+        {stream.status === "finished" ? (
+          <p className="text-sm text-muted-foreground">Stream finished.</p>
         ) : null}
-        <Button variant="outline" size="sm" aria-expanded={showRaw} onClick={() => setShowRaw((v) => !v)}>
+        {stream.status === "stopped" ? (
+          <p className="text-sm text-muted-foreground">
+            Stopped. The text above is cut off.
+          </p>
+        ) : null}
+        <Button
+          variant="outline"
+          size="sm"
+          aria-expanded={showRaw}
+          onClick={() => setShowRaw((v) => !v)}
+        >
           {showRaw ? "Hide raw events" : "Show raw events"}
         </Button>
         {showRaw ? (
@@ -48,8 +66,13 @@ export function LlmResultView({ result, stream, error }: LlmResultProps) {
 
   if (!result) {
     return (
-      <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
-        The reply and its usage will appear here.
+      <div className="space-y-3 py-2 text-sm text-muted-foreground">
+        <p>The reply and its usage will appear here.</p>
+        {onUseSample ? (
+          <Button variant="outline" size="sm" onClick={onUseSample}>
+            Fill a sample conversation
+          </Button>
+        ) : null}
       </div>
     );
   }
@@ -65,11 +88,16 @@ export function LlmResultView({ result, stream, error }: LlmResultProps) {
           { label: "Prompt tokens", value: result.usage.promptTokens },
           { label: "Completion tokens", value: result.usage.completionTokens },
           { label: "Total tokens", value: result.usage.totalTokens },
-          { label: "Estimated cost", value: result.usage.estimatedCostUsd, unit: "USD" },
+          {
+            label: "Estimated cost",
+            value: result.usage.estimatedCostUsd,
+            unit: "USD",
+          },
         ]}
       />
       <p className="text-xs text-muted-foreground">
-        Provider {result.provider || "not reported"}, model {result.model ?? "not reported"}.
+        Provider {result.provider || "not reported"}, model{" "}
+        {result.model ?? "not reported"}.
       </p>
     </div>
   );

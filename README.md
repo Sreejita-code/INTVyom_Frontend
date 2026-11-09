@@ -183,7 +183,7 @@ INTVyom_Frontend/
 │   └── vite-env.d.ts             # Vite type declarations
 ├── tests/                        # Vitest suites, mirroring source paths
 │   ├── setup.ts                  # Test env setup (matchMedia, ResizeObserver mocks)
-│   ├── components/common/        # MasterDetailShell, EmptyState, JsonSample, CopyIdButton, PlaygroundShell, EndpointReference, SnippetPanel
+│   ├── components/common/        # Shared shells, empty/result states, API snippets, optional configuration
 │   ├── hooks/                    # usePersistedFlag
 │   ├── lib/                      # apiSnippet, callMetadata, formatUrl, formatUsd,
 │   │                             #   placeholders, readJson
@@ -290,8 +290,8 @@ The sidebar labels in `src/routes/dashboard/navItems.ts` are the source of truth
 - **Theme:** Dark mode only with HSL CSS variables defined in `src/index.css`
 - **Primary:** Teal/cyan (`hsl(172 66% 50%)`) with neon glow effects
 - **Background:** Very dark slate (`hsl(222 47% 6%)`)
-- **Components:** 27 shadcn/ui primitives in `src/components/ui/`, plus six shared components in
-  `src/components/common/` (`MasterDetailShell`, `EmptyState`, `CopyIdButton`, `ApiSnippet`, `PlaygroundShell`, `EndpointReference`, `SnippetPanel`, `UsageSummary`, `ApiErrorPanel`, `ProviderKeyField`, `AssistantPicker`,
+- **Components:** 27 shadcn/ui primitives in `src/components/ui/`, plus shared components in
+  `src/components/common/` (`MasterDetailShell`, `EmptyState`, `CopyIdButton`, `ApiSnippet`, `PlaygroundShell`, `PlaygroundWorkbench`, `PlaygroundResult`, `OptionalConfiguration`, `EndpointReference`, `SuggestionInput`, `SnippetPanel`, `UsageSummary`, `ApiErrorPanel`, `ProviderKeyField`, `AssistantPicker`,
   `JsonSample`, `MetadataEditor`)
 - **CSS Utilities:** `neon-border`, `neon-glow`, `glass` (frosted glass), `watermark`, `status-chip`, `page-shell`, `page-padding`, `content-max`
 - **Animations:** `accordion-down`, `accordion-up`, `pulse-neon` (Tailwind config)

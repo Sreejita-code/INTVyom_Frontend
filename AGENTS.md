@@ -97,8 +97,9 @@ must be able to install, run, and navigate it from `README.md` alone.
   only; treat as third-party. Filenames are kebab-case because the CLI generates them.
 - `src/components/common/` — app-aware but domain-agnostic components, shared by 3 or more
   routes: `MasterDetailShell`, `EmptyState`, `CopyIdButton`, `ApiSnippet`, `JsonSample`,
-  `MetadataEditor`, and the standalone-API pages' parts `PlaygroundShell`, `EndpointReference`,
-  `SnippetPanel`, `UsageSummary`, `ApiErrorPanel`, `ProviderKeyField`, `AssistantPicker`. **Extraction bar: used by 3 or more routes.** Two copies is not duplication
+  `MetadataEditor`, and the standalone-API pages' parts `PlaygroundShell`, `PlaygroundWorkbench`, `EndpointReference`, `SuggestionInput`,
+  `SnippetPanel`, `UsageSummary`, `ApiErrorPanel`, `ProviderKeyField`, `AssistantPicker`,
+  `OptionalConfiguration`, and `PlaygroundResult`. **Extraction bar: used by 3 or more routes.** Two copies is not duplication
   worth an abstraction.
 - `src/services/<upstream>/<upstream>Service.ts` — one module per backend API domain:
   `analytics`, `assistant`, `audio`, `auth` (`authService` + `authedFetch`), `call`, `inbound`, `llm`, `stt`, `tts`,

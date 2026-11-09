@@ -1,8 +1,8 @@
 # Spec 001 — Standalone STT, LLM and TTS
 
-- **Status:** approved
+- **Status:** implemented — change approved and verified, 2026-11-09
 - **Owner:** VoiceKit frontend maintainers
-- **Last changed:** 2026-11-08
+- **Last changed:** 2026-11-09
 
 ## Summary
 
@@ -44,11 +44,15 @@ full payload reference.
 - **AC-18:** *mic denied.* If microphone permission is denied or unavailable, the STT page says so, explains how to allow it, and keeps file upload usable.
 - **AC-19:** *assistant picker.* The optional assistant selector lists the user's assistants; with none it explains how to create one and the page still works without it. Choosing an assistant shows that its settings will be used for fields left blank.
 - **AC-20:** *keyboard and names.* All controls are reachable by keyboard in reading order with visible focus. Record, stop, play, send, cancel and copy have accessible names. Results and errors are announced to screen readers. Recording and playback work without a mouse.
-- **AC-21:** *devices.* All three pages are usable without horizontal page scroll at 375, 768, 1024, 1440 and 1920 px, in light and dark.
+- **AC-21:** *devices.* All three pages are usable without horizontal page scroll at 375, 768, 1024, 1440 and 1920 px in the product's shipped dark theme.
 - **AC-22:** *old path.* No existing route, sidebar entry or stored key changes behaviour.
 - **AC-23:** *LLM raw events.* With stream on, the page also offers a "Raw events" view listing each event exactly as received, so the user sees the real payload whatever its shape.
 - **AC-24:** *suggested values.* For model, voice and language, the page suggests the values the app already knows for the chosen provider, and always accepts any typed value.
 - **AC-25:** *library warning.* `save_to_library` is off by default; turning it on shows a note that the audio may be stored in the user's Audio Library.
+- **AC-26:** *task-first hierarchy.* In every Try it area, the page presents the task's primary input and action before provider-specific or account-specific configuration. At 375 px, a user can understand what to provide and how to run the request without first reading every optional field.
+- **AC-27:** *progressive configuration.* Provider/model/language/voice controls remain available, while assistant inheritance and the one-request provider key are grouped as optional advanced configuration with a concise summary. Expanding or collapsing optional configuration never clears entered values.
+- **AC-28:** *workbench result.* At desktop widths the request and result read as one balanced workbench; the empty result does not consume half the page as an otherwise blank panel. During and after a request, status, errors, output, usage, retry/cancel controls, and sample actions stay visually associated with the result.
+- **AC-29:** *consistent polish.* The three pages use the existing VoiceKit page shell, semantic tokens, shadcn controls, spacing ladder, type scale, focus states, and shared standalone-page components. Equivalent controls and states have the same labels, layout treatment, and interaction pattern across STT, LLM, and TTS.
 
 ## States
 
@@ -100,3 +104,5 @@ None.
 | 2026-11-08 | Created | 2026-11-08-feature-standalone-stt-llm-tts |
 | 2026-11-08 | SSE event shape and TTS usage headers found in upstream docs `api/llm.md` and `api/tts.md`. AC-9 now shows usage for both formats. No open questions. | 2026-11-08-feature-standalone-stt-llm-tts |
 | 2026-11-08 | Defaults taken for 4 questions: suggested values (AC-24), library warning (AC-25), TTS usage for `json` only (AC-9), Analytics is a backend matter. SSE shape still open (AC-23 added). | 2026-11-08-feature-standalone-stt-llm-tts |
+| 2026-11-09 | Drafted the UI/implementation polish delta: corrected AC-21 to the shipped dark theme and added task-first hierarchy, progressive configuration, balanced results, and cross-page consistency (AC-26–AC-29). | 2026-11-09-change-standalone-playground-polish |
+| 2026-11-09 | Implemented and verified the task-first workbench, searchable editable suggestions, progressive settings, shared result treatment, page spacing, and dashboard scrolling. | 2026-11-09-change-standalone-playground-polish |

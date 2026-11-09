@@ -13,12 +13,13 @@ interface ProviderKeyFieldProps {
 export function ProviderKeyField({ value, onChange }: ProviderKeyFieldProps) {
   const id = "provider-api-key";
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <Label htmlFor={id}>Provider API key (optional)</Label>
       <Input
         id={id}
+        name={id}
         type="password"
-        autoComplete="off"
+        autoComplete="new-password"
         spellCheck={false}
         value={value}
         onChange={(event) => onChange(event.target.value)}

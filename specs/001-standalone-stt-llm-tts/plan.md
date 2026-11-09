@@ -222,3 +222,27 @@ Library facts used: Radix Tabs and Select are already installed (`@radix-ui/reac
 | Date | Change | Caused by |
 |------|--------|-----------|
 | 2026-11-08 | Created | AC-1 to AC-25 |
+| 2026-11-09 | Drafted task-first standalone playground polish delta | AC-10, AC-17, AC-20, AC-21, AC-24, AC-26 to AC-29 |
+
+## Delta — 2026-11-09 standalone playground polish
+
+**Status:** approved by user, 2026-11-09
+
+This delta preserves the endpoint, service, snippet, and reference contracts from the approved
+plan.
+
+1. Add route-level tests for task-first action placement, optional-configuration disclosure and
+   value retention, compact empty results, and consistent cross-page interaction patterns.
+2. Refine `PlaygroundShell` using existing tokens for a consistent header, endpoint identity, tabs,
+   max width, and responsive rhythm.
+3. Recompose each Try it area as primary task, compact request configuration, disclosed optional
+   assistant/key settings, and a result/status surface that is compact while empty.
+4. Keep behavior-specific forms route-local. Extract a shared presentation seam only with three
+   identical callers.
+5. Retain and finish the current working-tree improvements for suggestions, samples, focus,
+   storage assertions, and shadcn selects; remove warning noise from touched tests.
+6. Verify focused tests after each route, then the full quality gates and real-browser runs at all
+   five target widths, with visual inspection at 375 and 1920 px.
+
+No new dependency, backend change, route, global state, theme, or service-layer rewrite is part of
+this delta.

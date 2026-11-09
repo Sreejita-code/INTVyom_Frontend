@@ -30,20 +30,29 @@ const renderShell = (initial = "/dashboard/stt") =>
 describe("PlaygroundShell", () => {
   it("shows the endpoint and purpose in the header", () => {
     renderShell();
-    expect(screen.getByRole("heading", { name: "Speech to text" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Speech to text" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Turn audio into text.")).toBeInTheDocument();
-    expect(screen.getByText("POST /api/stt/transcribe")).toBeInTheDocument();
+    expect(screen.getByText("POST")).toBeInTheDocument();
+    expect(screen.getByText("/api/stt/transcribe")).toBeInTheDocument();
   });
 
   it("opens the tab named in ?tab=", () => {
     renderShell("/dashboard/stt?tab=code");
-    expect(screen.getByRole("tab", { name: "Code" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Code" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     expect(screen.getByText("code panel")).toBeVisible();
   });
 
   it("falls back to Try it for an unknown tab value", () => {
     renderShell("/dashboard/stt?tab=nope");
-    expect(screen.getByRole("tab", { name: "Try it" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Try it" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
   it("writes the chosen tab into the URL", () => {

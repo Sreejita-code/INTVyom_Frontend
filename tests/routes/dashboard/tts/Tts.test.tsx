@@ -5,9 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import Tts from "@/routes/dashboard/tts";
 import * as ttsService from "@/services/tts/ttsService";
+import * as ttsRules from "@/routes/dashboard/tts/ttsRules";
 
 const renderTts = (search = "") => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[`/dashboard/tts${search}`]}>
@@ -18,13 +21,19 @@ const renderTts = (search = "") => {
 };
 
 const typeText = (value: string) =>
-  fireEvent.change(screen.getByLabelText("Text to speak"), { target: { value } });
+  fireEvent.change(screen.getByLabelText("Text to speak"), {
+    target: { value },
+  });
 
-const sendButton = () => screen.getByRole("button", { name: "Generate speech" });
+const sendButton = () =>
+  screen.getByRole("button", { name: "Generate speech" });
 
 describe("TTS page", () => {
   beforeEach(() => {
-    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: vi.fn(() => "blob:tts") }));
+    vi.stubGlobal(
+      "URL",
+      Object.assign(URL, { createObjectURL: vi.fn(() => "blob:tts") }),
+    );
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -46,8 +55,12 @@ describe("TTS page", () => {
   it("warns when save to library is switched on, and not before (AC-25)", () => {
     renderTts();
     expect(screen.queryByText(/may store this audio/)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("switch", { name: "Save to Audio Library" }));
-    expect(screen.getByText(/may store this audio in your Audio Library/)).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("switch", { name: "Save to Audio Library" }),
+    );
+    expect(
+      screen.getByText(/may store this audio in your Audio Library/),
+    ).toBeInTheDocument();
   });
 
   it("json format shows usage, and a null cost reads as not reported (AC-9)", async () => {
@@ -60,7 +73,12 @@ describe("TTS page", () => {
           media_type: "audio/wav",
           provider: "cartesia",
           model: "sonic-3",
-          usage: { characters_count: 31, audio_duration_seconds: 2, estimated_cost_usd: null, pricing_complete: false },
+          usage: {
+            characters_count: 31,
+            audio_duration_seconds: 2,
+            estimated_cost_usd: null,
+            pricing_complete: false,
+          },
         },
       },
     });
@@ -83,15 +101,22 @@ describe("TTS page", () => {
     renderTts();
     typeText("hello");
     fireEvent.click(sendButton());
-    expect(await screen.findByText(/Usage is only available with the JSON format/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Download audio" })).toHaveAttribute("download", "speech.wav");
+    expect(
+      await screen.findByText(/Usage is only available with the JSON format/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Download audio" }),
+    ).toHaveAttribute("download", "speech.wav");
   });
 
   it("shows the server error with its suggestions and keeps the text (AC-12)", async () => {
     vi.spyOn(ttsService, "callSynthesizeEndpoint").mockResolvedValue({
       ok: false,
       status: 422,
-      json: { error: "Speaker not supported", suggestions: { tts: "Try: cartesia" } },
+      json: {
+        error: "Speaker not supported",
+        suggestions: { tts: "Try: cartesia" },
+      },
     });
     renderTts();
     typeText("hello");
@@ -104,11 +129,73 @@ describe("TTS page", () => {
 
   it("writes nothing to browser storage when it sends (AC-10)", async () => {
     const setItem = vi.spyOn(Storage.prototype, "setItem");
-    vi.spyOn(ttsService, "callSynthesizeEndpoint").mockResolvedValue({ ok: false, status: 502, json: { error: "down" } });
+    vi.spyOn(ttsService, "callSynthesizeEndpoint").mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: { error: "down" },
+    });
     renderTts();
     typeText("hello");
     fireEvent.click(sendButton());
     await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
     expect(setItem).not.toHaveBeenCalled();
+  });
+
+  it("suggests models and voices, and returns focus to Generate speech after Cancel (AC-24, AC-20)", () => {
+    vi.spyOn(ttsService, "callSynthesizeEndpoint").mockImplementation(
+      () => new Promise(() => undefined),
+    );
+    renderTts();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Browse Model suggestions" }),
+    );
+    fireEvent.click(screen.getByRole("option", { name: "sonic-3" }));
+    expect(screen.getByLabelText("Model")).toHaveValue("sonic-3");
+    typeText("hello");
+    fireEvent.click(sendButton());
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(sendButton()).toHaveFocus();
+  });
+
+  it("suggests the Sarvam speaker and language rosters for that provider (AC-24)", () => {
+    const { ttsVoiceOptions, ttsLanguageOptions } = ttsRules;
+    expect(ttsVoiceOptions("sarvam", "")).toContain("shubh");
+    expect(ttsVoiceOptions("sarvam", "bulbul:v4-flash")).toContain(
+      "shubh_hi_customer",
+    );
+    expect(ttsLanguageOptions("sarvam", "")).toContain("hi-IN");
+    expect(ttsLanguageOptions("cartesia", "")).toContain("en");
+  });
+
+  it("keeps Generate speech with the text and progressively discloses optional settings (AC-26, AC-27)", () => {
+    renderTts();
+    const input = screen.getByRole("group", { name: "Speech input" });
+    expect(input).toContainElement(sendButton());
+    expect(
+      screen.queryByLabelText("Provider API key (optional)"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Optional configuration" }),
+    );
+    fireEvent.change(screen.getByLabelText("Provider API key (optional)"), {
+      target: { value: "temporary-key" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Optional configuration" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Optional configuration" }),
+    );
+    expect(screen.getByLabelText("Provider API key (optional)")).toHaveValue(
+      "temporary-key",
+    );
+  });
+
+  it("labels the result as one compact workbench surface (AC-28, AC-29)", () => {
+    renderTts();
+    expect(screen.getByRole("region", { name: "Result" })).toHaveTextContent(
+      "Your audio and its usage will appear here.",
+    );
   });
 });

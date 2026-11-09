@@ -12,3 +12,6 @@ Status: `scoping` · `researching` · `awaiting-approval` · `approved` · `in-p
 | 2026-10-21 | 2026-10-21-feature-gemini-duplex-cost-sync | feature | done | Gemini realtime knobs and duplex voice/backend cost split (upstream 1.7.0), webhook samples per mode | agent-tracking/reports/2026-10-21-feature-gemini-duplex-cost-sync.md |
 | 2026-10-21 | 2026-10-21-ui-friendly-option-names | ui | done | Human-readable names for Sarvam speakers (grouped by language) and language codes; raw id still sent to the API | agent-tracking/reports/2026-10-21-ui-friendly-option-names.md |
 | 2026-11-08 | 2026-11-08-feature-standalone-stt-llm-tts | feature | in-progress (not converged) | Standalone STT, LLM, TTS pages with try-it, snippets, payload reference | |
+| 2026-11-09 | 2026-11-09-change-standalone-playground-polish | ui | done | Task-first UI and implementation polish for standalone STT, LLM, and TTS | agent-tracking/reports/2026-11-09-change-standalone-playground-polish.md |
+| 2026-11-09 | 2026-11-09-fix-standalone-playground-scroll | fix | done | Audit and fix scrolling and UI consistency across standalone STT, LLM, and TTS | agent-tracking/reports/2026-11-09-fix-standalone-playground-scroll.md |
+| 2026-11-09 | 2026-11-09-fix-playground-icons-spacing | fix | awaiting-approval | Restore bottom breathing room and icon-led hierarchy on STT, LLM, and TTS | |

@@ -62,6 +62,15 @@ Setup and shared foundations first. Slices follow one per AC, test before code i
 - [ ] 26. docs — Update `agent-tracking/INDEX.md` row to `implemented` and write `agent-tracking/reports/2026-11-08-feature-standalone-stt-llm-tts.md`.
 - [ ] 27. converge — Run `core-fe-converge` against `specs/001-standalone-stt-llm-tts/spec.md`. Every AC has evidence; drift scan; constitution re-check. Verify: `sh ~/.claude/skills/core-fe-workflow/scripts/sdd-check.sh converge 2026-11-08-feature-standalone-stt-llm-tts`.
 
+Leftover from the 2026-11-08 converge (Not converged), plus the user's UI-polish request:
+
+- [ ] 28. AC-24 — Suggested values everywhere, from `providerCatalog`: STT model + language datalists, LLM model datalist (openai cascade list; gemini per docs `api/llm.md`), TTS model + voice (Sarvam rosters) + language datalists. Free text stays accepted. Test first: rule helpers unit-tested, default-provider datalist rendered per page.
+- [ ] 29. AC-17 — LLM sample ("starter conversation") button in the empty result state. STT's empty state keeps the record button + upload. Test first.
+- [ ] 30. AC-20 — Focus returns to the send control after Cancel (STT, TTS) and after Stop (LLM). Test first.
+- [ ] 31. AC-10 — Storage-write assertions in `Stt.test.tsx` and `Llm.test.tsx`, matching the TTS one.
+- [ ] 32. ui — Polish pass (user request: pages "not smooth like others"): shadcn `Select` instead of native selects, spacing on the ui-design-system gap ladder (no `.5` tokens), consistent section cards, `PlaygroundShell` header matches sibling page headers (icon + `text-2xl font-bold tracking-tight`). No behaviour change; page tests must stay green.
+- [ ] 33. AC-21 — Full sweep + eyeball screenshots of the three pages at 375 and 1920. Note: the app ships exactly one theme (dark, by design); nothing to sweep beyond it.
+
 ## Files expected to change
 
 | Path | Change |

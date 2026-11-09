@@ -1,12 +1,22 @@
 import { useState } from "react";
+import { Mic } from "lucide-react";
 
 import { EndpointReference } from "@/components/common/EndpointReference";
 import { PlaygroundShell } from "@/components/common/PlaygroundShell";
+import { PlaygroundResult } from "@/components/common/PlaygroundResult";
+import { PlaygroundWorkbench } from "@/components/common/PlaygroundWorkbench";
 import { SnippetPanel } from "@/components/common/SnippetPanel";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { condenseApiError, type ApiError } from "@/lib/apiError";
-import { API_KEY_PLACEHOLDER, renderSnippet, type SnippetLanguage } from "@/lib/apiSnippet";
-import { callTranscribeEndpoint, condenseTranscribeResponse } from "@/services/stt/sttService";
+import {
+  API_KEY_PLACEHOLDER,
+  renderSnippet,
+  type SnippetLanguage,
+} from "@/lib/apiSnippet";
+import {
+  callTranscribeEndpoint,
+  condenseTranscribeResponse,
+} from "@/services/stt/sttService";
 import type { SttResult } from "@/types/stt";
 import { STT_REFERENCE } from "./sttReference";
 import { buildSttSpec } from "./sttSnippet";
@@ -14,8 +24,13 @@ import { SttForm, type SttFormValues } from "./SttForm";
 import { audioFileError, EMPTY_STT_VALUES } from "./sttRules";
 import { SttResultView } from "./SttResult";
 
-const backendUrl = () => import.meta.env.VITE_BACKEND_URL || "https://<your-backend>";
-const NETWORK_ERROR: ApiError = { status: 0, message: "Network error. The request did not reach the server.", suggestions: {} };
+const backendUrl = () =>
+  import.meta.env.VITE_BACKEND_URL || "https://<your-backend>";
+const NETWORK_ERROR: ApiError = {
+  status: 0,
+  message: "Network error. The request did not reach the server.",
+  suggestions: {},
+};
 
 export default function Stt() {
   const [values, setValues] = useState<SttFormValues>(EMPTY_STT_VALUES);
@@ -27,7 +42,8 @@ export default function Stt() {
   const [language, setLanguage] = useState<SnippetLanguage>("curl");
   const { copied, copy } = useCopyToClipboard(1500);
 
-  const update = (next: Partial<SttFormValues>) => setValues((prev) => ({ ...prev, ...next }));
+  const update = (next: Partial<SttFormValues>) =>
+    setValues((prev) => ({ ...prev, ...next }));
 
   const chooseFile = (file: File) => {
     const reason = audioFileError(file);
@@ -87,22 +103,27 @@ export default function Stt() {
       purpose="Record your voice or upload a file, then read the transcript and its cost."
       method="POST"
       path="/api/stt/transcribe"
+      icon={Mic}
       tabs={{
         try: (
-          <div className="grid gap-8 lg:grid-cols-2">
-            <SttForm
-              values={values}
-              fileError={fileError}
-              onChange={update}
-              onFile={chooseFile}
-              onSend={send}
-              onCancel={cancel}
-              busy={busy}
-            />
-            <div>
-              <SttResultView result={result} error={error} />
-            </div>
-          </div>
+          <PlaygroundWorkbench
+            request={
+              <SttForm
+                values={values}
+                fileError={fileError}
+                onChange={update}
+                onFile={chooseFile}
+                onSend={send}
+                onCancel={cancel}
+                busy={busy}
+              />
+            }
+            result={
+              <PlaygroundResult>
+                <SttResultView result={result} error={error} />
+              </PlaygroundResult>
+            }
+          />
         ),
         code: (
           <SnippetPanel

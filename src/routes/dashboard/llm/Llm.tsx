@@ -1,13 +1,23 @@
 import { useRef, useState } from "react";
-
+import { BrainCircuit } from "lucide-react";
 import { EndpointReference } from "@/components/common/EndpointReference";
 import { PlaygroundShell } from "@/components/common/PlaygroundShell";
+import { PlaygroundResult } from "@/components/common/PlaygroundResult";
+import { PlaygroundWorkbench } from "@/components/common/PlaygroundWorkbench";
 import { SnippetPanel } from "@/components/common/SnippetPanel";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { condenseApiError, type ApiError } from "@/lib/apiError";
-import { API_KEY_PLACEHOLDER, renderSnippet, type SnippetLanguage } from "@/lib/apiSnippet";
+import {
+  API_KEY_PLACEHOLDER,
+  renderSnippet,
+  type SnippetLanguage,
+} from "@/lib/apiSnippet";
 import { deltaOf, parseSseChunk, SSE_DONE } from "@/lib/sseEvents";
-import { callChatEndpoint, callChatStreamEndpoint, condenseChatResponse } from "@/services/llm/llmService";
+import {
+  callChatEndpoint,
+  callChatStreamEndpoint,
+  condenseChatResponse,
+} from "@/services/llm/llmService";
 import type { ChatMessage, LlmRequest, LlmResult } from "@/types/llm";
 import { buildLlmSpec } from "./llmSnippet";
 import { LLM_REFERENCE } from "./llmReference";
@@ -15,14 +25,25 @@ import { LlmForm, type LlmFormValues } from "./LlmForm";
 import { EMPTY_LLM_VALUES } from "./llmRules";
 import { LlmResultView, type StreamState } from "./LlmResult";
 
-const backendUrl = () => import.meta.env.VITE_BACKEND_URL || "https://<your-backend>";
-const NETWORK_ERROR: ApiError = { status: 0, message: "Network error. The request did not reach the server.", suggestions: {} };
+const SAMPLE_CONVERSATION: ChatMessage[] = [
+  { role: "system", content: "You are a helpful customer assistant." },
+  { role: "user", content: "What services do you offer?" },
+];
+
+const backendUrl = () =>
+  import.meta.env.VITE_BACKEND_URL || "https://<your-backend>";
+const NETWORK_ERROR: ApiError = {
+  status: 0,
+  message: "Network error. The request did not reach the server.",
+  suggestions: {},
+};
 
 const toRequest = (values: LlmFormValues): LlmRequest => ({
   messages: values.messages.filter((message) => message.content.trim() !== ""),
   provider: values.provider || undefined,
   model: values.model.trim() || undefined,
-  temperature: values.temperature === "" ? undefined : Number(values.temperature),
+  temperature:
+    values.temperature === "" ? undefined : Number(values.temperature),
   maxTokens: values.maxTokens === "" ? undefined : Number(values.maxTokens),
   assistantId: values.assistantId || undefined,
 });
@@ -38,7 +59,8 @@ export default function Llm() {
   const reader = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
   const { copied, copy } = useCopyToClipboard(1500);
 
-  const update = (next: Partial<LlmFormValues>) => setValues((prev) => ({ ...prev, ...next }));
+  const update = (next: Partial<LlmFormValues>) =>
+    setValues((prev) => ({ ...prev, ...next }));
 
   const readStream = async (body: ReadableStream<Uint8Array>) => {
     const decoder = new TextDecoder();
@@ -82,7 +104,11 @@ export default function Llm() {
     const request = toRequest(values);
     try {
       if (values.stream) {
-        const res = await callChatStreamEndpoint({ request: { ...request }, providerKey: values.providerKey || undefined, signal: abort.signal });
+        const res = await callChatStreamEndpoint({
+          request: { ...request },
+          providerKey: values.providerKey || undefined,
+          signal: abort.signal,
+        });
         if (!res.ok) {
           setError(condenseApiError(res.json, res.status));
         } else if (res.response?.body) {
@@ -90,7 +116,11 @@ export default function Llm() {
           await readStream(res.response.body);
         }
       } else {
-        const res = await callChatEndpoint({ request, providerKey: values.providerKey || undefined, signal: abort.signal });
+        const res = await callChatEndpoint({
+          request,
+          providerKey: values.providerKey || undefined,
+          signal: abort.signal,
+        });
         if (!res.ok) setError(condenseApiError(res.json, res.status));
         else setResult(condenseChatResponse(res.json));
       }
@@ -108,13 +138,16 @@ export default function Llm() {
     setBusy(false);
   };
 
-  const sample: ChatMessage[] = values.messages.some((m) => m.content.trim()) ? values.messages : [{ role: "user", content: "What services do you offer?" }];
+  const sample: ChatMessage[] = values.messages.some((m) => m.content.trim())
+    ? values.messages
+    : [{ role: "user", content: "What services do you offer?" }];
   const spec = buildLlmSpec(
     {
       messages: sample,
       provider: values.provider || undefined,
       model: values.model,
-      temperature: values.temperature === "" ? undefined : Number(values.temperature),
+      temperature:
+        values.temperature === "" ? undefined : Number(values.temperature),
       maxTokens: values.maxTokens === "" ? undefined : Number(values.maxTokens),
       assistantId: values.assistantId || undefined,
     },
@@ -128,14 +161,30 @@ export default function Llm() {
       purpose="Send a conversation to a model and read the reply, with usage and cost."
       method="POST"
       path="/api/llm/chat"
+      icon={BrainCircuit}
       tabs={{
         try: (
-          <div className="grid gap-8 lg:grid-cols-2">
-            <LlmForm values={values} onChange={update} onSend={send} onStop={stop} busy={busy} />
-            <div>
-              <LlmResultView result={result} stream={stream} error={error} />
-            </div>
-          </div>
+          <PlaygroundWorkbench
+            request={
+              <LlmForm
+                values={values}
+                onChange={update}
+                onSend={send}
+                onStop={stop}
+                busy={busy}
+              />
+            }
+            result={
+              <PlaygroundResult>
+                <LlmResultView
+                  result={result}
+                  stream={stream}
+                  error={error}
+                  onUseSample={() => update({ messages: SAMPLE_CONVERSATION })}
+                />
+              </PlaygroundResult>
+            }
+          />
         ),
         code: (
           <SnippetPanel

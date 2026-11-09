@@ -30,7 +30,7 @@ export function TtsResultView({ result, error, onUseSample }: TtsResultProps) {
 
   if (!result) {
     return (
-      <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground space-y-3">
+      <div className="space-y-3 py-2 text-sm text-muted-foreground">
         <p>Your audio and its usage will appear here.</p>
         <Button variant="outline" size="sm" onClick={onUseSample}>
           Use a sample sentence
@@ -41,7 +41,14 @@ export function TtsResultView({ result, error, onUseSample }: TtsResultProps) {
 
   return (
     <div className="space-y-4">
-      {url ? <audio controls src={url} aria-label="Generated speech" className="w-full" /> : null}
+      {url ? (
+        <audio
+          controls
+          src={url}
+          aria-label="Generated speech"
+          className="w-full"
+        />
+      ) : null}
       {url ? (
         <a className="text-sm underline" href={url} download="speech.wav">
           Download audio
@@ -52,17 +59,27 @@ export function TtsResultView({ result, error, onUseSample }: TtsResultProps) {
           pricingComplete={result.usage.pricingComplete}
           rows={[
             { label: "Characters", value: result.usage.charactersCount },
-            { label: "Audio duration", value: result.usage.audioDurationSeconds, unit: "s" },
-            { label: "Estimated cost", value: result.usage.estimatedCostUsd, unit: "USD" },
+            {
+              label: "Audio duration",
+              value: result.usage.audioDurationSeconds,
+              unit: "s",
+            },
+            {
+              label: "Estimated cost",
+              value: result.usage.estimatedCostUsd,
+              unit: "USD",
+            },
           ]}
         />
       ) : (
         <p className="text-sm text-muted-foreground">
-          Usage is only available with the JSON format, because the audio response does not expose its usage headers to the browser.
+          Usage is only available with the JSON format, because the audio
+          response does not expose its usage headers to the browser.
         </p>
       )}
       <p className="text-xs text-muted-foreground">
-        Provider {result.provider || "not reported"}, model {result.model ?? "not reported"}.
+        Provider {result.provider || "not reported"}, model{" "}
+        {result.model ?? "not reported"}.
       </p>
     </div>
   );

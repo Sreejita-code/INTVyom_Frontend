@@ -32,7 +32,7 @@ export function AssistantPicker({ value, onChange }: AssistantPickerProps) {
 
   if (query.isError) {
     return (
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         {label}
         <p role="alert" className="text-sm text-destructive">
           Could not load assistants. The page still works without one.
@@ -47,7 +47,7 @@ export function AssistantPicker({ value, onChange }: AssistantPickerProps) {
   const assistants = query.data ?? [];
   if (query.isSuccess && assistants.length === 0) {
     return (
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         {label}
         <p className="text-sm text-muted-foreground">
           No assistants yet. Fields stay blank and the request uses the defaults.{" "}
@@ -60,7 +60,7 @@ export function AssistantPicker({ value, onChange }: AssistantPickerProps) {
   }
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       {label}
       <Select value={value || NONE} onValueChange={(next) => onChange(next === NONE ? "" : next)}>
         <SelectTrigger id={id} disabled={query.isLoading}>

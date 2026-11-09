@@ -1,4 +1,12 @@
+import { OPENAI_CASCADE_MODELS } from "@/routes/dashboard/assistant/providerCatalog";
 import type { LlmFormValues } from "./LlmForm";
+
+/** The chat model the /llm/chat docs name for gemini. The Live models open a socket that closes. */
+export const GEMINI_CHAT_MODEL = "gemini-2.5-flash";
+
+/** Model id suggestions for the current provider; any typed value is still sent. */
+export const llmModelOptions = (provider: LlmFormValues["provider"]): string[] =>
+  provider === "gemini" ? [GEMINI_CHAT_MODEL] : OPENAI_CASCADE_MODELS.map((m) => m.value);
 
 export const EMPTY_LLM_VALUES: LlmFormValues = {
   messages: [{ role: "user", content: "" }],

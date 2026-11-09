@@ -1,12 +1,22 @@
 import { useRef, useState } from "react";
-
+import { AudioLines } from "lucide-react";
 import { PlaygroundShell } from "@/components/common/PlaygroundShell";
+import { PlaygroundResult } from "@/components/common/PlaygroundResult";
+import { PlaygroundWorkbench } from "@/components/common/PlaygroundWorkbench";
 import { EndpointReference } from "@/components/common/EndpointReference";
 import { SnippetPanel } from "@/components/common/SnippetPanel";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { condenseApiError, type ApiError } from "@/lib/apiError";
-import { API_KEY_PLACEHOLDER, renderSnippet, type SnippetLanguage } from "@/lib/apiSnippet";
-import { callSynthesizeEndpoint, condenseSynthesizeAudioResponse, condenseSynthesizeJsonResponse } from "@/services/tts/ttsService";
+import {
+  API_KEY_PLACEHOLDER,
+  renderSnippet,
+  type SnippetLanguage,
+} from "@/lib/apiSnippet";
+import {
+  callSynthesizeEndpoint,
+  condenseSynthesizeAudioResponse,
+  condenseSynthesizeJsonResponse,
+} from "@/services/tts/ttsService";
 import type { TtsResult } from "@/types/tts";
 import { buildTtsSpec } from "./ttsSnippet";
 import { TTS_REFERENCE } from "./ttsReference";
@@ -15,8 +25,13 @@ import { EMPTY_TTS_VALUES } from "./ttsRules";
 import { TtsResultView } from "./TtsResult";
 
 const SAMPLE = "Hello! Welcome to our platform.";
-const backendUrl = () => import.meta.env.VITE_BACKEND_URL || "https://<your-backend>";
-const NETWORK_ERROR: ApiError = { status: 0, message: "Network error. The request did not reach the server.", suggestions: {} };
+const backendUrl = () =>
+  import.meta.env.VITE_BACKEND_URL || "https://<your-backend>";
+const NETWORK_ERROR: ApiError = {
+  status: 0,
+  message: "Network error. The request did not reach the server.",
+  suggestions: {},
+};
 
 export default function Tts() {
   const [values, setValues] = useState<TtsFormValues>(EMPTY_TTS_VALUES);
@@ -27,7 +42,8 @@ export default function Tts() {
   const controller = useRef<AbortController | null>(null);
   const { copied, copy } = useCopyToClipboard(1500);
 
-  const update = (next: Partial<TtsFormValues>) => setValues((prev) => ({ ...prev, ...next }));
+  const update = (next: Partial<TtsFormValues>) =>
+    setValues((prev) => ({ ...prev, ...next }));
 
   const send = async () => {
     controller.current?.abort();
@@ -91,18 +107,31 @@ export default function Tts() {
       purpose="Turn text into speech with your key, then copy the request into your code."
       method="POST"
       path="/api/tts/synthesize"
+      icon={AudioLines}
       tabs={{
         try: (
-          <div className="grid gap-8 lg:grid-cols-2">
-            <TtsForm values={values} onChange={update} onSend={send} onCancel={cancel} busy={busy} />
-            <div aria-live="polite">
-              <TtsResultView
-                result={result}
-                error={error}
-                onUseSample={() => update({ text: SAMPLE })}
+          <PlaygroundWorkbench
+            request={
+              <TtsForm
+                values={values}
+                onChange={update}
+                onSend={send}
+                onCancel={cancel}
+                busy={busy}
               />
-            </div>
-          </div>
+            }
+            result={
+              <PlaygroundResult>
+                <div aria-live="polite">
+                  <TtsResultView
+                    result={result}
+                    error={error}
+                    onUseSample={() => update({ text: SAMPLE })}
+                  />
+                </div>
+              </PlaygroundResult>
+            }
+          />
         ),
         code: (
           <div className="space-y-3">
